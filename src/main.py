@@ -1,9 +1,10 @@
 from agent import Agent
+from prompts.main_prompt import SYSTEM_PROMPT
 
+agent = Agent(system_prompt=SYSTEM_PROMPT)
 
 def main():
-    agent = Agent()
-    for chunk in agent.stream("Write paragraph about France."):
+    for chunk in agent.stream("What is the current date and time?"):
         print(chunk, end="", flush=True)
     print()
 
