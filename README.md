@@ -1,0 +1,1 @@
+This is the project where I test ollama models
