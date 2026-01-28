@@ -1,0 +1,11 @@
+[project]
+name = "slm-lab"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain>=1.2.7",
+    "langchain-ollama>=1.0.1",
+    "ollama>=0.6.1",
+]
