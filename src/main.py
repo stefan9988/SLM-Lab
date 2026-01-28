@@ -1,12 +1,12 @@
-from langchain_ollama import ChatOllama
-
-from config import settings
+from agent import Agent
 
 
 def main():
-    llm = ChatOllama(model=settings.MODEL_NAME, base_url=settings.OLLAMA_BASE_URL)
-    response = llm.invoke("Hello, how are you?")
-    print(response.content)
+    agent = Agent()
+    for chunk in agent.stream("Write paragraph about France."):
+        print(chunk, end="", flush=True)
+    print()
+
 
 if __name__ == "__main__":
     main()
