@@ -24,7 +24,7 @@ class Agent:
         maintain_history: bool = False,
     ):
         self.maintain_history = maintain_history
-        self._message_history: List = []
+        self._session_histories: dict[str, List] = {}
 
         tool_names = [t.name for t in tools] if tools else []
         logger.info(
@@ -44,15 +44,17 @@ class Agent:
             logger.error("Failed to initialize Agent", exc_info=True)
             raise
 
-    def invoke(self, prompt: str) -> str:
+    def invoke(self, prompt: str, session_id: str) -> str:
         """Get a complete response for the given prompt."""
-        logger.info("invoke called (prompt_length=%d)", len(prompt))
+        logger.info(
+            "invoke called (prompt_length=%d, session_id=%s)", len(prompt), session_id
+        )
         logger.debug("invoke prompt: %s", prompt)
         try:
-            messages = self._get_input_messages(prompt)
+            messages = self._get_input_messages(prompt, session_id)
             result = self._agent.invoke({"messages": messages})
             all_messages = result["messages"]
-            self._save_history(all_messages)
+            self._save_history(all_messages, session_id)
             response = all_messages[-1].content
             logger.info("invoke complete (response_length=%d)", len(response))
             return response
@@ -60,11 +62,13 @@ class Agent:
             logger.error("invoke failed", exc_info=True)
             raise
 
-    def stream(self, prompt: str):
-        logger.info("stream called (prompt_length=%d)", len(prompt))
+    def stream(self, prompt: str, session_id: str):
+        logger.info(
+            "stream called (prompt_length=%d, session_id=%s)", len(prompt), session_id
+        )
         logger.debug("stream prompt: %s", prompt)
         try:
-            messages = self._get_input_messages(prompt)
+            messages = self._get_input_messages(prompt, session_id)
 
             full_response = []
             token_count = 0
@@ -92,30 +96,32 @@ class Agent:
                         yield {"type": "status", "content": "Tool returned result"}
 
             all_messages = list(messages) + [AIMessage(content="".join(full_response))]
-            self._save_history(all_messages)
+            self._save_history(all_messages, session_id)
             logger.info("stream complete (tokens=%d)", token_count)
         except Exception:
             logger.error("stream failed", exc_info=True)
             raise
 
-    def clear_history(self) -> None:
-        """Clear the conversation history."""
-        self._message_history = []
-        logger.debug("Conversation history cleared")
+    def clear_history(self, session_id: str) -> None:
+        """Clear the conversation history for a session."""
+        self._session_histories.pop(session_id, None)
+        logger.debug("Conversation history cleared (session_id=%s)", session_id)
 
-    def get_history(self) -> List[dict]:
-        """Get conversation history as serializable dicts."""
-        history = [
-            {"role": msg.type, "content": msg.content} for msg in self._message_history
-        ]
-        logger.debug("get_history called (messages=%d)", len(history))
+    def get_history(self, session_id: str) -> List[dict]:
+        """Get conversation history as serializable dicts for a session."""
+        messages = self._session_histories.get(session_id, [])
+        history = [{"role": msg.type, "content": msg.content} for msg in messages]
+        logger.debug(
+            "get_history called (session_id=%s, messages=%d)", session_id, len(history)
+        )
         return history
 
-    def _get_input_messages(self, prompt: str) -> List:
+    def _get_input_messages(self, prompt: str, session_id: str) -> List:
         if self.maintain_history:
-            return list(self._message_history) + [HumanMessage(content=prompt)]
+            history = self._session_histories.get(session_id, [])
+            return list(history) + [HumanMessage(content=prompt)]
         return [HumanMessage(content=prompt)]
 
-    def _save_history(self, messages: List) -> None:
+    def _save_history(self, messages: List, session_id: str) -> None:
         if self.maintain_history:
-            self._message_history = messages
+            self._session_histories[session_id] = messages

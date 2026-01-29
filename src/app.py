@@ -12,7 +12,7 @@ if str(src_dir) not in sys.path:
 
 from prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
 
@@ -49,6 +49,7 @@ class ChatRequest(BaseModel):
     """Request model for chat endpoints."""
 
     message: str
+    session_id: str
 
 
 @app.exception_handler(ValidationError)
@@ -68,40 +69,54 @@ async def unhandled_error_handler(request: Request, exc: Exception):
 @app.post("/chat")
 async def chat(request: ChatRequest):
     """Send a message and get a complete response."""
-    logger.info("POST /chat (message_preview=%.50s)", request.message)
-    response = general_agent.invoke(request.message)
-    logger.info("POST /chat response (length=%d)", len(response))
+    logger.info(
+        "POST /chat (session_id=%s, message_preview=%.50s)",
+        request.session_id,
+        request.message,
+    )
+    response = general_agent.invoke(request.message, session_id=request.session_id)
+    logger.info(
+        "POST /chat response (session_id=%s, length=%d)",
+        request.session_id,
+        len(response),
+    )
     return {"response": response}
 
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
     """Send a message and get a streaming SSE response."""
-    logger.info("POST /chat/stream (message_preview=%.50s)", request.message)
+    logger.info(
+        "POST /chat/stream (session_id=%s, message_preview=%.50s)",
+        request.session_id,
+        request.message,
+    )
 
     def generate():
-        for event in general_agent.stream(request.message):
+        for event in general_agent.stream(
+            request.message, session_id=request.session_id
+        ):
             yield f"data: {json.dumps(event)}\n\n"
         yield "data: [DONE]\n\n"
-        logger.info("POST /chat/stream complete")
+        logger.info("POST /chat/stream complete (session_id=%s)", request.session_id)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @app.get("/history")
-async def get_history():
-    """Retrieve conversation history."""
-    logger.info("GET /history")
-    history = general_agent.get_history()
-    logger.info("GET /history (messages=%d)", len(history))
+async def get_history(session_id: str = Query()):
+    """Retrieve conversation history for a session."""
+    logger.info("GET /history (session_id=%s)", session_id)
+    history = general_agent.get_history(session_id=session_id)
+    logger.info("GET /history (session_id=%s, messages=%d)", session_id, len(history))
     return {"history": history}
 
 
 @app.delete("/history")
-async def clear_history():
-    """Clear conversation history."""
-    logger.info("DELETE /history")
-    general_agent.clear_history()
+async def clear_history(session_id: str = Query()):
+    """Clear conversation history for a session."""
+    logger.info("DELETE /history (session_id=%s)", session_id)
+    general_agent.clear_history(session_id=session_id)
     return {"status": "cleared"}
 
 
