@@ -48,19 +48,23 @@ class OllamaAgent:
         messages = self._get_input_messages(prompt)
 
         full_response = []
-        for msg_chunk, metadata in self._agent.stream(
-            {"messages": messages}, stream_mode="messages"
+        for stream_mode, chunk in self._agent.stream(
+            {"messages": messages}, stream_mode=["messages", "custom"]
         ):
-            if isinstance(msg_chunk, AIMessageChunk):
-                if msg_chunk.tool_call_chunks:
-                    for tc in msg_chunk.tool_call_chunks:
-                        if tc.get("name"):
-                            yield {"type": "status", "content": f"Calling tool: {tc['name']}"}
-                elif msg_chunk.content:
-                    full_response.append(msg_chunk.content)
-                    yield {"type": "token", "content": msg_chunk.content}
-            elif isinstance(msg_chunk, ToolMessage):
-                yield {"type": "status", "content": f"Tool returned result"}
+            if stream_mode == "custom":
+                yield {"type": "status", "content": chunk}
+            elif stream_mode == "messages":
+                msg_chunk, metadata = chunk
+                if isinstance(msg_chunk, AIMessageChunk):
+                    if msg_chunk.tool_call_chunks:
+                        for tc in msg_chunk.tool_call_chunks:
+                            if tc.get("name"):
+                                yield {"type": "status", "content": f"Calling tool: {tc['name']}"}
+                    elif msg_chunk.content:
+                        full_response.append(msg_chunk.content)
+                        yield {"type": "token", "content": msg_chunk.content}
+                elif isinstance(msg_chunk, ToolMessage):
+                    yield {"type": "status", "content": "Tool returned result"}
 
         all_messages = list(messages) + [AIMessage(content="".join(full_response))]
         self._save_history(all_messages)

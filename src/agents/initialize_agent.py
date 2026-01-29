@@ -6,7 +6,7 @@ from langchain_core.tools import BaseTool
 
 from prompts import GENERAL_AGENT_PROMPT
 
-from .ollama_agent import OllamaAgent
+from .base import OllamaAgent
 
 
 def init_ollama_agent(
@@ -17,7 +17,7 @@ def init_ollama_agent(
     """Initialize and return an OllamaAgent.
 
     Args:
-        system_prompt: Optional system prompt. Defaults to SYSTEM_PROMPT from prompts.
+        system_prompt: Optional system prompt. Defaults to GENERAL_AGENT_PROMPT.
         tools: Optional list of tools available to the agent.
         maintain_history: Whether to maintain conversation history across calls.
 
