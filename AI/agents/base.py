@@ -8,7 +8,7 @@ from langchain_core.tools import BaseTool
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from logger import setup_logger
+from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
 

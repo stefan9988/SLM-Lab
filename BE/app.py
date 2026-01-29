@@ -5,21 +5,20 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-# Add src directory to path for imports when running from project root
-src_dir = Path(__file__).parent
-if str(src_dir) not in sys.path:
-    sys.path.insert(0, str(src_dir))
-
-from prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
 
-from agents import init_agent
-from config import settings
-from logger import setup_logger
-from tools import get_current_date_and_time, brave_search_tool, python_repl_tool
+from AI.agents import init_agent
+from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
+from AI.tools import get_current_date_and_time, brave_search_tool, python_repl_tool
+from BE.config import settings
+from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -123,4 +122,4 @@ async def clear_history(session_id: str = Query()):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("BE.app:app", host="0.0.0.0", port=8000, reload=True)

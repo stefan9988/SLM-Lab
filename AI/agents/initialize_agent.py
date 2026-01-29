@@ -5,8 +5,8 @@ from typing import List, Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import BaseTool
 
-from config import settings
-from logger import setup_logger
+from BE.config import settings
+from BE.logger import setup_logger
 
 from .base import Agent
 

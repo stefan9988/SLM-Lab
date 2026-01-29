@@ -40,7 +40,7 @@ settings = Settings()
 # Set LOG_LEVEL in environment so logger.py can read it before config is imported
 os.environ.setdefault("LOG_LEVEL", settings.LOG_LEVEL)
 
-from logger import setup_logger
+from BE.logger import setup_logger
 
 _logger = setup_logger(__name__)
 _logger.info(

@@ -2,8 +2,8 @@ from langchain_core.tools import tool
 from langchain_community.tools import BraveSearch
 from langgraph.config import get_stream_writer
 
-from config import settings
-from logger import setup_logger
+from BE.config import settings
+from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
 

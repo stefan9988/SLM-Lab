@@ -2,7 +2,7 @@ from langchain_core.tools import tool
 from langchain_experimental.tools import PythonREPLTool
 from langgraph.config import get_stream_writer
 
-from logger import setup_logger
+from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
 
