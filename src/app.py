@@ -18,7 +18,6 @@ from pydantic import BaseModel
 from agents import init_ollama_agent
 from config import settings
 from tools import get_current_date_and_time, brave_search_tool
-from langchain_community.tools import BraveSearch
 
 app = FastAPI(
     title=settings.API_TITLE,
@@ -60,8 +59,8 @@ async def chat_stream(request: ChatRequest):
     """
 
     def generate():
-        for chunk in general_agent.stream(request.message):
-            yield f"data: {json.dumps({'content': chunk})}\n\n"
+        for event in general_agent.stream(request.message):
+            yield f"data: {json.dumps(event)}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")

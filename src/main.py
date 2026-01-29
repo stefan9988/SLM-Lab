@@ -4,8 +4,11 @@ from tools import get_current_date_and_time, brave_search_tool
 agent = init_ollama_agent(tools=[get_current_date_and_time, brave_search_tool])
 
 def main():
-    for chunk in agent.stream("What is current bitcoin price?"):
-        print(chunk, end="", flush=True)
+    for event in agent.stream("Write paragraphs about the future of AI."):
+        if event["type"] == "token":
+            print(event["content"], end="", flush=True)
+        elif event["type"] == "status":
+            print(f"\n[{event['content']}]", flush=True)
     print()
 
 
