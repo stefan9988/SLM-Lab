@@ -54,6 +54,7 @@ class TestInitAgent:
         mock_create.return_value = MagicMock()
         agent = init_agent(system_prompt="test", tools=[], maintain_history=False)
         from AI.agents.base import Agent
+
         assert isinstance(agent, Agent)
 
     @patch("AI.agents.initialize_agent._build_llm")

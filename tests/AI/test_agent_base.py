@@ -46,9 +46,7 @@ class TestGetInputMessages:
 
 class TestInvoke:
     def test_returns_content(self, agent_no_history, mock_graph):
-        mock_graph.invoke.return_value = {
-            "messages": [AIMessage(content="response")]
-        }
+        mock_graph.invoke.return_value = {"messages": [AIMessage(content="response")]}
         result = agent_no_history.invoke("hi", "s1")
         assert result == "response"
 
@@ -70,17 +68,24 @@ class TestInvoke:
 class TestStream:
     def test_ai_chunk_with_content_yields_token(self, agent_no_history, mock_graph):
         chunk = AIMessageChunk(content="hi")
-        mock_graph.stream.return_value = iter([
-            ("messages", (chunk, {})),
-        ])
+        mock_graph.stream.return_value = iter(
+            [
+                ("messages", (chunk, {})),
+            ]
+        )
         events = list(agent_no_history.stream("hi", "s1"))
         assert events == [{"type": "token", "content": "hi"}]
 
     def test_ai_chunk_with_tool_call_yields_status(self, agent_no_history, mock_graph):
-        chunk = AIMessageChunk(content="", tool_call_chunks=[{"name": "mytool", "args": "", "id": "1", "index": 0}])
-        mock_graph.stream.return_value = iter([
-            ("messages", (chunk, {})),
-        ])
+        chunk = AIMessageChunk(
+            content="",
+            tool_call_chunks=[{"name": "mytool", "args": "", "id": "1", "index": 0}],
+        )
+        mock_graph.stream.return_value = iter(
+            [
+                ("messages", (chunk, {})),
+            ]
+        )
         events = list(agent_no_history.stream("hi", "s1"))
         assert len(events) == 1
         assert events[0]["type"] == "status"
@@ -88,16 +93,20 @@ class TestStream:
 
     def test_tool_message_yields_status(self, agent_no_history, mock_graph):
         chunk = ToolMessage(content="result", tool_call_id="1")
-        mock_graph.stream.return_value = iter([
-            ("messages", (chunk, {})),
-        ])
+        mock_graph.stream.return_value = iter(
+            [
+                ("messages", (chunk, {})),
+            ]
+        )
         events = list(agent_no_history.stream("hi", "s1"))
         assert events == [{"type": "status", "content": "Tool returned result"}]
 
     def test_custom_stream_mode_yields_status(self, agent_no_history, mock_graph):
-        mock_graph.stream.return_value = iter([
-            ("custom", "Processing..."),
-        ])
+        mock_graph.stream.return_value = iter(
+            [
+                ("custom", "Processing..."),
+            ]
+        )
         events = list(agent_no_history.stream("hi", "s1"))
         assert events == [{"type": "status", "content": "Processing..."}]
 

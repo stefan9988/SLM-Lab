@@ -17,9 +17,11 @@ class TestChatEndpoint:
 
 class TestChatStreamEndpoint:
     def test_returns_sse_with_done(self, client, mock_agent):
-        mock_agent.stream.return_value = iter([
-            {"type": "token", "content": "hi"},
-        ])
+        mock_agent.stream.return_value = iter(
+            [
+                {"type": "token", "content": "hi"},
+            ]
+        )
         resp = client.post("/chat/stream", json={"message": "hi", "session_id": "s1"})
         assert resp.status_code == 200
         lines = [l for l in resp.text.strip().split("\n\n") if l.startswith("data:")]
