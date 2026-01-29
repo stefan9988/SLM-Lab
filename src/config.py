@@ -17,5 +17,8 @@ class Settings(BaseSettings):
     API_DESCRIPTION: str = "Chat API with streaming support using OllamaAgent"
     API_VERSION: str = "0.1.0"
 
+    # External service API keys
+    BRAVE_SEARCH_API_KEY: str = "YOUR_BRAVE_SEARCH_API_KEY_HERE"
+
 
 settings = Settings()

@@ -17,7 +17,8 @@ from pydantic import BaseModel
 
 from agents import init_ollama_agent
 from config import settings
-from tools import get_current_date_and_time
+from tools import get_current_date_and_time, brave_search_tool
+from langchain_community.tools import BraveSearch
 
 app = FastAPI(
     title=settings.API_TITLE,
@@ -25,7 +26,7 @@ app = FastAPI(
     version=settings.API_VERSION,
 )
 
-general_agent = init_ollama_agent(system_prompt=GENERAL_AGENT_PROMPT, tools=[get_current_date_and_time], maintain_history=True)
+general_agent = init_ollama_agent(system_prompt=GENERAL_AGENT_PROMPT, tools=[get_current_date_and_time, brave_search_tool], maintain_history=True)
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoints."""
