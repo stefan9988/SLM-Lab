@@ -19,7 +19,7 @@ from pydantic import BaseModel, ValidationError
 from agents import init_ollama_agent
 from config import settings
 from logger import setup_logger
-from tools import get_current_date_and_time, brave_search_tool
+from tools import get_current_date_and_time, brave_search_tool, python_repl_tool
 
 logger = setup_logger(__name__)
 
@@ -38,7 +38,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-general_agent = init_ollama_agent(system_prompt=GENERAL_AGENT_PROMPT, tools=[get_current_date_and_time, brave_search_tool], maintain_history=True)
+general_agent = init_ollama_agent(system_prompt=GENERAL_AGENT_PROMPT, tools=[get_current_date_and_time, brave_search_tool, python_repl_tool], maintain_history=True)
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoints."""
