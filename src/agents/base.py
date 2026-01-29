@@ -144,3 +144,14 @@ class BaseAgent(ABC):
     def clear_history(self) -> None:
         """Clear the conversation history."""
         self._message_history = []
+
+    def get_history(self) -> List[dict]:
+        """Get conversation history as serializable dicts.
+
+        Returns:
+            List of dictionaries with 'role' and 'content' keys.
+        """
+        return [
+            {"role": msg.type, "content": msg.content}
+            for msg in self._message_history
+        ]

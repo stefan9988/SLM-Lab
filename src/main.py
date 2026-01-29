@@ -1,8 +1,7 @@
-from agents import OllamaAgent
-from prompts.main_prompt import SYSTEM_PROMPT
-from tools.get_current_date_and_time import get_current_date_and_time
+from agents import init_ollama_agent
+from tools import get_current_date_and_time
 
-agent = OllamaAgent(system_prompt=SYSTEM_PROMPT, tools=[get_current_date_and_time])
+agent = init_ollama_agent(tools=[get_current_date_and_time])
 
 def main():
     for chunk in agent.stream("What is the current date and time?"):
