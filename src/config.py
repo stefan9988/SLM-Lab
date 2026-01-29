@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,5 +22,18 @@ class Settings(BaseSettings):
     # External service API keys
     BRAVE_SEARCH_API_KEY: str = "YOUR_BRAVE_SEARCH_API_KEY_HERE"
 
+    # LangSmith settings
+    LANGSMITH_TRACING: bool = False
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGSMITH_API_KEY: str = ""
+    LANGSMITH_PROJECT: str = "SLM Lab"
+
 
 settings = Settings()
+
+# Export LangSmith settings to environment so LangChain picks them up
+if settings.LANGSMITH_TRACING:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGSMITH_ENDPOINT
+    os.environ["LANGCHAIN_API_KEY"] = settings.LANGSMITH_API_KEY
+    os.environ["LANGCHAIN_PROJECT"] = settings.LANGSMITH_PROJECT
