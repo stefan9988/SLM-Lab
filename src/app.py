@@ -9,6 +9,8 @@ src_dir = Path(__file__).parent
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
+from prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
+
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -23,7 +25,7 @@ app = FastAPI(
     version=settings.API_VERSION,
 )
 
-agent = init_ollama_agent(tools=[get_current_date_and_time], maintain_history=True)
+general_agent = init_ollama_agent(system_prompt=GENERAL_AGENT_PROMPT, tools=[get_current_date_and_time], maintain_history=True)
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoints."""
@@ -41,7 +43,7 @@ async def chat(request: ChatRequest):
     Returns:
         JSON with the assistant's response.
     """
-    response = agent.invoke(request.message)
+    response = general_agent.invoke(request.message)
     return {"response": response}
 
 
@@ -57,7 +59,7 @@ async def chat_stream(request: ChatRequest):
     """
 
     def generate():
-        for chunk in agent.stream(request.message):
+        for chunk in general_agent.stream(request.message):
             yield f"data: {json.dumps({'content': chunk})}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -71,7 +73,7 @@ async def get_history():
     Returns:
         JSON with the conversation history.
     """
-    return {"history": agent.get_history()}
+    return {"history": general_agent.get_history()}
 
 
 @app.delete("/history")
@@ -81,7 +83,7 @@ async def clear_history():
     Returns:
         JSON with status confirmation.
     """
-    agent.clear_history()
+    general_agent.clear_history()
     return {"status": "cleared"}
 
 

@@ -1,2 +1,0 @@
-SYSTEM_PROMPT = """You are an advanced AI assistant designed to help users with a wide range of tasks. 
-Your capabilities include answering questions, providing explanations, generating creative content."""

@@ -1,3 +1,3 @@
-from prompts.main_prompt import SYSTEM_PROMPT
+from prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 
-__all__ = ["SYSTEM_PROMPT"]
+__all__ = ["GENERAL_AGENT_PROMPT"]

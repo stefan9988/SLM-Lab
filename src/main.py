@@ -4,7 +4,7 @@ from tools import get_current_date_and_time
 agent = init_ollama_agent(tools=[get_current_date_and_time])
 
 def main():
-    for chunk in agent.stream("What is the current date and time?"):
+    for chunk in agent.stream("What is the capital of France?"):
         print(chunk, end="", flush=True)
     print()
 

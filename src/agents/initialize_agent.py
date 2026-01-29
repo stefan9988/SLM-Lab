@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from langchain_core.tools import BaseTool
 
-from prompts import SYSTEM_PROMPT
+from prompts import GENERAL_AGENT_PROMPT
 
 from .ollama_agent import OllamaAgent
 
@@ -25,7 +25,7 @@ def init_ollama_agent(
         Configured OllamaAgent instance.
     """
     return OllamaAgent(
-        system_prompt=system_prompt or SYSTEM_PROMPT,
+        system_prompt=system_prompt or GENERAL_AGENT_PROMPT,
         tools=tools,
         maintain_history=maintain_history,
     )
