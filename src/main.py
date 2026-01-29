@@ -1,16 +1,23 @@
-from agents import init_ollama_agent
+from agents import init_agent
 from logger import setup_logger
 from tools import get_current_date_and_time, brave_search_tool, python_repl_tool
+from prompts import GENERAL_AGENT_PROMPT
 
 logger = setup_logger(__name__)
 
-agent = init_ollama_agent(tools=[get_current_date_and_time, brave_search_tool, python_repl_tool])
+agent = init_agent(
+    system_prompt=GENERAL_AGENT_PROMPT,
+    tools=[get_current_date_and_time, brave_search_tool, python_repl_tool],
+)
+
 
 def main():
     logger.info("Starting conversation")
     token_count = 0
     try:
-        for event in agent.stream("Can you run a Python code to calculate the factorial of 5?"):
+        for event in agent.stream(
+            "Can you read what is in this file /home/beta/projects/SLM-Lab/README.md using Python?"
+        ):
             if event["type"] == "token":
                 print(event["content"], end="", flush=True)
                 token_count += 1

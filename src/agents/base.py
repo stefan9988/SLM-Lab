@@ -2,25 +2,23 @@
 
 from typing import Iterator, List, Optional
 
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import BaseTool
-from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from config import settings
 from logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
-class OllamaAgent:
-    """Agent using LangChain's create_agent with an Ollama backend."""
+class Agent:
+    """Provider-agnostic agent using LangChain's create_agent."""
 
     def __init__(
         self,
-        model_name: str = settings.MODEL_NAME,
-        base_url: str = settings.OLLAMA_BASE_URL,
+        llm: BaseChatModel,
         system_prompt: Optional[str] = None,
         tools: Optional[List[BaseTool]] = None,
         maintain_history: bool = False,
@@ -29,18 +27,21 @@ class OllamaAgent:
         self._message_history: List = []
 
         tool_names = [t.name for t in tools] if tools else []
-        logger.info("Initializing OllamaAgent (model=%s, tools=%s)", model_name, tool_names)
+        logger.info(
+            "Initializing Agent (model=%s, tools=%s)",
+            llm.__class__.__name__,
+            tool_names,
+        )
 
         try:
-            llm = ChatOllama(model=model_name, base_url=base_url)
             self._agent = create_agent(
                 model=llm,
                 tools=tools or [],
                 system_prompt=system_prompt,
             )
-            logger.info("OllamaAgent initialized successfully")
+            logger.info("Agent initialized successfully")
         except Exception:
-            logger.error("Failed to initialize OllamaAgent", exc_info=True)
+            logger.error("Failed to initialize Agent", exc_info=True)
             raise
 
     def invoke(self, prompt: str) -> str:
@@ -58,7 +59,6 @@ class OllamaAgent:
         except Exception:
             logger.error("invoke failed", exc_info=True)
             raise
-
 
     def stream(self, prompt: str):
         logger.info("stream called (prompt_length=%d)", len(prompt))
@@ -80,7 +80,10 @@ class OllamaAgent:
                             for tc in msg_chunk.tool_call_chunks:
                                 if tc.get("name"):
                                     logger.info("Tool call: %s", tc["name"])
-                                    yield {"type": "status", "content": f"Calling tool: {tc['name']}"}
+                                    yield {
+                                        "type": "status",
+                                        "content": f"Calling tool: {tc['name']}",
+                                    }
                         elif msg_chunk.content:
                             full_response.append(msg_chunk.content)
                             token_count += 1
@@ -95,7 +98,6 @@ class OllamaAgent:
             logger.error("stream failed", exc_info=True)
             raise
 
-
     def clear_history(self) -> None:
         """Clear the conversation history."""
         self._message_history = []
@@ -104,8 +106,7 @@ class OllamaAgent:
     def get_history(self) -> List[dict]:
         """Get conversation history as serializable dicts."""
         history = [
-            {"role": msg.type, "content": msg.content}
-            for msg in self._message_history
+            {"role": msg.type, "content": msg.content} for msg in self._message_history
         ]
         logger.debug("get_history called (messages=%d)", len(history))
         return history

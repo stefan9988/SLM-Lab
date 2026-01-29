@@ -7,7 +7,9 @@ from logger import setup_logger
 
 logger = setup_logger(__name__)
 
-_brave = BraveSearch.from_api_key(api_key=settings.BRAVE_SEARCH_API_KEY, search_kwargs={"count": 3})
+_brave = BraveSearch.from_api_key(
+    api_key=settings.BRAVE_SEARCH_API_KEY, search_kwargs={"count": 3}
+)
 
 
 @tool

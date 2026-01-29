@@ -13,9 +13,12 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
-    # Model settings
+    # LLM provider settings
+    LLM_PROVIDER: str = "ollama"  # "ollama" | "openrouter"
     MODEL_NAME: str = "llama2"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OPEN_ROUTER_API_KEY: str = ""
+    OPEN_ROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
 
     # API settings
     API_TITLE: str = "SLM-Lab Chat API"
@@ -40,7 +43,11 @@ os.environ.setdefault("LOG_LEVEL", settings.LOG_LEVEL)
 from logger import setup_logger
 
 _logger = setup_logger(__name__)
-_logger.info("Configuration loaded (model=%s, base_url=%s)", settings.MODEL_NAME, settings.OLLAMA_BASE_URL)
+_logger.info(
+    "Configuration loaded (model=%s, base_url=%s)",
+    settings.MODEL_NAME,
+    settings.OLLAMA_BASE_URL,
+)
 
 # Export LangSmith settings to environment so LangChain picks them up
 if settings.LANGSMITH_TRACING:

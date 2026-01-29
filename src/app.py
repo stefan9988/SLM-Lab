@@ -1,4 +1,4 @@
-"""FastAPI chat server exposing OllamaAgent via HTTP endpoints."""
+"""FastAPI chat server exposing the chat Agent via HTTP endpoints."""
 
 import json
 import sys
@@ -16,7 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
 
-from agents import init_ollama_agent
+from agents import init_agent
 from config import settings
 from logger import setup_logger
 from tools import get_current_date_and_time, brave_search_tool, python_repl_tool
@@ -38,7 +38,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-general_agent = init_ollama_agent(system_prompt=GENERAL_AGENT_PROMPT, tools=[get_current_date_and_time, brave_search_tool, python_repl_tool], maintain_history=True)
+general_agent = init_agent(
+    system_prompt=GENERAL_AGENT_PROMPT,
+    tools=[get_current_date_and_time, brave_search_tool, python_repl_tool],
+    maintain_history=True,
+)
+
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoints."""
@@ -54,7 +59,9 @@ async def validation_error_handler(request: Request, exc: ValidationError):
 
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception):
-    logger.error("Unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
+    logger.error(
+        "Unhandled error on %s %s", request.method, request.url.path, exc_info=exc
+    )
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
