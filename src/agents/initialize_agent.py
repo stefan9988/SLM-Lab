@@ -5,8 +5,11 @@ from typing import List, Optional
 from langchain_core.tools import BaseTool
 
 from prompts import GENERAL_AGENT_PROMPT
+from logger import setup_logger
 
 from .base import OllamaAgent
+
+logger = setup_logger(__name__)
 
 
 def init_ollama_agent(
@@ -24,8 +27,16 @@ def init_ollama_agent(
     Returns:
         Configured OllamaAgent instance.
     """
-    return OllamaAgent(
-        system_prompt=system_prompt or GENERAL_AGENT_PROMPT,
-        tools=tools,
-        maintain_history=maintain_history,
-    )
+    tool_names = [t.name for t in tools] if tools else []
+    logger.info("init_ollama_agent called (tools=%s, maintain_history=%s)", tool_names, maintain_history)
+    try:
+        agent = OllamaAgent(
+            system_prompt=system_prompt or GENERAL_AGENT_PROMPT,
+            tools=tools,
+            maintain_history=maintain_history,
+        )
+        logger.info("init_ollama_agent successful")
+        return agent
+    except Exception:
+        logger.error("init_ollama_agent failed", exc_info=True)
+        raise

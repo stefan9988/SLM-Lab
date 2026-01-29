@@ -10,6 +10,9 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
+    # Logging
+    LOG_LEVEL: str = "INFO"
+
     # Model settings
     MODEL_NAME: str = "llama2"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
@@ -31,9 +34,20 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+# Set LOG_LEVEL in environment so logger.py can read it before config is imported
+os.environ.setdefault("LOG_LEVEL", settings.LOG_LEVEL)
+
+from logger import setup_logger
+
+_logger = setup_logger(__name__)
+_logger.info("Configuration loaded (model=%s, base_url=%s)", settings.MODEL_NAME, settings.OLLAMA_BASE_URL)
+
 # Export LangSmith settings to environment so LangChain picks them up
 if settings.LANGSMITH_TRACING:
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGSMITH_ENDPOINT
     os.environ["LANGCHAIN_API_KEY"] = settings.LANGSMITH_API_KEY
     os.environ["LANGCHAIN_PROJECT"] = settings.LANGSMITH_PROJECT
+    _logger.info("LangSmith tracing enabled (project=%s)", settings.LANGSMITH_PROJECT)
+else:
+    _logger.debug("LangSmith tracing disabled")
