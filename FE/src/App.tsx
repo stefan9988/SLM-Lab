@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Conversation } from './types';
+import type { Conversation, FileAttachment } from './types';
 import { loadConversations, saveConversations, addConversation, removeConversation } from './utils/storage';
 import { useChat } from './hooks/useChat';
 import Sidebar from './components/Sidebar';
@@ -21,13 +21,13 @@ function App() {
   }, [loadHistory]);
 
   const handleSend = useCallback(
-    (text: string) => {
+    (text: string, files?: FileAttachment[]) => {
       // Ensure conversation exists in sidebar
       if (!conversations.find((c) => c.id === activeId)) {
         const title = text.slice(0, 50) || 'New Chat';
         setConversations(addConversation({ id: activeId, title }));
       }
-      sendMessage(text);
+      sendMessage(text, files);
     },
     [activeId, conversations, sendMessage],
   );
