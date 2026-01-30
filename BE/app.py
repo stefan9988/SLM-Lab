@@ -1,9 +1,11 @@
 """FastAPI chat server exposing the chat Agent via HTTP endpoints."""
 
+import base64
 import json
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import List, Optional
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent
@@ -21,6 +23,102 @@ from BE.config import settings
 from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+MAX_TOTAL_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+
+
+class FileAttachment(BaseModel):
+    name: str
+    type: str
+    content: str
+    size: int
+
+
+class ChatRequest(BaseModel):
+    """Request model for chat endpoints."""
+
+    message: str
+    session_id: str
+    files: Optional[List[FileAttachment]] = None
+
+
+def _decode_base64_content(data_url: str) -> bytes:
+    """Extract raw bytes from a data URL (e.g. 'data:text/plain;base64,...')."""
+    if "," in data_url:
+        return base64.b64decode(data_url.split(",", 1)[1])
+    return base64.b64decode(data_url)
+
+
+def build_prompt_with_files(
+    message: str, files: List[FileAttachment]
+) -> tuple[str, list[dict], list[str]]:
+    """Process file attachments and return (augmented_prompt, images_list, warnings)."""
+    text_parts: list[str] = []
+    images: list[dict] = []
+    warnings: list[str] = []
+
+    for f in files:
+        mime = f.type or ""
+
+        if mime.startswith("image/"):
+            # Keep the full data URL for multimodal message
+            images.append({"url": f.content})
+            text_parts.append(f"[Attached image: {f.name}]")
+
+        elif mime == "application/pdf":
+            try:
+                import fitz  # PyMuPDF
+
+                raw = _decode_base64_content(f.content)
+                doc = fitz.open(stream=raw, filetype="pdf")
+                pdf_text = "\n\n".join(page.get_text() for page in doc)
+                doc.close()
+                if pdf_text.strip():
+                    logger.info("Extracted %d chars from PDF %s", len(pdf_text), f.name)
+                    text_parts.append(
+                        f"--- Content of {f.name} ---\n{pdf_text}\n--- End of {f.name} ---"
+                    )
+                else:
+                    warn = (
+                        f"No extractable text in {f.name} – possibly a scanned document"
+                    )
+                    logger.warning(warn)
+                    warnings.append(warn)
+                    text_parts.append(
+                        f"[Attached PDF: {f.name} (no extractable text – possibly a scanned document)]"
+                    )
+            except Exception as exc:
+                warn = f"Failed to extract PDF text from {f.name}: {exc}"
+                logger.warning(warn)
+                warnings.append(warn)
+                text_parts.append(f"[Attached PDF: {f.name} (could not extract text)]")
+
+        else:
+            # Text / code files
+            try:
+                raw = _decode_base64_content(f.content)
+                file_text = raw.decode("utf-8")
+                logger.info("Read %d chars from file %s", len(file_text), f.name)
+                text_parts.append(
+                    f"--- Content of {f.name} ---\n{file_text}\n--- End of {f.name} ---"
+                )
+            except Exception as exc:
+                warn = f"Failed to decode text file {f.name}: {exc}"
+                logger.warning(warn)
+                warnings.append(warn)
+                text_parts.append(f"[Attached file: {f.name} (could not decode)]")
+
+    augmented = message
+    if not message.strip() and text_parts:
+        augmented = (
+            "\n\n".join(text_parts)
+            + "\n\nThe user uploaded the above file(s) without a message."
+            " Please review and summarize the content."
+        )
+    elif text_parts:
+        augmented = "\n\n".join(text_parts) + "\n\n" + message
+
+    return augmented, images, warnings
 
 
 @asynccontextmanager
@@ -42,13 +140,6 @@ general_agent = init_agent(
     tools=[get_current_date_and_time, brave_search_tool, python_repl_tool],
     maintain_history=True,
 )
-
-
-class ChatRequest(BaseModel):
-    """Request model for chat endpoints."""
-
-    message: str
-    session_id: str
 
 
 @app.exception_handler(ValidationError)
@@ -73,7 +164,25 @@ async def chat(request: ChatRequest):
         request.session_id,
         request.message,
     )
-    response = general_agent.invoke(request.message, session_id=request.session_id)
+
+    prompt = request.message
+    images: list[dict] = []
+
+    if request.files:
+        total_size = sum(f.size for f in request.files)
+        if total_size > MAX_TOTAL_FILE_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Total file size exceeds 20MB limit"},
+            )
+        prompt, images, file_warnings = build_prompt_with_files(
+            request.message, request.files
+        )
+        logger.info("Augmented prompt length: %d chars", len(prompt))
+
+    response = general_agent.invoke(
+        prompt, session_id=request.session_id, images=images or None
+    )
     logger.info(
         "POST /chat response (session_id=%s, length=%d)",
         request.session_id,
@@ -91,9 +200,29 @@ async def chat_stream(request: ChatRequest):
         request.message,
     )
 
+    prompt = request.message
+    images: list[dict] = []
+
+    logger.info("Files received: %d", len(request.files) if request.files else 0)
+
+    if request.files:
+        total_size = sum(f.size for f in request.files)
+        if total_size > MAX_TOTAL_FILE_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Total file size exceeds 20MB limit"},
+            )
+        prompt, images, file_warnings = build_prompt_with_files(
+            request.message, request.files
+        )
+        logger.info("Augmented prompt length: %d chars", len(prompt))
+
     def generate():
+        if request.files:
+            for warn in file_warnings:
+                yield f"data: {json.dumps({'type': 'status', 'content': warn})}\n\n"
         for event in general_agent.stream(
-            request.message, session_id=request.session_id
+            prompt, session_id=request.session_id, images=images or None
         ):
             yield f"data: {json.dumps(event)}\n\n"
         yield "data: [DONE]\n\n"

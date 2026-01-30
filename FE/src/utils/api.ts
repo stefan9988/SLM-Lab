@@ -1,4 +1,4 @@
-import type { Message, SSEEvent } from '../types';
+import type { Message, SSEEvent, FileAttachment } from '../types';
 
 export async function fetchHistory(sessionId: string): Promise<Message[]> {
   const res = await fetch(`/history?session_id=${encodeURIComponent(sessionId)}`);
@@ -17,11 +17,12 @@ export async function clearHistory(sessionId: string): Promise<void> {
 export async function* streamChat(
   message: string,
   sessionId: string,
+  files?: FileAttachment[],
 ): AsyncGenerator<SSEEvent | 'DONE'> {
   const res = await fetch('/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, session_id: sessionId }),
+    body: JSON.stringify({ message, session_id: sessionId, files }),
   });
 
   if (!res.ok) throw new Error('Stream request failed');

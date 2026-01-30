@@ -44,14 +44,19 @@ class Agent:
             logger.error("Failed to initialize Agent", exc_info=True)
             raise
 
-    def invoke(self, prompt: str, session_id: str) -> str:
+    def invoke(
+        self,
+        prompt: str,
+        session_id: str,
+        images: Optional[list[dict]] = None,
+    ) -> str:
         """Get a complete response for the given prompt."""
         logger.info(
             "invoke called (prompt_length=%d, session_id=%s)", len(prompt), session_id
         )
         logger.debug("invoke prompt: %s", prompt)
         try:
-            messages = self._get_input_messages(prompt, session_id)
+            messages = self._get_input_messages(prompt, session_id, images=images)
             result = self._agent.invoke({"messages": messages})
             all_messages = result["messages"]
             self._save_history(all_messages, session_id)
@@ -62,13 +67,18 @@ class Agent:
             logger.error("invoke failed", exc_info=True)
             raise
 
-    def stream(self, prompt: str, session_id: str):
+    def stream(
+        self,
+        prompt: str,
+        session_id: str,
+        images: Optional[list[dict]] = None,
+    ):
         logger.info(
             "stream called (prompt_length=%d, session_id=%s)", len(prompt), session_id
         )
         logger.debug("stream prompt: %s", prompt)
         try:
-            messages = self._get_input_messages(prompt, session_id)
+            messages = self._get_input_messages(prompt, session_id, images=images)
 
             full_response = []
             token_count = 0
@@ -116,11 +126,24 @@ class Agent:
         )
         return history
 
-    def _get_input_messages(self, prompt: str, session_id: str) -> List:
+    def _get_input_messages(
+        self,
+        prompt: str,
+        session_id: str,
+        images: Optional[list[dict]] = None,
+    ) -> List:
+        if images:
+            content: list[dict] = [{"type": "text", "text": prompt}]
+            for img in images:
+                content.append({"type": "image_url", "image_url": {"url": img["url"]}})
+            human_msg = HumanMessage(content=content)
+        else:
+            human_msg = HumanMessage(content=prompt)
+
         if self.maintain_history:
             history = self._session_histories.get(session_id, [])
-            return list(history) + [HumanMessage(content=prompt)]
-        return [HumanMessage(content=prompt)]
+            return list(history) + [human_msg]
+        return [human_msg]
 
     def _save_history(self, messages: List, session_id: str) -> None:
         if self.maintain_history:

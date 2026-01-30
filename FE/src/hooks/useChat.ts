@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import type { Message } from '../types';
+import type { Message, FileAttachment } from '../types';
 import { streamChat, fetchHistory, clearHistory } from '../utils/api';
 
 export function useChat(sessionId: string) {
@@ -18,11 +18,11 @@ export function useChat(sessionId: string) {
   }, [sessionId]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, files?: FileAttachment[]) => {
       if (streaming) return;
       abortRef.current = false;
 
-      const userMsg: Message = { role: 'human', content: text };
+      const userMsg: Message = { role: 'human', content: text, files };
       setMessages((prev) => [...prev, userMsg]);
       setStreaming(true);
       setToolStatus(null);
@@ -31,7 +31,7 @@ export function useChat(sessionId: string) {
       setMessages((prev) => [...prev, aiMsg]);
 
       try {
-        for await (const event of streamChat(text, sessionId)) {
+        for await (const event of streamChat(text, sessionId, files)) {
           if (abortRef.current) break;
           if (event === 'DONE') break;
           if (event.type === 'token') {
