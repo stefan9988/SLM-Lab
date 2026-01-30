@@ -21,7 +21,10 @@ def _build_llm() -> BaseChatModel:
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
-        return ChatOllama(model=settings.MODEL_NAME, base_url=settings.OLLAMA_BASE_URL, reasoning=True)
+        kwargs = {"model": settings.MODEL_NAME, "base_url": settings.OLLAMA_BASE_URL}
+        if settings.OLLAMA_THINKING:
+            kwargs["reasoning"] = True
+        return ChatOllama(**kwargs)
     elif provider == "openrouter":
         from langchain_openai import ChatOpenAI
 

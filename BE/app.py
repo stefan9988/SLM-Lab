@@ -12,6 +12,11 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
@@ -25,6 +30,10 @@ from BE.logger import setup_logger
 logger = setup_logger(__name__)
 
 MAX_TOTAL_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+
+
+class FileSizeLimitExceeded(Exception):
+    """Raised when total uploaded file size exceeds the limit."""
 
 
 class FileAttachment(BaseModel):
@@ -66,9 +75,13 @@ def build_prompt_with_files(
             text_parts.append(f"[Attached image: {f.name}]")
 
         elif mime == "application/pdf":
+            if fitz is None:
+                warn = f"PyMuPDF not installed – cannot extract text from {f.name}"
+                logger.warning(warn)
+                warnings.append(warn)
+                text_parts.append(f"[Attached PDF: {f.name} (PyMuPDF not installed)]")
+                continue
             try:
-                import fitz  # PyMuPDF
-
                 raw = _decode_base64_content(f.content)
                 doc = fitz.open(stream=raw, filetype="pdf")
                 pdf_text = "\n\n".join(page.get_text() for page in doc)
@@ -121,9 +134,32 @@ def build_prompt_with_files(
     return augmented, images, warnings
 
 
+def process_files(
+    message: str, files: Optional[List[FileAttachment]]
+) -> tuple[str, list[dict], list[str]]:
+    """Validate file sizes and build augmented prompt.
+
+    Returns (prompt, images, warnings).
+    Raises FileSizeLimitExceeded if total size exceeds MAX_TOTAL_FILE_SIZE.
+    """
+    if not files:
+        return message, [], []
+    total_size = sum(f.size for f in files)
+    if total_size > MAX_TOTAL_FILE_SIZE:
+        raise FileSizeLimitExceeded()
+    prompt, images, warnings = build_prompt_with_files(message, files)
+    logger.info("Augmented prompt length: %d chars", len(prompt))
+    return prompt, images, warnings
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application startup")
+    app.state.general_agent = init_agent(
+        system_prompt=GENERAL_AGENT_PROMPT,
+        tools=[get_current_date_and_time, brave_search_tool, python_repl_tool],
+        maintain_history=True,
+    )
     yield
     logger.info("Application shutdown")
 
@@ -133,12 +169,6 @@ app = FastAPI(
     description=settings.API_DESCRIPTION,
     version=settings.API_VERSION,
     lifespan=lifespan,
-)
-
-general_agent = init_agent(
-    system_prompt=GENERAL_AGENT_PROMPT,
-    tools=[get_current_date_and_time, brave_search_tool, python_repl_tool],
-    maintain_history=True,
 )
 
 
@@ -157,94 +187,84 @@ async def unhandled_error_handler(request: Request, exc: Exception):
 
 
 @app.post("/chat")
-async def chat(request: ChatRequest):
+async def chat(body: ChatRequest, request: Request):
     """Send a message and get a complete response."""
     logger.info(
         "POST /chat (session_id=%s, message_preview=%.50s)",
-        request.session_id,
-        request.message,
+        body.session_id,
+        body.message,
     )
 
-    prompt = request.message
-    images: list[dict] = []
-
-    if request.files:
-        total_size = sum(f.size for f in request.files)
-        if total_size > MAX_TOTAL_FILE_SIZE:
-            return JSONResponse(
-                status_code=413,
-                content={"detail": "Total file size exceeds 20MB limit"},
-            )
-        prompt, images, file_warnings = build_prompt_with_files(
-            request.message, request.files
+    try:
+        prompt, images, file_warnings = process_files(body.message, body.files)
+    except FileSizeLimitExceeded:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": "Total file size exceeds 20MB limit"},
         )
-        logger.info("Augmented prompt length: %d chars", len(prompt))
 
-    response = general_agent.invoke(
-        prompt, session_id=request.session_id, images=images or None
+    agent = request.app.state.general_agent
+    response = agent.invoke(
+        prompt, session_id=body.session_id, images=images or None
     )
     logger.info(
         "POST /chat response (session_id=%s, length=%d)",
-        request.session_id,
+        body.session_id,
         len(response),
     )
     return {"response": response}
 
 
 @app.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(body: ChatRequest, request: Request):
     """Send a message and get a streaming SSE response."""
     logger.info(
         "POST /chat/stream (session_id=%s, message_preview=%.50s)",
-        request.session_id,
-        request.message,
+        body.session_id,
+        body.message,
     )
 
-    prompt = request.message
-    images: list[dict] = []
+    logger.info("Files received: %d", len(body.files) if body.files else 0)
 
-    logger.info("Files received: %d", len(request.files) if request.files else 0)
-
-    if request.files:
-        total_size = sum(f.size for f in request.files)
-        if total_size > MAX_TOTAL_FILE_SIZE:
-            return JSONResponse(
-                status_code=413,
-                content={"detail": "Total file size exceeds 20MB limit"},
-            )
-        prompt, images, file_warnings = build_prompt_with_files(
-            request.message, request.files
+    try:
+        prompt, images, file_warnings = process_files(body.message, body.files)
+    except FileSizeLimitExceeded:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": "Total file size exceeds 20MB limit"},
         )
-        logger.info("Augmented prompt length: %d chars", len(prompt))
+
+    agent = request.app.state.general_agent
 
     def generate():
-        if request.files:
-            for warn in file_warnings:
-                yield f"data: {json.dumps({'type': 'status', 'content': warn})}\n\n"
-        for event in general_agent.stream(
-            prompt, session_id=request.session_id, images=images or None
+        for warn in file_warnings:
+            yield f"data: {json.dumps({'type': 'status', 'content': warn})}\n\n"
+        for event in agent.stream(
+            prompt, session_id=body.session_id, images=images or None
         ):
             yield f"data: {json.dumps(event)}\n\n"
         yield "data: [DONE]\n\n"
-        logger.info("POST /chat/stream complete (session_id=%s)", request.session_id)
+        logger.info("POST /chat/stream complete (session_id=%s)", body.session_id)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @app.get("/history")
-async def get_history(session_id: str = Query()):
+async def get_history(request: Request, session_id: str = Query()):
     """Retrieve conversation history for a session."""
     logger.info("GET /history (session_id=%s)", session_id)
-    history = general_agent.get_history(session_id=session_id)
+    agent = request.app.state.general_agent
+    history = agent.get_history(session_id=session_id)
     logger.info("GET /history (session_id=%s, messages=%d)", session_id, len(history))
     return {"history": history}
 
 
 @app.delete("/history")
-async def clear_history(session_id: str = Query()):
+async def clear_history(request: Request, session_id: str = Query()):
     """Clear conversation history for a session."""
     logger.info("DELETE /history (session_id=%s)", session_id)
-    general_agent.clear_history(session_id=session_id)
+    agent = request.app.state.general_agent
+    agent.clear_history(session_id=session_id)
     return {"status": "cleared"}
 
 

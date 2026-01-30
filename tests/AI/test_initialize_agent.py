@@ -13,13 +13,21 @@ class TestBuildLlm:
         mock_settings.LLM_PROVIDER = "ollama"
         mock_settings.MODEL_NAME = "llama3.1:8b"
         mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        with patch("AI.agents.initialize_agent.ChatOllama", create=True) as mock_cls:
-            # The import is inside the function, so we patch it at module level
-            with patch.dict("sys.modules", {}):
-                pass
-        # Simpler approach: patch the import inside _build_llm
+        mock_settings.OLLAMA_THINKING = True
         with patch("langchain_ollama.ChatOllama") as MockOllama:
-            llm = _build_llm()
+            _build_llm()
+            MockOllama.assert_called_once_with(
+                model="llama3.1:8b", base_url="http://localhost:11434", reasoning=True
+            )
+
+    @patch("AI.agents.initialize_agent.settings")
+    def test_ollama_provider_no_thinking(self, mock_settings):
+        mock_settings.LLM_PROVIDER = "ollama"
+        mock_settings.MODEL_NAME = "llama3.1:8b"
+        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
+        mock_settings.OLLAMA_THINKING = False
+        with patch("langchain_ollama.ChatOllama") as MockOllama:
+            _build_llm()
             MockOllama.assert_called_once_with(
                 model="llama3.1:8b", base_url="http://localhost:11434"
             )
