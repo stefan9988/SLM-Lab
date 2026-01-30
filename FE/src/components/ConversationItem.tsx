@@ -10,14 +10,16 @@ interface Props {
 export default function ConversationItem({ conversation, active, onSelect, onDelete }: Props) {
   return (
     <div
-      className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-sm ${
-        active ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100 text-gray-700'
+      className={`group flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors duration-150 ${
+        active
+          ? 'bg-[#7c3aed]/20 text-[#e2e8f0] border-l-2 border-[#7c3aed]'
+          : 'hover:bg-[#0f3460]/50 text-[#94a3b8] border-l-2 border-transparent'
       }`}
       onClick={() => onSelect(conversation.id)}
     >
       <span className="truncate flex-1">{conversation.title}</span>
       <button
-        className="ml-2 text-gray-400 hover:text-red-500 shrink-0"
+        className="ml-2 text-[#94a3b8] opacity-0 group-hover:opacity-100 hover:text-[#ef4444] shrink-0 transition-opacity duration-150"
         onClick={(e) => {
           e.stopPropagation();
           onDelete(conversation.id);

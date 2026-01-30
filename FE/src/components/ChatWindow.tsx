@@ -40,9 +40,23 @@ export default function ChatWindow({ messages, toolStatus, streaming }: Props) {
   }, [messages, toolStatus]);
 
   return (
-    <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4">
+    <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 bg-[#0f172a] relative">
       {messages.length === 0 && (
-        <p className="text-center text-gray-400 mt-20">Send a message to start chatting.</p>
+        <div className="flex flex-col items-center justify-center h-full pb-20">
+          <h2 className="text-2xl font-bold text-[#e2e8f0] mb-2">SLM Lab</h2>
+          <p className="text-[#94a3b8] text-sm mb-8">What can I help you with?</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl w-full px-4">
+            <div className="rounded-xl border border-[#334155] bg-[#1e293b] p-4 text-sm text-[#94a3b8] hover:border-[#7c3aed] transition-colors cursor-default">
+              Explain how reinforcement learning agents work
+            </div>
+            <div className="rounded-xl border border-[#334155] bg-[#1e293b] p-4 text-sm text-[#94a3b8] hover:border-[#7c3aed] transition-colors cursor-default">
+              Compare DQN and PPO algorithms
+            </div>
+            <div className="rounded-xl border border-[#334155] bg-[#1e293b] p-4 text-sm text-[#94a3b8] hover:border-[#7c3aed] transition-colors cursor-default">
+              Help me configure a new experiment
+            </div>
+          </div>
+        </div>
       )}
       {messages.map((msg, i) => {
         const isLastAi = msg.role === 'ai' && i === messages.length - 1;

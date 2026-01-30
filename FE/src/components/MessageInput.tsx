@@ -1,4 +1,4 @@
-import { useState, useRef, type KeyboardEvent, type ChangeEvent } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react';
 import type { FileAttachment } from '../types';
 
 const ACCEPTED_TYPES =
@@ -13,11 +13,24 @@ interface Props {
   onStop: () => void;
 }
 
+const MAX_ROWS = 8;
+const MIN_ROWS = 1;
+const LINE_HEIGHT = 20;
+
 export default function MessageInput({ onSend, disabled, streaming, onStop }: Props) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const newHeight = Math.min(el.scrollHeight, MAX_ROWS * LINE_HEIGHT);
+    el.style.height = `${Math.max(newHeight, MIN_ROWS * LINE_HEIGHT)}px`;
+  }, [text]);
 
   const handleFiles = (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -75,6 +88,9 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
     setText('');
     setFiles([]);
     setError(null);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
   };
 
   const handleKey = (e: KeyboardEvent) => {
@@ -85,21 +101,21 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
   };
 
   return (
-    <div className="border-t p-3">
+    <div className="bg-[#0f172a] px-4 py-3">
       {error && (
-        <p className="text-red-500 text-xs mb-2">{error}</p>
+        <p className="text-[#ef4444] text-xs mb-2">{error}</p>
       )}
       {files.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
           {files.map((f, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1 bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full"
+              className="inline-flex items-center gap-1 bg-[#0f3460] text-[#e2e8f0] text-xs px-2 py-1 rounded-full border border-[#334155]"
             >
               {f.name}
               <button
                 type="button"
-                className="hover:text-red-500"
+                className="hover:text-[#ef4444] transition-colors"
                 onClick={() => removeFile(i)}
               >
                 &times;
@@ -108,7 +124,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
           ))}
         </div>
       )}
-      <div className="flex gap-2">
+      <div className="flex items-end gap-2 bg-[#1e293b] border border-[#334155] rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-[#7c3aed] focus-within:border-[#7c3aed] transition-all duration-200">
         <input
           ref={fileInputRef}
           type="file"
@@ -119,7 +135,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
         />
         <button
           type="button"
-          className="rounded-lg border border-gray-300 px-3 py-2 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50"
+          className="p-1.5 text-[#94a3b8] hover:text-[#e2e8f0] disabled:opacity-50 transition-colors duration-200"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
           title="Attach files"
@@ -129,8 +145,9 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
           </svg>
         </button>
         <textarea
-          className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-          rows={1}
+          ref={textareaRef}
+          className="flex-1 resize-none bg-transparent text-[#e2e8f0] placeholder-[#94a3b8] py-1 focus:outline-none text-sm overflow-y-auto"
+          rows={MIN_ROWS}
           placeholder="Type a message…"
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -139,19 +156,25 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
         />
         {streaming ? (
           <button
-            className="rounded-lg bg-red-600 px-4 py-2 text-white text-sm font-medium hover:bg-red-700"
+            className="flex-shrink-0 w-8 h-8 rounded-full bg-[#ef4444] flex items-center justify-center text-white hover:bg-[#dc2626] transition-colors duration-200"
             onClick={onStop}
             type="button"
+            title="Stop"
           >
-            Stop
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16">
+              <rect x="3" y="3" width="10" height="10" rx="1" />
+            </svg>
           </button>
         ) : (
           <button
-            className="rounded-lg bg-blue-600 px-4 py-2 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="flex-shrink-0 w-8 h-8 rounded-full bg-[#7c3aed] flex items-center justify-center text-white hover:bg-[#6d28d9] disabled:opacity-50 transition-colors duration-200"
             onClick={handleSend}
             disabled={disabled || (!text.trim() && files.length === 0)}
+            title="Send"
           >
-            Send
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
           </button>
         )}
       </div>

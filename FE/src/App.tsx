@@ -57,7 +57,7 @@ function App() {
   }, [clearChat]);
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-[#0f172a] text-[#e2e8f0]">
       <Sidebar
         conversations={conversations}
         activeId={activeId}

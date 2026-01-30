@@ -6,6 +6,30 @@ interface Props extends MessageType {
   isThinking?: boolean;
 }
 
+function CopyButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="absolute top-2 right-2 px-2 py-1 rounded bg-[#334155] text-[#94a3b8] hover:bg-[#475569] hover:text-[#e2e8f0] text-xs opacity-0 group-hover:opacity-100 transition-all duration-200"
+      title="Copy code"
+    >
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  );
+}
+
 export default function Message({ role, content, files, thinking, isThinking }: Props) {
   const isUser = role === 'human';
   const [showThinking, setShowThinking] = useState(false);
@@ -37,12 +61,12 @@ export default function Message({ role, content, files, thinking, isThinking }: 
   const thinkingDone = !isThinking && !!thinking;
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3 animate-messageIn`}>
       <div
-        className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+        className={`rounded-2xl px-5 py-3 leading-relaxed ${
           isUser
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-100 text-gray-900'
+            ? 'max-w-[80%] bg-gradient-to-br from-[#7c3aed] to-[#533483] text-white'
+            : 'max-w-[750px] bg-[#1e293b] text-[#e2e8f0] border border-[#334155] shadow-sm'
         }`}
       >
         {isUser && files && files.length > 0 && (
@@ -50,7 +74,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
             {files.map((f, i) => (
               <span
                 key={i}
-                className="inline-block bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full"
+                className="inline-block bg-[#7c3aed] text-white text-xs px-2 py-0.5 rounded-full"
               >
                 {f.name}
               </span>
@@ -61,11 +85,11 @@ export default function Message({ role, content, files, thinking, isThinking }: 
         {/* Live streaming: show thinking text as it arrives */}
         {!isUser && isThinking && thinking && (
           <div className="mb-2">
-            <p className="text-xs text-gray-400 font-medium mb-1 flex items-center gap-1">
-              <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <p className="text-xs text-[#06b6d4] font-medium mb-1 flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-[#06b6d4] animate-pulse" />
               Thinking...
             </p>
-            <div ref={thinkingRef} onScroll={handleThinkingScroll} className="pl-3 border-l-2 border-amber-300 text-sm text-gray-400 italic whitespace-pre-wrap max-h-40 overflow-y-auto">
+            <div ref={thinkingRef} onScroll={handleThinkingScroll} className="pl-3 border-l-2 border-[#06b6d4]/40 text-sm text-[#94a3b8] italic whitespace-pre-wrap max-h-40 overflow-y-auto">
               {thinking}
             </div>
           </div>
@@ -73,7 +97,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
 
         {/* Still waiting for first thinking token */}
         {!isUser && isThinking && !thinking && (
-          <p className="text-sm text-gray-400 italic animate-pulse">Thinking...</p>
+          <p className="text-sm text-[#06b6d4] italic animate-pulse">Thinking...</p>
         )}
 
         {/* Thinking done: collapsible summary */}
@@ -81,7 +105,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
           <div className="mb-2">
             <button
               onClick={() => setShowThinking((v) => !v)}
-              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
+              className="text-xs text-[#94a3b8] hover:text-[#e2e8f0] flex items-center gap-1 transition-colors"
             >
               <span
                 className="inline-block transition-transform duration-200"
@@ -92,7 +116,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
               Thought for a moment
             </button>
             {showThinking && (
-              <div className="mt-1 pl-3 border-l-2 border-gray-300 text-sm text-gray-400 italic whitespace-pre-wrap max-h-60 overflow-y-auto">
+              <div className="mt-1 pl-3 border-l-2 border-[#334155] text-sm text-[#94a3b8] italic whitespace-pre-wrap max-h-60 overflow-y-auto">
                 {thinking}
               </div>
             )}
@@ -102,7 +126,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
         {isUser ? (
           content ? <p className="whitespace-pre-wrap">{content}</p> : null
         ) : (
-          <div className="prose prose-sm max-w-none">
+          <div className="prose prose-sm prose-invert max-w-none prose-p:text-[#e2e8f0] prose-headings:text-[#e2e8f0] prose-strong:text-[#e2e8f0] prose-code:text-[#06b6d4] prose-code:bg-[#0f172a] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0f172a] prose-pre:border prose-pre:border-[#334155] prose-a:text-[#7c3aed] prose-a:no-underline hover:prose-a:underline">
             <ReactMarkdown
               components={{
                 a: ({ href, children }) => (
@@ -110,11 +134,20 @@ export default function Message({ role, content, files, thinking, isThinking }: 
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 underline hover:text-blue-800"
                   >
                     {children}
                   </a>
                 ),
+                pre: ({ children }) => {
+                  const codeElement = children as React.ReactElement<{ children: string }>;
+                  const code = codeElement?.props?.children || '';
+                  return (
+                    <div className="relative group">
+                      <CopyButton code={code} />
+                      <pre className="!bg-[#0f172a] !border-[#334155] !p-4 !mt-0">{children}</pre>
+                    </div>
+                  );
+                },
               }}
             >{content}</ReactMarkdown>
           </div>
