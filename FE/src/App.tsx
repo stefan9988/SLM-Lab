@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Conversation, FileAttachment } from './types';
-import { loadConversations, saveConversations, addConversation, removeConversation } from './utils/storage';
+import { loadConversations, addConversation, removeConversation } from './utils/storage';
 import { useChat } from './hooks/useChat';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';

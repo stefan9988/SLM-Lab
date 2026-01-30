@@ -9,7 +9,10 @@ logger = setup_logger(__name__)
 
 def _get_client() -> Client:
     """Create an Ollama client with the API key configured."""
-    return Client(headers={"authorization": f"Bearer {settings.OLLAMA_API_KEY}"})
+    return Client(
+        host=settings.OLLAMA_BASE_URL,
+        headers={"authorization": f"Bearer {settings.OLLAMA_API_KEY}"},
+    )
 
 
 @tool
