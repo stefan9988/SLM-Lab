@@ -10,11 +10,28 @@ export default function Message({ role, content, files, thinking, isThinking }: 
   const isUser = role === 'human';
   const [showThinking, setShowThinking] = useState(false);
   const thinkingRef = useRef<HTMLDivElement>(null);
+  const thinkingUserScrolledUp = useRef(false);
+  const thinkingLastScrollTop = useRef(0);
+
+  const handleThinkingScroll = () => {
+    const el = thinkingRef.current;
+    if (!el) return;
+    const currentTop = el.scrollTop;
+    const distanceFromBottom = el.scrollHeight - currentTop - el.clientHeight;
+
+    if (currentTop < thinkingLastScrollTop.current && distanceFromBottom > 20) {
+      thinkingUserScrolledUp.current = true;
+    }
+    if (distanceFromBottom < 10) {
+      thinkingUserScrolledUp.current = false;
+    }
+    thinkingLastScrollTop.current = currentTop;
+  };
 
   useEffect(() => {
-    if (isThinking && thinkingRef.current) {
-      thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
-    }
+    const el = thinkingRef.current;
+    if (!isThinking || !el || thinkingUserScrolledUp.current) return;
+    el.scrollTop = el.scrollHeight;
   }, [thinking, isThinking]);
 
   const thinkingDone = !isThinking && !!thinking;
@@ -48,7 +65,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
               <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
               Thinking...
             </p>
-            <div ref={thinkingRef} className="pl-3 border-l-2 border-amber-300 text-sm text-gray-400 italic whitespace-pre-wrap max-h-40 overflow-y-auto">
+            <div ref={thinkingRef} onScroll={handleThinkingScroll} className="pl-3 border-l-2 border-amber-300 text-sm text-gray-400 italic whitespace-pre-wrap max-h-40 overflow-y-auto">
               {thinking}
             </div>
           </div>
