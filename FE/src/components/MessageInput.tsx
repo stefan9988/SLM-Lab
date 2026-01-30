@@ -9,9 +9,11 @@ const MAX_TOTAL_SIZE = 20 * 1024 * 1024;
 interface Props {
   onSend: (text: string, files?: FileAttachment[]) => void;
   disabled: boolean;
+  streaming: boolean;
+  onStop: () => void;
 }
 
-export default function MessageInput({ onSend, disabled }: Props) {
+export default function MessageInput({ onSend, disabled, streaming, onStop }: Props) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -135,13 +137,23 @@ export default function MessageInput({ onSend, disabled }: Props) {
           onKeyDown={handleKey}
           disabled={disabled}
         />
-        <button
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          onClick={handleSend}
-          disabled={disabled || (!text.trim() && files.length === 0)}
-        >
-          Send
-        </button>
+        {streaming ? (
+          <button
+            className="rounded-lg bg-red-600 px-4 py-2 text-white text-sm font-medium hover:bg-red-700"
+            onClick={onStop}
+            type="button"
+          >
+            Stop
+          </button>
+        ) : (
+          <button
+            className="rounded-lg bg-blue-600 px-4 py-2 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            onClick={handleSend}
+            disabled={disabled || (!text.trim() && files.length === 0)}
+          >
+            Send
+          </button>
+        )}
       </div>
     </div>
   );

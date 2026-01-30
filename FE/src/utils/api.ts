@@ -18,11 +18,13 @@ export async function* streamChat(
   message: string,
   sessionId: string,
   files?: FileAttachment[],
+  signal?: AbortSignal,
 ): AsyncGenerator<SSEEvent | 'DONE'> {
   const res = await fetch('/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, session_id: sessionId, files }),
+    signal,
   });
 
   if (!res.ok) throw new Error('Stream request failed');

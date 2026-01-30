@@ -6,7 +6,7 @@ export function useChat(sessionId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [toolStatus, setToolStatus] = useState<string | null>(null);
-  const abortRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -17,10 +17,19 @@ export function useChat(sessionId: string) {
     }
   }, [sessionId]);
 
+  const stopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setStreaming(false);
+    setToolStatus(null);
+  }, []);
+
   const sendMessage = useCallback(
     async (text: string, files?: FileAttachment[]) => {
       if (streaming) return;
-      abortRef.current = false;
+
+      const controller = new AbortController();
+      abortRef.current = controller;
 
       const userMsg: Message = { role: 'human', content: text, files };
       setMessages((prev) => [...prev, userMsg]);
@@ -31,8 +40,7 @@ export function useChat(sessionId: string) {
       setMessages((prev) => [...prev, aiMsg]);
 
       try {
-        for await (const event of streamChat(text, sessionId, files)) {
-          if (abortRef.current) break;
+        for await (const event of streamChat(text, sessionId, files, controller.signal)) {
           if (event === 'DONE') break;
           if (event.type === 'token') {
             aiMsg.content += event.content;
@@ -46,13 +54,18 @@ export function useChat(sessionId: string) {
           }
         }
       } catch (err) {
-        aiMsg.content += '\n\n*[Error: connection lost]*';
-        setMessages((prev) => {
-          const next = [...prev];
-          next[next.length - 1] = { ...aiMsg };
-          return next;
-        });
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // Intentional abort — not an error
+        } else {
+          aiMsg.content += '\n\n*[Error: connection lost]*';
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { ...aiMsg };
+            return next;
+          });
+        }
       } finally {
+        abortRef.current = null;
         setStreaming(false);
         setToolStatus(null);
       }
@@ -69,5 +82,5 @@ export function useChat(sessionId: string) {
     setMessages([]);
   }, [sessionId]);
 
-  return { messages, streaming, toolStatus, sendMessage, loadHistory, clearChat };
+  return { messages, streaming, toolStatus, sendMessage, loadHistory, clearChat, stopStreaming };
 }

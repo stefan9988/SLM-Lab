@@ -14,7 +14,7 @@ function App() {
     return saved.length > 0 ? saved[0].id : uuidv4();
   });
 
-  const { messages, streaming, toolStatus, sendMessage, loadHistory, clearChat } = useChat(activeId);
+  const { messages, streaming, toolStatus, sendMessage, loadHistory, clearChat, stopStreaming } = useChat(activeId);
 
   useEffect(() => {
     loadHistory();
@@ -68,7 +68,7 @@ function App() {
       />
       <main className="flex-1 flex flex-col">
         <ChatWindow messages={messages} toolStatus={toolStatus} />
-        <MessageInput onSend={handleSend} disabled={streaming} />
+        <MessageInput onSend={handleSend} disabled={streaming} streaming={streaming} onStop={stopStreaming} />
       </main>
     </div>
   );
