@@ -96,7 +96,6 @@ class Agent:
                         if thinking_content:
                             if not thinking_started:
                                 thinking_started = True
-                                yield {"type": "status", "content": "Thinking..."}
                             yield {"type": "thinking", "content": thinking_content}
 
                         if msg_chunk.tool_call_chunks:

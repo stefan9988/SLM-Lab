@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Message as MessageType } from '../types';
 
@@ -9,6 +9,15 @@ interface Props extends MessageType {
 export default function Message({ role, content, files, thinking, isThinking }: Props) {
   const isUser = role === 'human';
   const [showThinking, setShowThinking] = useState(false);
+  const thinkingRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isThinking && thinkingRef.current) {
+      thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
+    }
+  }, [thinking, isThinking]);
+
+  const thinkingDone = !isThinking && !!thinking;
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
@@ -31,38 +40,66 @@ export default function Message({ role, content, files, thinking, isThinking }: 
             ))}
           </div>
         )}
-        {isThinking && (
-          <p className="text-sm text-gray-500 italic animate-pulse">Thinking...</p>
+
+        {/* Live streaming: show thinking text as it arrives */}
+        {!isUser && isThinking && thinking && (
+          <div className="mb-2">
+            <p className="text-xs text-gray-400 font-medium mb-1 flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              Thinking...
+            </p>
+            <div ref={thinkingRef} className="pl-3 border-l-2 border-amber-300 text-sm text-gray-400 italic whitespace-pre-wrap max-h-40 overflow-y-auto">
+              {thinking}
+            </div>
+          </div>
         )}
-        {!isUser && thinking && (
+
+        {/* Still waiting for first thinking token */}
+        {!isUser && isThinking && !thinking && (
+          <p className="text-sm text-gray-400 italic animate-pulse">Thinking...</p>
+        )}
+
+        {/* Thinking done: collapsible summary */}
+        {!isUser && thinkingDone && (
           <div className="mb-2">
             <button
               onClick={() => setShowThinking((v) => !v)}
-              className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
             >
-              <span className="inline-block transition-transform" style={{ transform: showThinking ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9654;</span>
-              Thinking
+              <span
+                className="inline-block transition-transform duration-200"
+                style={{ transform: showThinking ? 'rotate(90deg)' : 'rotate(0deg)' }}
+              >
+                &#9654;
+              </span>
+              Thought for a moment
             </button>
             {showThinking && (
-              <div className="mt-1 pl-3 border-l-2 border-gray-300 text-sm text-gray-500 italic whitespace-pre-wrap">
+              <div className="mt-1 pl-3 border-l-2 border-gray-300 text-sm text-gray-400 italic whitespace-pre-wrap max-h-60 overflow-y-auto">
                 {thinking}
               </div>
             )}
-            {showThinking && (
-              <button
-                onClick={() => setShowThinking(false)}
-                className="text-xs text-gray-500 hover:text-gray-700 mt-1"
-              >
-                ▲ Hide thinking
-              </button>
-            )}
           </div>
         )}
+
         {isUser ? (
           content ? <p className="whitespace-pre-wrap">{content}</p> : null
         ) : (
           <div className="prose prose-sm max-w-none">
-            <ReactMarkdown>{content}</ReactMarkdown>
+            <ReactMarkdown
+              components={{
+                a: ({ href, children }) => (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 underline hover:text-blue-800"
+                  >
+                    {children}
+                  </a>
+                ),
+              }}
+            >{content}</ReactMarkdown>
           </div>
         )}
       </div>

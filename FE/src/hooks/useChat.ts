@@ -44,6 +44,7 @@ export function useChat(sessionId: string) {
           if (event === 'DONE') break;
           if (event.type === 'token') {
             aiMsg.content += event.content;
+            setToolStatus(null);
             setMessages((prev) => {
               const next = [...prev];
               next[next.length - 1] = { ...aiMsg };
