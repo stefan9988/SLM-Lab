@@ -23,7 +23,13 @@ from pydantic import BaseModel, ValidationError
 
 from AI.agents import init_agent
 from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
-from AI.tools import get_current_date_and_time, brave_search_tool, python_repl_tool
+from AI.tools import (
+    get_current_date_and_time,
+    brave_search_tool,
+    python_repl_tool,
+    ollama_web_search_tool,
+    ollama_web_fetch_tool,
+)
 from BE.config import settings
 from BE.logger import setup_logger
 
@@ -157,7 +163,13 @@ async def lifespan(app: FastAPI):
     logger.info("Application startup")
     app.state.general_agent = init_agent(
         system_prompt=GENERAL_AGENT_PROMPT,
-        tools=[get_current_date_and_time, brave_search_tool, python_repl_tool],
+        tools=[
+            get_current_date_and_time,
+            brave_search_tool,
+            python_repl_tool,
+            ollama_web_search_tool,
+            ollama_web_fetch_tool,
+        ],
         maintain_history=True,
     )
     yield
@@ -204,9 +216,7 @@ async def chat(body: ChatRequest, request: Request):
         )
 
     agent = request.app.state.general_agent
-    response = agent.invoke(
-        prompt, session_id=body.session_id, images=images or None
-    )
+    response = agent.invoke(prompt, session_id=body.session_id, images=images or None)
     logger.info(
         "POST /chat response (session_id=%s, length=%d)",
         body.session_id,

@@ -92,7 +92,9 @@ class Agent:
                     msg_chunk, metadata = chunk
                     if isinstance(msg_chunk, AIMessageChunk):
                         # Detect thinking content from thinking models (e.g. Qwen3)
-                        thinking_content = msg_chunk.additional_kwargs.get("reasoning_content")
+                        thinking_content = msg_chunk.additional_kwargs.get(
+                            "reasoning_content"
+                        )
                         if thinking_content:
                             if not thinking_started:
                                 thinking_started = True

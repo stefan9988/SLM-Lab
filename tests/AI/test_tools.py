@@ -38,3 +38,61 @@ class TestPythonReplTool:
         result = python_repl_tool.invoke({"code": "print(42)"})
         assert result == "42"
         mock_repl.run.assert_called_once_with("print(42)")
+
+
+class TestOllamaWebSearchTool:
+    @patch("AI.tools.ollama_web.get_stream_writer")
+    @patch("AI.tools.ollama_web._get_client")
+    def test_returns_search_results(self, mock_get_client, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_client = MagicMock()
+        mock_client.web_search.return_value = {"results": ["r1"]}
+        mock_get_client.return_value = mock_client
+        from AI.tools.ollama_web import ollama_web_search_tool
+
+        result = ollama_web_search_tool.invoke({"query": "test query"})
+        assert result == "{'results': ['r1']}"
+        mock_client.web_search.assert_called_once_with("test query")
+
+    @patch("AI.tools.ollama_web.get_stream_writer")
+    @patch("AI.tools.ollama_web._get_client")
+    def test_raises_on_error(self, mock_get_client, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_client = MagicMock()
+        mock_client.web_search.side_effect = RuntimeError("fail")
+        mock_get_client.return_value = mock_client
+        from AI.tools.ollama_web import ollama_web_search_tool
+
+        import pytest
+
+        with pytest.raises(RuntimeError, match="fail"):
+            ollama_web_search_tool.invoke({"query": "bad"})
+
+
+class TestOllamaWebFetchTool:
+    @patch("AI.tools.ollama_web.get_stream_writer")
+    @patch("AI.tools.ollama_web._get_client")
+    def test_returns_fetched_content(self, mock_get_client, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_client = MagicMock()
+        mock_client.web_fetch.return_value = {"content": "page html"}
+        mock_get_client.return_value = mock_client
+        from AI.tools.ollama_web import ollama_web_fetch_tool
+
+        result = ollama_web_fetch_tool.invoke({"url": "https://example.com"})
+        assert result == "{'content': 'page html'}"
+        mock_client.web_fetch.assert_called_once_with("https://example.com")
+
+    @patch("AI.tools.ollama_web.get_stream_writer")
+    @patch("AI.tools.ollama_web._get_client")
+    def test_raises_on_error(self, mock_get_client, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_client = MagicMock()
+        mock_client.web_fetch.side_effect = ConnectionError("timeout")
+        mock_get_client.return_value = mock_client
+        from AI.tools.ollama_web import ollama_web_fetch_tool
+
+        import pytest
+
+        with pytest.raises(ConnectionError, match="timeout"):
+            ollama_web_fetch_tool.invoke({"url": "https://bad.com"})

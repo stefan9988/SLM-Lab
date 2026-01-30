@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     MODEL_NAME: str = "llama3.1:8b"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_THINKING: bool = False
+    OLLAMA_API_KEY: str = ""
     OPEN_ROUTER_API_KEY: str = ""
     OPEN_ROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
 
@@ -49,6 +50,10 @@ _logger.info(
     settings.MODEL_NAME,
     settings.OLLAMA_BASE_URL,
 )
+
+# Export OLLAMA_API_KEY so the ollama client picks it up for web search/fetch
+if settings.OLLAMA_API_KEY:
+    os.environ.setdefault("OLLAMA_API_KEY", settings.OLLAMA_API_KEY)
 
 # Export LangSmith settings to environment so LangChain picks them up
 if settings.LANGSMITH_TRACING:
