@@ -67,7 +67,7 @@ function App() {
         onClear={handleClear}
       />
       <main className="flex-1 flex flex-col">
-        <ChatWindow messages={messages} toolStatus={toolStatus} />
+        <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} />
         <MessageInput onSend={handleSend} disabled={streaming} streaming={streaming} onStop={stopStreaming} />
       </main>
     </div>

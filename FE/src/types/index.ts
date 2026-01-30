@@ -9,6 +9,7 @@ export interface Message {
   role: 'human' | 'ai';
   content: string;
   files?: FileAttachment[];
+  thinking?: string;
 }
 
 export interface Conversation {
@@ -17,6 +18,6 @@ export interface Conversation {
 }
 
 export interface SSEEvent {
-  type: 'token' | 'status';
+  type: 'token' | 'status' | 'thinking';
   content: string;
 }

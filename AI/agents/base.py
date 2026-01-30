@@ -82,6 +82,7 @@ class Agent:
 
             full_response = []
             token_count = 0
+            thinking_started = False
             for stream_mode, chunk in self._agent.stream(
                 {"messages": messages}, stream_mode=["messages", "custom"]
             ):
@@ -90,6 +91,14 @@ class Agent:
                 elif stream_mode == "messages":
                     msg_chunk, metadata = chunk
                     if isinstance(msg_chunk, AIMessageChunk):
+                        # Detect thinking content from thinking models (e.g. Qwen3)
+                        thinking_content = msg_chunk.additional_kwargs.get("reasoning_content")
+                        if thinking_content:
+                            if not thinking_started:
+                                thinking_started = True
+                                yield {"type": "status", "content": "Thinking..."}
+                            yield {"type": "thinking", "content": thinking_content}
+
                         if msg_chunk.tool_call_chunks:
                             for tc in msg_chunk.tool_call_chunks:
                                 if tc.get("name"):

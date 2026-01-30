@@ -6,9 +6,10 @@ import ToolNotification from './ToolNotification';
 interface Props {
   messages: MessageType[];
   toolStatus: string | null;
+  streaming?: boolean;
 }
 
-export default function ChatWindow({ messages, toolStatus }: Props) {
+export default function ChatWindow({ messages, toolStatus, streaming }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -20,9 +21,11 @@ export default function ChatWindow({ messages, toolStatus }: Props) {
       {messages.length === 0 && (
         <p className="text-center text-gray-400 mt-20">Send a message to start chatting.</p>
       )}
-      {messages.map((msg, i) => (
-        <Message key={i} {...msg} />
-      ))}
+      {messages.map((msg, i) => {
+        const isLastAi = msg.role === 'ai' && i === messages.length - 1;
+        const isThinking = isLastAi && streaming && msg.thinking && !msg.content;
+        return <Message key={i} {...msg} isThinking={!!isThinking} />;
+      })}
       {toolStatus && <ToolNotification status={toolStatus} />}
       <div ref={bottomRef} />
     </div>

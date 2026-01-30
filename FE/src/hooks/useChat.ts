@@ -49,6 +49,13 @@ export function useChat(sessionId: string) {
               next[next.length - 1] = { ...aiMsg };
               return next;
             });
+          } else if (event.type === 'thinking') {
+            aiMsg.thinking = (aiMsg.thinking || '') + event.content;
+            setMessages((prev) => {
+              const next = [...prev];
+              next[next.length - 1] = { ...aiMsg };
+              return next;
+            });
           } else if (event.type === 'status') {
             setToolStatus(event.content);
           }

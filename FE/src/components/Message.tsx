@@ -1,8 +1,14 @@
+import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Message as MessageType } from '../types';
 
-export default function Message({ role, content, files }: MessageType) {
+interface Props extends MessageType {
+  isThinking?: boolean;
+}
+
+export default function Message({ role, content, files, thinking, isThinking }: Props) {
   const isUser = role === 'human';
+  const [showThinking, setShowThinking] = useState(false);
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
@@ -23,6 +29,33 @@ export default function Message({ role, content, files }: MessageType) {
                 {f.name}
               </span>
             ))}
+          </div>
+        )}
+        {isThinking && (
+          <p className="text-sm text-gray-500 italic animate-pulse">Thinking...</p>
+        )}
+        {!isUser && thinking && (
+          <div className="mb-2">
+            <button
+              onClick={() => setShowThinking((v) => !v)}
+              className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+            >
+              <span className="inline-block transition-transform" style={{ transform: showThinking ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9654;</span>
+              Thinking
+            </button>
+            {showThinking && (
+              <div className="mt-1 pl-3 border-l-2 border-gray-300 text-sm text-gray-500 italic whitespace-pre-wrap">
+                {thinking}
+              </div>
+            )}
+            {showThinking && (
+              <button
+                onClick={() => setShowThinking(false)}
+                className="text-xs text-gray-500 hover:text-gray-700 mt-1"
+              >
+                ▲ Hide thinking
+              </button>
+            )}
           </div>
         )}
         {isUser ? (
