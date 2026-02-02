@@ -9,6 +9,7 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from BE.logger import setup_logger
+from BE.session_store import SessionStore, InMemoryStore
 
 logger = setup_logger(__name__)
 
@@ -22,9 +23,14 @@ class Agent:
         system_prompt: Optional[str] = None,
         tools: Optional[List[BaseTool]] = None,
         maintain_history: bool = False,
+        session_store: Optional[SessionStore] = None,
+        model_name: str = "",
+        provider: str = "",
     ):
         self.maintain_history = maintain_history
-        self._session_histories: dict[str, List] = {}
+        self._store: SessionStore = session_store or InMemoryStore()
+        self._model_name = model_name
+        self._provider = provider
 
         tool_names = [t.name for t in tools] if tools else []
         logger.info(
@@ -129,32 +135,12 @@ class Agent:
 
     def clear_history(self, session_id: str) -> None:
         """Clear the conversation history for a session."""
-        self._session_histories.pop(session_id, None)
+        self._store.clear(session_id)
         logger.debug("Conversation history cleared (session_id=%s)", session_id)
 
     def get_history(self, session_id: str) -> List[dict]:
         """Get conversation history as serializable dicts for a session."""
-        messages = self._session_histories.get(session_id, [])
-        history = []
-        for msg in messages:
-            if msg.type not in ("human", "ai"):
-                continue
-            content = msg.content
-            if isinstance(content, list):
-                content = " ".join(
-                    block.get("text", "")
-                    for block in content
-                    if isinstance(block, dict) and block.get("type") == "text"
-                )
-            entry: dict = {"role": msg.type, "content": content}
-            thinking = (
-                msg.additional_kwargs.get("thinking")
-                if hasattr(msg, "additional_kwargs")
-                else None
-            )
-            if thinking:
-                entry["thinking"] = thinking
-            history.append(entry)
+        history = self._store.get_history_dicts(session_id)
         logger.debug(
             "get_history called (session_id=%s, messages=%d)", session_id, len(history)
         )
@@ -175,10 +161,12 @@ class Agent:
             human_msg = HumanMessage(content=prompt)
 
         if self.maintain_history:
-            history = self._session_histories.get(session_id, [])
+            history = self._store.get_messages(session_id)
             return list(history) + [human_msg]
         return [human_msg]
 
     def _save_history(self, messages: List, session_id: str) -> None:
         if self.maintain_history:
-            self._session_histories[session_id] = messages
+            self._store.save_messages(
+                session_id, messages, self._model_name, self._provider
+            )

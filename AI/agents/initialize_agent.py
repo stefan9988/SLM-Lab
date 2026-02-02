@@ -7,6 +7,7 @@ from langchain_core.tools import BaseTool
 
 from BE.config import settings
 from BE.logger import setup_logger
+from BE.session_store import create_store
 
 from .base import Agent
 
@@ -63,11 +64,15 @@ def init_agent(
     )
     try:
         llm = _build_llm()
+        store = create_store()
         agent = Agent(
             llm=llm,
             system_prompt=system_prompt,
             tools=tools,
             maintain_history=maintain_history,
+            session_store=store,
+            model_name=settings.MODEL_NAME,
+            provider=settings.LLM_PROVIDER,
         )
         logger.info("init_agent successful")
         return agent

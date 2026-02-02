@@ -16,6 +16,7 @@ dependencies = [
     "langchain-openai>=0.3.0",
     "langgraph>=1.0.7",
     "pymupdf>=1.24.0",
+    "redis>=5.0.0",
     "langchain-experimental>=0.4.1",
 ]
 

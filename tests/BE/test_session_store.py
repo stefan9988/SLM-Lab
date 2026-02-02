@@ -1,0 +1,230 @@
+"""Tests for session store implementations."""
+
+import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+from langchain_core.messages import AIMessage, HumanMessage
+
+from BE.session_store import (
+    InMemoryStore,
+    RedisStore,
+    create_store,
+    _msg_to_dict,
+    _dict_to_message,
+    _history_entry_from_dict,
+)
+
+# --- Helper fixtures ---
+
+
+@pytest.fixture
+def in_memory_store():
+    return InMemoryStore()
+
+
+@pytest.fixture
+def sample_messages():
+    return [
+        HumanMessage(content="Hello"),
+        AIMessage(content="Hi there!", additional_kwargs={"thinking": "Let me think"}),
+    ]
+
+
+# --- _msg_to_dict / _dict_to_message round-trip ---
+
+
+class TestMessageSerialization:
+    def test_human_message_round_trip(self):
+        msg = HumanMessage(content="test")
+        d = _msg_to_dict(msg, model="llama3.1:8b", provider="ollama")
+        assert d["type"] == "human"
+        assert d["content"] == "test"
+        assert d["model"] == "llama3.1:8b"
+        assert d["provider"] == "ollama"
+        assert d["timestamp"]  # non-empty
+        restored = _dict_to_message(d)
+        assert isinstance(restored, HumanMessage)
+        assert restored.content == "test"
+
+    def test_ai_message_with_thinking(self):
+        msg = AIMessage(content="answer", additional_kwargs={"thinking": "reason"})
+        d = _msg_to_dict(msg)
+        assert d["thinking"] == "reason"
+        assert "thinking" not in d["additional_kwargs"]
+        restored = _dict_to_message(d)
+        assert isinstance(restored, AIMessage)
+        assert restored.additional_kwargs["thinking"] == "reason"
+
+    def test_unknown_type_returns_none(self):
+        d = {"type": "tool", "content": "x", "thinking": None, "additional_kwargs": {}}
+        assert _dict_to_message(d) is None
+
+
+class TestHistoryEntryFromDict:
+    def test_human_entry(self):
+        d = {"type": "human", "content": "hi", "thinking": None}
+        entry = _history_entry_from_dict(d)
+        assert entry == {"role": "human", "content": "hi"}
+
+    def test_ai_entry_with_thinking(self):
+        d = {"type": "ai", "content": "reply", "thinking": "thought"}
+        entry = _history_entry_from_dict(d)
+        assert entry == {"role": "ai", "content": "reply", "thinking": "thought"}
+
+    def test_multimodal_content_flattened(self):
+        d = {
+            "type": "human",
+            "content": [
+                {"type": "text", "text": "describe"},
+                {"type": "image_url", "image_url": {"url": "data:..."}},
+            ],
+            "thinking": None,
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["content"] == "describe"
+
+    def test_tool_type_skipped(self):
+        d = {"type": "tool", "content": "result", "thinking": None}
+        assert _history_entry_from_dict(d) is None
+
+
+# --- InMemoryStore ---
+
+
+class TestInMemoryStore:
+    def test_empty_session(self, in_memory_store):
+        assert in_memory_store.get_messages("none") == []
+        assert in_memory_store.get_history_dicts("none") == []
+
+    def test_save_and_retrieve(self, in_memory_store, sample_messages):
+        in_memory_store.save_messages("s1", sample_messages, "model", "provider")
+        msgs = in_memory_store.get_messages("s1")
+        assert len(msgs) == 2
+        assert isinstance(msgs[0], HumanMessage)
+        assert isinstance(msgs[1], AIMessage)
+
+    def test_get_history_dicts(self, in_memory_store, sample_messages):
+        in_memory_store.save_messages("s1", sample_messages)
+        history = in_memory_store.get_history_dicts("s1")
+        assert len(history) == 2
+        assert history[0]["role"] == "human"
+        assert history[1]["thinking"] == "Let me think"
+
+    def test_clear(self, in_memory_store, sample_messages):
+        in_memory_store.save_messages("s1", sample_messages)
+        in_memory_store.clear("s1")
+        assert in_memory_store.get_messages("s1") == []
+
+    def test_clear_nonexistent_no_error(self, in_memory_store):
+        in_memory_store.clear("nope")  # should not raise
+
+
+# --- RedisStore (mocked) ---
+
+
+class TestRedisStore:
+    @pytest.fixture
+    def mock_redis(self):
+        with patch("BE.session_store.redis_lib", create=True):
+            mock_client = MagicMock()
+            mock_client.ping.return_value = True
+            with patch("redis.Redis.from_url", return_value=mock_client):
+                store = RedisStore.__new__(RedisStore)
+                store._redis = mock_client
+                store._ttl_seconds = 30 * 86400
+                yield store, mock_client
+
+    def test_get_messages_empty(self, mock_redis):
+        store, client = mock_redis
+        client.lrange.return_value = []
+        assert store.get_messages("s1") == []
+        client.lrange.assert_called_once_with("session:s1:messages", 0, -1)
+
+    def test_get_messages_deserializes(self, mock_redis):
+        store, client = mock_redis
+        client.lrange.return_value = [
+            json.dumps(
+                {
+                    "type": "human",
+                    "content": "hi",
+                    "thinking": None,
+                    "additional_kwargs": {},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "ai",
+                    "content": "hello",
+                    "thinking": None,
+                    "additional_kwargs": {},
+                }
+            ),
+        ]
+        msgs = store.get_messages("s1")
+        assert len(msgs) == 2
+        assert isinstance(msgs[0], HumanMessage)
+        assert isinstance(msgs[1], AIMessage)
+
+    def test_save_messages_uses_pipeline(self, mock_redis, sample_messages):
+        store, client = mock_redis
+        mock_pipe = MagicMock()
+        client.pipeline.return_value = mock_pipe
+
+        store.save_messages("s1", sample_messages, "model", "ollama")
+
+        client.pipeline.assert_called_once_with(transaction=True)
+        mock_pipe.delete.assert_called_once_with("session:s1:messages")
+        assert mock_pipe.rpush.call_count == 2
+        mock_pipe.hsetnx.assert_called_once()
+        mock_pipe.hset.assert_called_once()
+        assert mock_pipe.expire.call_count == 2
+        mock_pipe.execute.assert_called_once()
+
+    def test_clear_deletes_both_keys(self, mock_redis):
+        store, client = mock_redis
+        store.clear("s1")
+        client.delete.assert_called_once_with("session:s1:meta", "session:s1:messages")
+
+    def test_get_history_dicts(self, mock_redis):
+        store, client = mock_redis
+        client.lrange.return_value = [
+            json.dumps({"type": "human", "content": "q", "thinking": None}),
+            json.dumps({"type": "ai", "content": "a", "thinking": "t"}),
+        ]
+        history = store.get_history_dicts("s1")
+        assert len(history) == 2
+        assert history[0] == {"role": "human", "content": "q"}
+        assert history[1] == {"role": "ai", "content": "a", "thinking": "t"}
+
+
+# --- create_store factory ---
+
+
+class TestCreateStore:
+    @patch("BE.config.settings")
+    def test_disabled_returns_in_memory(self, mock_settings):
+        mock_settings.REDIS_ENABLED = False
+        store = create_store()
+        assert isinstance(store, InMemoryStore)
+
+    @patch("BE.session_store.RedisStore")
+    @patch("BE.config.settings")
+    def test_enabled_returns_redis(self, mock_settings, mock_redis_cls):
+        mock_settings.REDIS_ENABLED = True
+        mock_settings.REDIS_URL = "redis://localhost:6379/0"
+        mock_settings.REDIS_SESSION_TTL_DAYS = 30
+        mock_redis_cls.return_value = MagicMock(spec=RedisStore)
+        store = create_store()
+        mock_redis_cls.assert_called_once_with(
+            redis_url="redis://localhost:6379/0", ttl_days=30
+        )
+
+    @patch("BE.session_store.RedisStore", side_effect=ConnectionError("refused"))
+    @patch("BE.config.settings")
+    def test_fallback_on_connection_error(self, mock_settings, mock_redis_cls):
+        mock_settings.REDIS_ENABLED = True
+        mock_settings.REDIS_URL = "redis://localhost:6379/0"
+        mock_settings.REDIS_SESSION_TTL_DAYS = 30
+        store = create_store()
+        assert isinstance(store, InMemoryStore)

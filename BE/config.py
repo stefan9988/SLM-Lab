@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # External service API keys
     BRAVE_SEARCH_API_KEY: str = "YOUR_BRAVE_SEARCH_API_KEY_HERE"
 
+    # Redis settings
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_ENABLED: bool = True
+    REDIS_SESSION_TTL_DAYS: int = 30
+
     # LangSmith settings
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"

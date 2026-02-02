@@ -32,7 +32,7 @@ docker compose up --build
 - **Frontend:** `http://localhost:8080`
 - **Backend API:** `http://localhost:8000`
 
-Both services use `network_mode: host`, so they share the host's network. This allows the backend to reach Ollama on `localhost:11434` directly.
+The stack includes a Redis container for persistent session/conversation history. Both backend and frontend use `network_mode: host`, so they share the host's network. This allows the backend to reach Ollama on `localhost:11434` and Redis on `localhost:6379` directly.
 
 To stop:
 
@@ -49,6 +49,28 @@ ssh -L 8080:localhost:8080 user@your-server
 ```
 
 Then open `http://localhost:8080` in your browser.
+
+## Redis (session persistence)
+
+Conversation history is stored in Redis so it survives backend restarts. When running with Docker Compose, Redis starts automatically.
+
+For local development, either start Redis separately:
+
+```bash
+docker run -d -p 6379:6379 redis:7-alpine
+```
+
+Or disable it in `.env` to use in-memory storage (history lost on restart):
+
+```
+REDIS_ENABLED=false
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection URL |
+| `REDIS_ENABLED` | `true` | Set to `false` to use in-memory fallback |
+| `REDIS_SESSION_TTL_DAYS` | `30` | Auto-expire inactive sessions after N days |
 
 ## Local development (without Docker)
 

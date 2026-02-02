@@ -38,7 +38,7 @@ class TestGetInputMessages:
 
     def test_with_history_includes_prior_messages(self, agent_with_history):
         prior = [HumanMessage(content="a"), AIMessage(content="b")]
-        agent_with_history._session_histories["s1"] = prior
+        agent_with_history._store.save_messages("s1", prior)
         msgs = agent_with_history._get_input_messages("c", "s1")
         assert len(msgs) == 3
         assert msgs[-1].content == "c"
