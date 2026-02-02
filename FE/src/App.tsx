@@ -18,7 +18,7 @@ function App() {
 
   useEffect(() => {
     loadHistory();
-  }, [loadHistory]);
+  }, [loadHistory, activeId]);
 
   const handleSend = useCallback(
     (text: string, files?: FileAttachment[]) => {

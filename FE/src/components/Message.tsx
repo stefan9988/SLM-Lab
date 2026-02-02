@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Message as MessageType } from '../types';
+import logger from '../utils/logger';
 
 interface Props extends MessageType {
   isThinking?: boolean;
@@ -13,9 +14,10 @@ function CopyButton({ code }: { code: string }) {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
+      logger.debug('[Message] Code copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // ignore
+      logger.error('[Message] Failed to copy code');
     }
   };
 

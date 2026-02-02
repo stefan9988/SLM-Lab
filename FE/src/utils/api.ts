@@ -1,17 +1,28 @@
 import type { Message, SSEEvent, FileAttachment } from '../types';
+import logger from './logger';
 
 export async function fetchHistory(sessionId: string): Promise<Message[]> {
+  logger.info('[API] Fetching history for session:', sessionId);
   const res = await fetch(`/history?session_id=${encodeURIComponent(sessionId)}`);
-  if (!res.ok) throw new Error('Failed to fetch history');
+  if (!res.ok) {
+    logger.error('[API] Failed to fetch history:', res.status, res.statusText);
+    throw new Error('Failed to fetch history');
+  }
   const data = await res.json();
+  logger.info('[API] Fetched history:', data.history.length, 'messages');
   return data.history;
 }
 
 export async function clearHistory(sessionId: string): Promise<void> {
+  logger.info('[API] Clearing history for session:', sessionId);
   const res = await fetch(`/history?session_id=${encodeURIComponent(sessionId)}`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error('Failed to clear history');
+  if (!res.ok) {
+    logger.error('[API] Failed to clear history:', res.status, res.statusText);
+    throw new Error('Failed to clear history');
+  }
+  logger.info('[API] History cleared successfully');
 }
 
 export async function* streamChat(
@@ -20,6 +31,7 @@ export async function* streamChat(
   files?: FileAttachment[],
   signal?: AbortSignal,
 ): AsyncGenerator<SSEEvent | 'DONE'> {
+  logger.info('[API] Starting stream chat for session:', sessionId, 'with', files?.length || 0, 'files');
   const res = await fetch('/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -27,7 +39,11 @@ export async function* streamChat(
     signal,
   });
 
-  if (!res.ok) throw new Error('Stream request failed');
+  if (!res.ok) {
+    logger.error('[API] Stream request failed:', res.status, res.statusText);
+    throw new Error('Stream request failed');
+  }
+  logger.info('[API] Stream connection established');
 
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
@@ -50,9 +66,11 @@ export async function* streamChat(
         return;
       }
       try {
-        yield JSON.parse(payload) as SSEEvent;
+        const event = JSON.parse(payload) as SSEEvent;
+        logger.debug('[API] Received SSE event:', event.type);
+        yield event;
       } catch {
-        // skip malformed events
+        logger.warn('[API] Skipping malformed SSE event:', payload);
       }
     }
   }

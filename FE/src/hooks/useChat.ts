@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { Message, FileAttachment } from '../types';
 import { streamChat, fetchHistory, clearHistory } from '../utils/api';
+import logger from '../utils/logger';
 
 export function useChat(sessionId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -9,10 +10,13 @@ export function useChat(sessionId: string) {
   const abortRef = useRef<AbortController | null>(null);
 
   const loadHistory = useCallback(async () => {
+    logger.info('[useChat] Loading history for session:', sessionId);
     try {
       const history = await fetchHistory(sessionId);
+      logger.info('[useChat] History loaded:', history.length, 'messages');
       setMessages(history);
-    } catch {
+    } catch (err) {
+      logger.error('[useChat] Failed to load history:', err);
       setMessages([]);
     }
   }, [sessionId]);
@@ -28,6 +32,7 @@ export function useChat(sessionId: string) {
     async (text: string, files?: FileAttachment[]) => {
       if (streaming) return;
 
+      logger.info('[useChat] Sending message:', text.slice(0, 50), text.length > 50 ? '...' : '', 'with', files?.length || 0, 'files');
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -41,7 +46,10 @@ export function useChat(sessionId: string) {
 
       try {
         for await (const event of streamChat(text, sessionId, files, controller.signal)) {
-          if (event === 'DONE') break;
+          if (event === 'DONE') {
+            logger.info('[useChat] Stream complete');
+            break;
+          }
           if (event.type === 'token') {
             aiMsg.content += event.content;
             setToolStatus(null);
@@ -51,6 +59,7 @@ export function useChat(sessionId: string) {
               return next;
             });
           } else if (event.type === 'thinking') {
+            logger.debug('[useChat] Received thinking block');
             aiMsg.thinking = (aiMsg.thinking || '') + event.content;
             setToolStatus(null);
             setMessages((prev) => {
@@ -59,13 +68,15 @@ export function useChat(sessionId: string) {
               return next;
             });
           } else if (event.type === 'status') {
+            logger.debug('[useChat] Tool status:', event.content);
             setToolStatus(event.content);
           }
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
-          // Intentional abort — not an error
+          // Stream aborted intentionally
         } else {
+          logger.error('[useChat] Stream error:', err);
           aiMsg.content += '\n\n*[Error: connection lost]*';
           setMessages((prev) => {
             const next = [...prev];
@@ -85,8 +96,8 @@ export function useChat(sessionId: string) {
   const clearChat = useCallback(async () => {
     try {
       await clearHistory(sessionId);
-    } catch {
-      // ignore
+    } catch (err) {
+      logger.error('[useChat] Failed to clear history:', err);
     }
     setMessages([]);
   }, [sessionId]);

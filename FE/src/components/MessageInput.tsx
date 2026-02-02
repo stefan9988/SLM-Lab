@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react';
 import type { FileAttachment } from '../types';
+import logger from '../utils/logger';
 
 const ACCEPTED_TYPES =
   '.txt,.py,.js,.ts,.json,.csv,.md,.html,.css,.xml,.yaml,.yml,.log,.pdf,.png,.jpg,.jpeg,.gif,.webp';
@@ -39,6 +40,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
 
     for (const f of selected) {
       if (f.size > MAX_FILE_SIZE) {
+        logger.warn('[MessageInput] File too large:', f.name, f.size);
         setError(`File "${f.name}" exceeds 10MB limit.`);
         e.target.value = '';
         return;
@@ -47,6 +49,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
 
     const totalSize = [...files, ...selected].reduce((s, f) => s + f.size, 0);
     if (totalSize > MAX_TOTAL_SIZE) {
+      logger.warn('[MessageInput] Total file size exceeds limit:', totalSize);
       setError('Total file size exceeds 20MB limit.');
       e.target.value = '';
       return;
@@ -64,7 +67,10 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
+      reader.onerror = () => {
+        logger.error('[MessageInput] Failed to read file:', file.name);
+        reject(reader.error);
+      };
       reader.readAsDataURL(file);
     });
 
