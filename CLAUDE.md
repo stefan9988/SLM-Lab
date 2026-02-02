@@ -19,3 +19,7 @@ Follow best coding principles: clean code, proper naming, separation of concerns
 ## Testing
 
 Write tests for all new features.
+
+## Environment Variables
+
+When adding new environment variables, update `.env.example` accordingly.
