@@ -269,9 +269,3 @@ async def clear_history(request: Request, session_id: str = Query()):
     agent = request.app.state.general_agent
     agent.clear_history(session_id=session_id)
     return {"status": "cleared"}
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("BE.app:app", host="0.0.0.0", port=8000, reload=True)
