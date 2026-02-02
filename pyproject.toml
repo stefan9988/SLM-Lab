@@ -27,6 +27,7 @@ include = ["BE*", "AI*"]
 
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.20.0",
     "black>=26.1.0",
     "httpx>=0.28.1",
     "pytest>=9.0.2",

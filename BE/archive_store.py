@@ -113,6 +113,9 @@ class PostgresArchiveStore:
         """Delete an archived session and its messages."""
         async with self._factory() as session:
             async with session.begin():
+                await session.execute(
+                    delete(Message).where(Message.session_id == session_id)
+                )
                 result = await session.execute(
                     delete(Session).where(Session.id == session_id)
                 )
