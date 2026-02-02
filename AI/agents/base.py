@@ -142,10 +142,16 @@ class Agent:
             content = msg.content
             if isinstance(content, list):
                 content = " ".join(
-                    block.get("text", "") for block in content if isinstance(block, dict) and block.get("type") == "text"
+                    block.get("text", "")
+                    for block in content
+                    if isinstance(block, dict) and block.get("type") == "text"
                 )
             entry: dict = {"role": msg.type, "content": content}
-            thinking = msg.additional_kwargs.get("thinking") if hasattr(msg, "additional_kwargs") else None
+            thinking = (
+                msg.additional_kwargs.get("thinking")
+                if hasattr(msg, "additional_kwargs")
+                else None
+            )
             if thinking:
                 entry["thinking"] = thinking
             history.append(entry)

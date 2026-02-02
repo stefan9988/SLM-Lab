@@ -19,6 +19,9 @@ dependencies = [
     "langchain-experimental>=0.4.1",
 ]
 
+[tool.setuptools.packages.find]
+include = ["BE*", "AI*"]
+
 [dependency-groups]
 dev = [
     "black>=26.1.0",
