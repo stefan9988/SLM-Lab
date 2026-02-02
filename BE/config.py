@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     REDIS_ENABLED: bool = True
     REDIS_SESSION_TTL_DAYS: int = 30
 
+    # PostgreSQL settings
+    POSTGRES_URL: str = "postgresql+asyncpg://slmlab:slmlab@localhost:5432/slmlab"
+    POSTGRES_ENABLED: bool = True
+
     # LangSmith settings
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"

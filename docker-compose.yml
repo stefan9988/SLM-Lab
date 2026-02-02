@@ -13,6 +13,23 @@ services:
       timeout: 3s
       retries: 3
 
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-slmlab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-slmlab}
+      POSTGRES_DB: ${POSTGRES_DB:-slmlab}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slmlab"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
   backend:
     build:
       context: .
@@ -23,6 +40,8 @@ services:
       - OLLAMA_BASE_URL=http://localhost:11434
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -43,3 +62,4 @@ services:
 
 volumes:
   redis_data:
+  postgres_data:

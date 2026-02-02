@@ -1,5 +1,6 @@
 """Session store abstraction for conversation history persistence."""
 
+import asyncio
 import json
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -189,6 +190,39 @@ class RedisStore(SessionStore):
         )
         self._touch_ttl(pipe, session_id)
         pipe.execute()
+
+        # Fire-and-forget archive to PostgreSQL
+        self._archive_to_postgres(session_id, dicts, model, provider)
+
+    def _archive_to_postgres(
+        self, session_id: str, dicts: list[dict], model: str, provider: str
+    ) -> None:
+        """Best-effort async archive to PostgreSQL."""
+        from BE.archive_store import create_store
+
+        store = create_store()
+        if store is None:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        async def _do_archive():
+            try:
+                await store.save_messages(
+                    session_id, dicts, {"model": model, "provider": provider}
+                )
+            except Exception as exc:
+                logger.warning("Archive to PostgreSQL failed: %s", exc)
+
+        if loop and loop.is_running():
+            loop.create_task(_do_archive())
+        else:
+            try:
+                asyncio.run(_do_archive())
+            except Exception as exc:
+                logger.warning("Archive to PostgreSQL failed: %s", exc)
 
     def clear(self, session_id: str) -> None:
         self._redis.delete(
