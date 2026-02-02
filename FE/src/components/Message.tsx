@@ -16,6 +16,40 @@ function extractText(node: React.ReactNode): string {
   return '';
 }
 
+function CopyMessageButton({ text, position = 'top' }: { text: string; position?: 'top' | 'bottom' }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      logger.debug('[Message] Message copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      logger.error('[Message] Failed to copy message');
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`${position === 'top' ? 'absolute top-2 right-2' : 'absolute bottom-2 right-2'} p-1 rounded bg-[#334155]/80 text-[#94a3b8] hover:bg-[#475569] hover:text-[#e2e8f0] text-xs opacity-0 group-hover:opacity-100 transition-all duration-200 z-10`}
+      title="Copy message"
+    >
+      {copied ? (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        </svg>
+      ) : (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+          <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 function CopyButton({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -81,12 +115,14 @@ export default function Message({ role, content, files, thinking, isThinking }: 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3 animate-messageIn`}>
       <div
-        className={`rounded-2xl px-5 py-3 leading-relaxed ${
+        className={`group relative rounded-2xl px-5 py-3 leading-relaxed ${
           isUser
             ? 'max-w-[80%] bg-gradient-to-br from-[#7c3aed] to-[#533483] text-white'
             : 'max-w-[750px] bg-[#1e293b] text-[#e2e8f0] border border-[#334155] shadow-sm'
         }`}
       >
+        <CopyMessageButton text={normalizedContent} />
+
         {isUser && files && files.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-1">
             {files.map((f, i) => (
@@ -169,6 +205,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
             >{normalizedContent}</ReactMarkdown>
           </div>
         )}
+        <CopyMessageButton text={normalizedContent} position="bottom" />
       </div>
     </div>
   );
