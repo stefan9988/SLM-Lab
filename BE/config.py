@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     REDIS_ENABLED: bool = True
     REDIS_SESSION_TTL_DAYS: int = 30
 
+    # General Agent Tool Toggles
+    GENERAL_AGENT_DATE_TIME_TOOL: bool = False
+    GENERAL_AGENT_BRAVE_SEARCH_TOOL: bool = False
+    GENERAL_AGENT_PYTHON_REPL_TOOL: bool = False
+    GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL: bool = False
+    GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL: bool = False
+
     # LangSmith settings
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"

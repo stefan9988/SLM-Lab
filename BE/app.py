@@ -16,13 +16,7 @@ from pydantic import BaseModel, ValidationError
 
 from AI.agents import init_agent
 from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
-from AI.tools import (
-    get_current_date_and_time,
-    brave_search_tool,
-    python_repl_tool,
-    ollama_web_search_tool,
-    ollama_web_fetch_tool,
-)
+from AI.tools import get_enabled_tools
 from BE.config import settings
 from BE.logger import setup_logger
 
@@ -154,15 +148,12 @@ def process_files(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application startup")
+    tools = get_enabled_tools(settings)
+    tool_names = [t.name if hasattr(t, "name") else t.__name__ for t in tools]
+    logger.info("General agent tools enabled: %s", tool_names)
     app.state.general_agent = init_agent(
         system_prompt=GENERAL_AGENT_PROMPT,
-        tools=[
-            get_current_date_and_time,
-            brave_search_tool,
-            python_repl_tool,
-            ollama_web_search_tool,
-            ollama_web_fetch_tool,
-        ],
+        tools=tools,
         maintain_history=True,
     )
     yield

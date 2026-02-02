@@ -9,4 +9,22 @@ __all__ = [
     "python_repl_tool",
     "ollama_web_search_tool",
     "ollama_web_fetch_tool",
+    "get_enabled_tools",
 ]
+
+GENERAL_AGENT_TOOLS = [
+    ("GENERAL_AGENT_DATE_TIME_TOOL", get_current_date_and_time),
+    ("GENERAL_AGENT_BRAVE_SEARCH_TOOL", brave_search_tool),
+    ("GENERAL_AGENT_PYTHON_REPL_TOOL", python_repl_tool),
+    ("GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL", ollama_web_search_tool),
+    ("GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL", ollama_web_fetch_tool),
+]
+
+
+def get_enabled_tools(settings) -> list:
+    """Return tools enabled for the general agent based on settings."""
+    tools = []
+    for setting_name, tool in GENERAL_AGENT_TOOLS:
+        if getattr(settings, setting_name, False):
+            tools.append(tool)
+    return tools

@@ -1,7 +1,54 @@
 """Tests for AI.tools module."""
 
 import re
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
+from AI.tools import get_enabled_tools, GENERAL_AGENT_TOOLS
+
+
+class TestGetEnabledTools:
+    def test_all_enabled_by_default(self):
+        settings = SimpleNamespace(
+            GENERAL_AGENT_DATE_TIME_TOOL=True,
+            GENERAL_AGENT_BRAVE_SEARCH_TOOL=True,
+            GENERAL_AGENT_PYTHON_REPL_TOOL=True,
+            GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL=True,
+            GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=True,
+        )
+        tools = get_enabled_tools(settings)
+        assert len(tools) == 5
+
+    def test_disable_one_tool(self):
+        settings = SimpleNamespace(
+            GENERAL_AGENT_DATE_TIME_TOOL=True,
+            GENERAL_AGENT_BRAVE_SEARCH_TOOL=True,
+            GENERAL_AGENT_PYTHON_REPL_TOOL=False,
+            GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL=True,
+            GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=True,
+        )
+        tools = get_enabled_tools(settings)
+        assert len(tools) == 4
+        tool_entries = dict(GENERAL_AGENT_TOOLS)
+        from AI.tools.python_repl import python_repl_tool
+
+        assert python_repl_tool not in tools
+
+    def test_all_disabled(self):
+        settings = SimpleNamespace(
+            GENERAL_AGENT_DATE_TIME_TOOL=False,
+            GENERAL_AGENT_BRAVE_SEARCH_TOOL=False,
+            GENERAL_AGENT_PYTHON_REPL_TOOL=False,
+            GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL=False,
+            GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=False,
+        )
+        tools = get_enabled_tools(settings)
+        assert len(tools) == 0
+
+    def test_missing_setting_defaults_to_disabled(self):
+        settings = SimpleNamespace()
+        tools = get_enabled_tools(settings)
+        assert len(tools) == 0
 
 
 class TestGetCurrentDateAndTime:
