@@ -81,6 +81,7 @@ class Agent:
             messages = self._get_input_messages(prompt, session_id, images=images)
 
             full_response = []
+            full_thinking = ""
             token_count = 0
             thinking_started = False
             for stream_mode, chunk in self._agent.stream(
@@ -98,6 +99,7 @@ class Agent:
                         if thinking_content:
                             if not thinking_started:
                                 thinking_started = True
+                            full_thinking += thinking_content
                             yield {"type": "thinking", "content": thinking_content}
 
                         if msg_chunk.tool_call_chunks:
@@ -115,7 +117,10 @@ class Agent:
                     elif isinstance(msg_chunk, ToolMessage):
                         yield {"type": "status", "content": "Tool returned result"}
 
-            all_messages = list(messages) + [AIMessage(content="".join(full_response))]
+            ai_msg = AIMessage(content="".join(full_response))
+            if full_thinking:
+                ai_msg.additional_kwargs["thinking"] = full_thinking
+            all_messages = list(messages) + [ai_msg]
             self._save_history(all_messages, session_id)
             logger.info("stream complete (tokens=%d)", token_count)
         except Exception:
@@ -130,7 +135,20 @@ class Agent:
     def get_history(self, session_id: str) -> List[dict]:
         """Get conversation history as serializable dicts for a session."""
         messages = self._session_histories.get(session_id, [])
-        history = [{"role": msg.type, "content": msg.content} for msg in messages]
+        history = []
+        for msg in messages:
+            if msg.type not in ("human", "ai"):
+                continue
+            content = msg.content
+            if isinstance(content, list):
+                content = " ".join(
+                    block.get("text", "") for block in content if isinstance(block, dict) and block.get("type") == "text"
+                )
+            entry: dict = {"role": msg.type, "content": content}
+            thinking = msg.additional_kwargs.get("thinking") if hasattr(msg, "additional_kwargs") else None
+            if thinking:
+                entry["thinking"] = thinking
+            history.append(entry)
         logger.debug(
             "get_history called (session_id=%s, messages=%d)", session_id, len(history)
         )
