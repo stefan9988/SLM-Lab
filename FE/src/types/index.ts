@@ -6,8 +6,9 @@ export interface FileAttachment {
 }
 
 export interface Message {
+  id?: string;
   role: 'human' | 'ai';
-  content: string;
+  content: string | Array<{ type?: string; text?: string }>;
   files?: FileAttachment[];
   thinking?: string;
 }

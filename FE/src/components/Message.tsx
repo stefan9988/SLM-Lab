@@ -7,6 +7,15 @@ interface Props extends MessageType {
   isThinking?: boolean;
 }
 
+function extractText(node: React.ReactNode): string {
+  if (typeof node === 'string') return node;
+  if (Array.isArray(node)) return node.map(extractText).join('');
+  if (node && typeof node === 'object' && 'props' in node) {
+    return extractText((node as React.ReactElement).props.children);
+  }
+  return '';
+}
+
 function CopyButton({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -36,7 +45,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
   const isUser = role === 'human';
   // Normalize content: multimodal format (array of blocks) → plain string
   const normalizedContent = Array.isArray(content)
-    ? (content as Array<{ type?: string; text?: string }>)
+    ? content
         .filter((b) => b.type === 'text')
         .map((b) => b.text ?? '')
         .join(' ')
@@ -148,8 +157,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
                   </a>
                 ),
                 pre: ({ children }) => {
-                  const codeElement = children as React.ReactElement<{ children: string }>;
-                  const code = codeElement?.props?.children || '';
+                  const code = extractText(children);
                   return (
                     <div className="relative group">
                       <CopyButton code={code} />

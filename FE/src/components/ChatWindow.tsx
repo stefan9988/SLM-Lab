@@ -7,9 +7,16 @@ interface Props {
   messages: MessageType[];
   toolStatus: string | null;
   streaming?: boolean;
+  onSend: (text: string) => void;
 }
 
-export default function ChatWindow({ messages, toolStatus, streaming }: Props) {
+const suggestions = [
+  'Explain how reinforcement learning agents work',
+  'Compare DQN and PPO algorithms',
+  'Help me configure a new experiment',
+];
+
+export default function ChatWindow({ messages, toolStatus, streaming, onSend }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const userScrolledUp = useRef(false);
   const lastScrollTop = useRef(0);
@@ -46,22 +53,22 @@ export default function ChatWindow({ messages, toolStatus, streaming }: Props) {
           <h2 className="text-2xl font-bold text-[#e2e8f0] mb-2">SLM Lab</h2>
           <p className="text-[#94a3b8] text-sm mb-8">What can I help you with?</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl w-full px-4">
-            <div className="rounded-xl border border-[#334155] bg-[#1e293b] p-4 text-sm text-[#94a3b8] hover:border-[#7c3aed] transition-colors cursor-default">
-              Explain how reinforcement learning agents work
-            </div>
-            <div className="rounded-xl border border-[#334155] bg-[#1e293b] p-4 text-sm text-[#94a3b8] hover:border-[#7c3aed] transition-colors cursor-default">
-              Compare DQN and PPO algorithms
-            </div>
-            <div className="rounded-xl border border-[#334155] bg-[#1e293b] p-4 text-sm text-[#94a3b8] hover:border-[#7c3aed] transition-colors cursor-default">
-              Help me configure a new experiment
-            </div>
+            {suggestions.map((text) => (
+              <div
+                key={text}
+                onClick={() => onSend(text)}
+                className="rounded-xl border border-[#334155] bg-[#1e293b] p-4 text-sm text-[#94a3b8] hover:border-[#7c3aed] transition-colors cursor-pointer"
+              >
+                {text}
+              </div>
+            ))}
           </div>
         </div>
       )}
       {messages.map((msg, i) => {
         const isLastAi = msg.role === 'ai' && i === messages.length - 1;
         const isThinking = isLastAi && streaming && msg.thinking && !msg.content;
-        return <Message key={i} {...msg} isThinking={!!isThinking} />;
+        return <Message key={msg.id ?? i} {...msg} isThinking={!!isThinking} />;
       })}
       {toolStatus && <ToolNotification status={toolStatus} />}
     </div>

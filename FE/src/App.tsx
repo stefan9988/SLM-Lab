@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Conversation, FileAttachment } from './types';
 import { loadConversations, addConversation, removeConversation } from './utils/storage';
+import { clearHistory } from './utils/api';
 import { useChat } from './hooks/useChat';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
@@ -42,7 +43,12 @@ function App() {
   }, []);
 
   const handleDelete = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      try {
+        await clearHistory(id);
+      } catch (err) {
+        console.error('Failed to clear history from backend:', err);
+      }
       setConversations(removeConversation(id));
       if (id === activeId) {
         const remaining = loadConversations();
@@ -67,7 +73,7 @@ function App() {
         onClear={handleClear}
       />
       <main className="flex-1 flex flex-col">
-        <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} />
+        <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} onSend={handleSend} />
         <MessageInput onSend={handleSend} disabled={streaming} streaming={streaming} onStop={stopStreaming} />
       </main>
     </div>

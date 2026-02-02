@@ -14,7 +14,7 @@ export function useChat(sessionId: string) {
     try {
       const history = await fetchHistory(sessionId);
       logger.info('[useChat] History loaded:', history.length, 'messages');
-      setMessages(history);
+      setMessages(history.map((m: Message) => ({ ...m, id: m.id || crypto.randomUUID() })));
     } catch (err) {
       logger.error('[useChat] Failed to load history:', err);
       setMessages([]);
@@ -36,13 +36,13 @@ export function useChat(sessionId: string) {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const userMsg: Message = { role: 'human', content: text, files };
+      const userMsg: Message = { id: crypto.randomUUID(), role: 'human', content: text, files };
       setMessages((prev) => [...prev, userMsg]);
       setStreaming(true);
       setToolStatus(null);
 
-      const aiMsg: Message = { role: 'ai', content: '' };
-      setMessages((prev) => [...prev, aiMsg]);
+      const aiMsg: Message = { id: crypto.randomUUID(), role: 'ai', content: '' };
+      setMessages((prev) => [...prev, { ...aiMsg }]);
 
       try {
         for await (const event of streamChat(text, sessionId, files, controller.signal)) {
