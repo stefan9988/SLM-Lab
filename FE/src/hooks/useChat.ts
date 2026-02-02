@@ -52,6 +52,7 @@ export function useChat(sessionId: string) {
             });
           } else if (event.type === 'thinking') {
             aiMsg.thinking = (aiMsg.thinking || '') + event.content;
+            setToolStatus(null);
             setMessages((prev) => {
               const next = [...prev];
               next[next.length - 1] = { ...aiMsg };
