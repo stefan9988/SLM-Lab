@@ -66,3 +66,10 @@ cd FE
 npm install
 npm run dev
 ```
+
+### Running tests
+
+```bash
+uv sync
+uv run pytest tests/
+```

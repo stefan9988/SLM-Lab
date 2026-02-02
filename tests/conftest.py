@@ -1,6 +1,6 @@
 """Shared test fixtures."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,8 +19,8 @@ def mock_agent():
 
 @pytest.fixture
 def client(mock_agent):
-    with patch("BE.app.general_agent", mock_agent):
-        from fastapi.testclient import TestClient
-        from BE.app import app
+    from fastapi.testclient import TestClient
+    from BE.app import app
 
-        yield TestClient(app, raise_server_exceptions=False)
+    app.state.general_agent = mock_agent
+    yield TestClient(app, raise_server_exceptions=False)

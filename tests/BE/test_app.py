@@ -53,7 +53,7 @@ class TestBuildPromptWithFiles:
         mock_fitz = MagicMock()
         mock_fitz.open.return_value = mock_doc
 
-        with patch.dict("sys.modules", {"fitz": mock_fitz}):
+        with patch("BE.app.fitz", mock_fitz):
             f = FileAttachment(
                 name="doc.pdf",
                 type="application/pdf",
@@ -75,7 +75,7 @@ class TestBuildPromptWithFiles:
         mock_fitz = MagicMock()
         mock_fitz.open.return_value = mock_doc
 
-        with patch.dict("sys.modules", {"fitz": mock_fitz}):
+        with patch("BE.app.fitz", mock_fitz):
             f = FileAttachment(
                 name="scan.pdf",
                 type="application/pdf",
@@ -90,7 +90,7 @@ class TestBuildPromptWithFiles:
         mock_fitz = MagicMock()
         mock_fitz.open.side_effect = RuntimeError("corrupt")
 
-        with patch.dict("sys.modules", {"fitz": mock_fitz}):
+        with patch("BE.app.fitz", mock_fitz):
             f = FileAttachment(
                 name="bad.pdf",
                 type="application/pdf",
@@ -188,7 +188,7 @@ class TestChatWithFiles:
         mock_fitz = MagicMock()
         mock_fitz.open.side_effect = RuntimeError("corrupt")
 
-        with patch.dict("sys.modules", {"fitz": mock_fitz}):
+        with patch("BE.app.fitz", mock_fitz):
             data_url = _make_text_data_url("bytes", "application/pdf")
             resp = client.post(
                 "/chat/stream",
