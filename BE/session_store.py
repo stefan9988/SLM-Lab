@@ -99,11 +99,6 @@ def _clear_archive(session_id: str) -> None:
     if store is None:
         return
 
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
     async def _do_delete():
         try:
             await store.delete_session(session_id)
@@ -111,13 +106,11 @@ def _clear_archive(session_id: str) -> None:
         except Exception as exc:
             logger.warning("Failed to clear archive for session %s: %s", session_id, exc)
 
-    if loop and loop.is_running():
+    try:
+        loop = asyncio.get_running_loop()
         loop.create_task(_do_delete())
-    else:
-        try:
-            asyncio.run(_do_delete())
-        except Exception as exc:
-            logger.warning("Failed to clear archive for session %s: %s", session_id, exc)
+    except RuntimeError:
+        logger.debug("No running event loop, skipping archive clear for session %s", session_id)
 
 
 class InMemoryStore(SessionStore):
@@ -233,10 +226,6 @@ class RedisStore(SessionStore):
         store = create_store()
         if store is None:
             return
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
 
         async def _do_archive():
             try:
@@ -246,13 +235,11 @@ class RedisStore(SessionStore):
             except Exception as exc:
                 logger.warning("Archive to PostgreSQL failed: %s", exc)
 
-        if loop and loop.is_running():
+        try:
+            loop = asyncio.get_running_loop()
             loop.create_task(_do_archive())
-        else:
-            try:
-                asyncio.run(_do_archive())
-            except Exception as exc:
-                logger.warning("Archive to PostgreSQL failed: %s", exc)
+        except RuntimeError:
+            logger.debug("No running event loop, skipping archive for session %s", session_id)
 
     def clear(self, session_id: str) -> None:
         self._redis.delete(
