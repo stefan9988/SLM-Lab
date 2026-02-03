@@ -91,6 +91,35 @@ def _history_entry_from_dict(d: dict) -> Optional[dict]:
     return entry
 
 
+def _clear_archive(session_id: str) -> None:
+    """Best-effort async archive deletion from PostgreSQL."""
+    from BE.archive_store import create_store
+
+    store = create_store()
+    if store is None:
+        return
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    async def _do_delete():
+        try:
+            await store.delete_session(session_id)
+            logger.debug("Cleared archive for session %s", session_id)
+        except Exception as exc:
+            logger.warning("Failed to clear archive for session %s: %s", session_id, exc)
+
+    if loop and loop.is_running():
+        loop.create_task(_do_delete())
+    else:
+        try:
+            asyncio.run(_do_delete())
+        except Exception as exc:
+            logger.warning("Failed to clear archive for session %s: %s", session_id, exc)
+
+
 class InMemoryStore(SessionStore):
     """In-memory session store (no persistence across restarts)."""
 
@@ -119,6 +148,7 @@ class InMemoryStore(SessionStore):
 
     def clear(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
+        _clear_archive(session_id)
 
     def get_history_dicts(self, session_id: str) -> List[dict]:
         dicts = self._sessions.get(session_id, [])
@@ -229,6 +259,7 @@ class RedisStore(SessionStore):
             self._meta_key(session_id),
             self._messages_key(session_id),
         )
+        _clear_archive(session_id)
 
     def get_history_dicts(self, session_id: str) -> List[dict]:
         raw = self._redis.lrange(self._messages_key(session_id), 0, -1)

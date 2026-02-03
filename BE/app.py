@@ -175,6 +175,19 @@ async def lifespan(app: FastAPI):
         ],
         maintain_history=True,
     )
+
+    # Log service URLs for easy reference
+    logger.info("=" * 60)
+    logger.info("SLM-Lab services running:")
+    logger.info("  Frontend:   http://localhost:8080")
+    logger.info("  Backend:    http://localhost:8000")
+    logger.info("  Ollama:     %s", settings.OLLAMA_BASE_URL)
+    if settings.REDIS_ENABLED:
+        logger.info("  Redis:      %s", settings.REDIS_URL)
+    if settings.POSTGRES_ENABLED:
+        logger.info("  PostgreSQL: %s", settings.POSTGRES_URL.split("@")[-1])
+    logger.info("=" * 60)
+
     yield
     logger.info("Application shutdown")
 
