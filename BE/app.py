@@ -3,26 +3,29 @@
 import base64
 import json
 from contextlib import asynccontextmanager
-from typing import List, Optional
 
 try:
     import fitz  # PyMuPDF
 except ImportError:
     fitz = None
 
-from fastapi import FastAPI, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from AI.agents import init_agent
 from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 from AI.tools import get_enabled_tools
+from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
 from BE.config import settings
-from BE.logger import setup_logger
+from BE.logger import redact_url, setup_logger
 
 logger = setup_logger(__name__)
 
+__all__ = ["app"]
+
 MAX_TOTAL_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+SESSION_ID_PATTERN = r"^[a-zA-Z0-9_-]+$"
 
 
 class FileSizeLimitExceeded(Exception):
@@ -39,9 +42,17 @@ class FileAttachment(BaseModel):
 class ChatRequest(BaseModel):
     """Request model for chat endpoints."""
 
-    message: str
-    session_id: str
-    files: Optional[List[FileAttachment]] = None
+    message: str = Field(max_length=100_000)
+    session_id: str = Field(max_length=128, pattern=SESSION_ID_PATTERN)
+    files: list[FileAttachment] | None = None
+
+
+def get_archive_store() -> PostgresArchiveStore:
+    """Dependency that returns the archive store or raises 503."""
+    store = _create_archive_store()
+    if store is None:
+        raise HTTPException(status_code=503, detail="Archive store unavailable")
+    return store
 
 
 def _decode_base64_content(data_url: str) -> bytes:
@@ -52,7 +63,7 @@ def _decode_base64_content(data_url: str) -> bytes:
 
 
 def build_prompt_with_files(
-    message: str, files: List[FileAttachment]
+    message: str, files: list[FileAttachment]
 ) -> tuple[str, list[dict], list[str]]:
     """Process file attachments and return (augmented_prompt, images_list, warnings)."""
     text_parts: list[str] = []
@@ -93,7 +104,7 @@ def build_prompt_with_files(
                     text_parts.append(
                         f"[Attached PDF: {f.name} (no extractable text – possibly a scanned document)]"
                     )
-            except Exception as exc:
+            except (ValueError, RuntimeError, OSError) as exc:
                 warn = f"Failed to extract PDF text from {f.name}: {exc}"
                 logger.warning(warn)
                 warnings.append(warn)
@@ -108,7 +119,7 @@ def build_prompt_with_files(
                 text_parts.append(
                     f"--- Content of {f.name} ---\n{file_text}\n--- End of {f.name} ---"
                 )
-            except Exception as exc:
+            except (ValueError, UnicodeDecodeError) as exc:
                 warn = f"Failed to decode text file {f.name}: {exc}"
                 logger.warning(warn)
                 warnings.append(warn)
@@ -128,7 +139,7 @@ def build_prompt_with_files(
 
 
 def process_files(
-    message: str, files: Optional[List[FileAttachment]]
+    message: str, files: list[FileAttachment] | None
 ) -> tuple[str, list[dict], list[str]]:
     """Validate file sizes and build augmented prompt.
 
@@ -176,7 +187,7 @@ async def lifespan(app: FastAPI):
     if settings.REDIS_ENABLED:
         logger.info("  Redis:      %s", settings.REDIS_URL)
     if settings.POSTGRES_ENABLED:
-        logger.info("  PostgreSQL: %s", settings.POSTGRES_URL.split("@")[-1])
+        logger.info("  PostgreSQL: %s", redact_url(settings.POSTGRES_URL))
     logger.info("=" * 60)
 
     yield
@@ -267,7 +278,10 @@ async def chat_stream(body: ChatRequest, request: Request):
 
 
 @app.get("/history")
-async def get_history(request: Request, session_id: str = Query()):
+async def get_history(
+    request: Request,
+    session_id: str = Query(min_length=1, max_length=128, pattern=SESSION_ID_PATTERN),
+):
     """Retrieve conversation history for a session."""
     logger.info("GET /history (session_id=%s)", session_id)
     agent = request.app.state.general_agent
@@ -277,7 +291,10 @@ async def get_history(request: Request, session_id: str = Query()):
 
 
 @app.delete("/history")
-async def clear_history(request: Request, session_id: str = Query()):
+async def clear_history(
+    request: Request,
+    session_id: str = Query(min_length=1, max_length=128, pattern=SESSION_ID_PATTERN),
+):
     """Clear conversation history for a session."""
     logger.info("DELETE /history (session_id=%s)", session_id)
     agent = request.app.state.general_agent
@@ -289,43 +306,30 @@ async def clear_history(request: Request, session_id: str = Query()):
 
 
 @app.get("/archive/sessions")
-async def list_archived_sessions():
+async def list_archived_sessions(
+    store: PostgresArchiveStore = Depends(get_archive_store),
+):
     """List all archived sessions."""
-    from BE.archive_store import create_store
-
-    store = create_store()
-    if store is None:
-        return JSONResponse(
-            status_code=503, content={"detail": "Archive store unavailable"}
-        )
     sessions = await store.get_all_sessions()
     return {"sessions": sessions}
 
 
 @app.get("/archive/sessions/{session_id}")
-async def get_archived_session(session_id: str):
+async def get_archived_session(
+    session_id: str,
+    store: PostgresArchiveStore = Depends(get_archive_store),
+):
     """Get archived messages for a session."""
-    from BE.archive_store import create_store
-
-    store = create_store()
-    if store is None:
-        return JSONResponse(
-            status_code=503, content={"detail": "Archive store unavailable"}
-        )
     messages = await store.get_messages(session_id)
     return {"session_id": session_id, "messages": messages}
 
 
 @app.delete("/archive/sessions/{session_id}")
-async def delete_archived_session(session_id: str):
+async def delete_archived_session(
+    session_id: str,
+    store: PostgresArchiveStore = Depends(get_archive_store),
+):
     """Delete an archived session."""
-    from BE.archive_store import create_store
-
-    store = create_store()
-    if store is None:
-        return JSONResponse(
-            status_code=503, content={"detail": "Archive store unavailable"}
-        )
     deleted = await store.delete_session(session_id)
     if not deleted:
         return JSONResponse(status_code=404, content={"detail": "Session not found"})

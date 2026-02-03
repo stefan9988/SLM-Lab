@@ -7,6 +7,8 @@ from BE.models import Base
 
 logger = setup_logger(__name__)
 
+__all__ = ["get_session_factory", "init_db"]
+
 _engine = None
 _session_factory = None
 
@@ -16,7 +18,19 @@ def _get_engine():
     if _engine is None:
         from BE.config import settings
 
-        _engine = create_async_engine(settings.POSTGRES_URL, echo=False)
+        _engine = create_async_engine(
+            settings.POSTGRES_URL,
+            echo=False,
+            pool_size=settings.POSTGRES_POOL_SIZE,
+            max_overflow=settings.POSTGRES_MAX_OVERFLOW,
+            pool_recycle=settings.POSTGRES_POOL_RECYCLE,
+            pool_pre_ping=settings.POSTGRES_POOL_PRE_PING,
+        )
+        logger.debug(
+            "Created async engine with pool_size=%d, max_overflow=%d",
+            settings.POSTGRES_POOL_SIZE,
+            settings.POSTGRES_MAX_OVERFLOW,
+        )
     return _engine
 
 
@@ -35,10 +49,3 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("PostgreSQL tables initialized")
-
-
-async def get_db() -> AsyncSession:
-    """Get an async database session."""
-    factory = get_session_factory()
-    async with factory() as session:
-        return session

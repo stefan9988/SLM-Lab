@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     # PostgreSQL settings
     POSTGRES_URL: str = "postgresql+asyncpg://slmlab:slmlab@localhost:5432/slmlab"
     POSTGRES_ENABLED: bool = True
+    POSTGRES_POOL_SIZE: int = 5
+    POSTGRES_MAX_OVERFLOW: int = 10
+    POSTGRES_POOL_RECYCLE: int = 3600
+    POSTGRES_POOL_PRE_PING: bool = True
+
+    # Archive retry settings
+    ARCHIVE_MAX_RETRIES: int = 3
+    ARCHIVE_RETRY_DELAY: float = 1.0
+    ARCHIVE_TIMEOUT: float = 30.0
 
     # LangSmith settings
     LANGSMITH_TRACING: bool = False

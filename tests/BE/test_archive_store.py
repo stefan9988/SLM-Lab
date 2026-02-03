@@ -134,11 +134,14 @@ class TestCreateStoreFactory:
         result = archive_store.create_store()
         assert result is None
 
-    @patch("BE.archive_store.get_session_factory", side_effect=Exception("no pg"))
+    @patch("BE.archive_store.get_session_factory")
     @patch("BE.config.settings")
     def test_fallback_on_error(self, mock_settings, mock_factory):
+        from sqlalchemy.exc import SQLAlchemyError
+
         from BE import archive_store
 
+        mock_factory.side_effect = SQLAlchemyError("no pg")
         archive_store._archive_store = None
         mock_settings.POSTGRES_ENABLED = True
         result = archive_store.create_store()

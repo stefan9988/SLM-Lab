@@ -5,12 +5,15 @@ from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import SQLAlchemyError
 
 from BE.database import get_session_factory
 from BE.logger import setup_logger
 from BE.models import Message, Session
 
 logger = setup_logger(__name__)
+
+__all__ = ["PostgresArchiveStore", "create_store"]
 
 
 class PostgresArchiveStore:
@@ -141,6 +144,6 @@ def create_store() -> PostgresArchiveStore | None:
         _archive_store = PostgresArchiveStore()
         logger.info("PostgreSQL archive store created")
         return _archive_store
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         logger.warning("Failed to create PostgreSQL archive store: %s", exc)
         return None

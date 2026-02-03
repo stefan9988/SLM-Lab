@@ -2,6 +2,21 @@
 
 import logging
 import os
+import re
+
+__all__ = ["setup_logger", "redact_url"]
+
+
+def redact_url(url: str) -> str:
+    """Redact password from a URL for safe logging.
+
+    Args:
+        url: URL that may contain credentials.
+
+    Returns:
+        URL with password replaced by asterisks.
+    """
+    return re.sub(r"(://[^:]+:)[^@]+(@)", r"\1****\2", url)
 
 
 class ColoredFormatter(logging.Formatter):
@@ -16,13 +31,13 @@ class ColoredFormatter(logging.Formatter):
     }
     RESET = "\033[0m"
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         color = self.COLORS.get(record.levelno, self.RESET)
         record.levelname = f"{color}{record.levelname}{self.RESET}"
         return super().format(record)
 
 
-def setup_logger(name: str, level: str = None) -> logging.Logger:
+def setup_logger(name: str, level: str | None = None) -> logging.Logger:
     """Create and return a configured logger.
 
     Args:

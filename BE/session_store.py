@@ -1,28 +1,31 @@
 """Session store abstraction for conversation history persistence."""
 
-import asyncio
 import json
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Any, List, Optional
 
+import redis as redis_lib
+
+from BE.async_utils import schedule_background_task
 from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+__all__ = ["SessionStore", "InMemoryStore", "RedisStore", "create_store"]
 
 
 class SessionStore(ABC):
     """Abstract base class for session storage backends."""
 
     @abstractmethod
-    def get_messages(self, session_id: str) -> List:
+    def get_messages(self, session_id: str) -> list:
         """Retrieve LangChain message objects for a session."""
 
     @abstractmethod
     def save_messages(
         self,
         session_id: str,
-        messages: List,
+        messages: list,
         model: str = "",
         provider: str = "",
     ) -> None:
@@ -33,7 +36,7 @@ class SessionStore(ABC):
         """Delete all data for a session."""
 
     @abstractmethod
-    def get_history_dicts(self, session_id: str) -> List[dict]:
+    def get_history_dicts(self, session_id: str) -> list[dict]:
         """Return conversation history as serializable dicts."""
 
 
@@ -74,7 +77,7 @@ def _dict_to_message(d: dict):
     return None
 
 
-def _history_entry_from_dict(d: dict) -> Optional[dict]:
+def _history_entry_from_dict(d: dict) -> dict | None:
     """Convert a stored dict to a history entry for the API."""
     if d["type"] not in ("human", "ai"):
         return None
@@ -91,6 +94,17 @@ def _history_entry_from_dict(d: dict) -> Optional[dict]:
     return entry
 
 
+def _get_archive_settings() -> tuple[int, float, float]:
+    """Get archive retry settings from config."""
+    from BE.config import settings
+
+    return (
+        settings.ARCHIVE_MAX_RETRIES,
+        settings.ARCHIVE_RETRY_DELAY,
+        settings.ARCHIVE_TIMEOUT,
+    )
+
+
 def _clear_archive(session_id: str) -> None:
     """Best-effort async archive deletion from PostgreSQL."""
     from BE.archive_store import create_store
@@ -99,27 +113,28 @@ def _clear_archive(session_id: str) -> None:
     if store is None:
         return
 
-    async def _do_delete():
-        try:
-            await store.delete_session(session_id)
-            logger.debug("Cleared archive for session %s", session_id)
-        except Exception as exc:
-            logger.warning("Failed to clear archive for session %s: %s", session_id, exc)
+    max_retries, retry_delay, timeout = _get_archive_settings()
 
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_do_delete())
-    except RuntimeError:
-        logger.debug("No running event loop, skipping archive clear for session %s", session_id)
+    async def _do_delete():
+        await store.delete_session(session_id)
+        logger.debug("Cleared archive for session %s", session_id)
+
+    schedule_background_task(
+        _do_delete,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        timeout=timeout,
+        task_name=f"archive_clear:{session_id}",
+    )
 
 
 class InMemoryStore(SessionStore):
     """In-memory session store (no persistence across restarts)."""
 
     def __init__(self) -> None:
-        self._sessions: dict[str, List[dict]] = {}
+        self._sessions: dict[str, list[dict]] = {}
 
-    def get_messages(self, session_id: str) -> List:
+    def get_messages(self, session_id: str) -> list:
         dicts = self._sessions.get(session_id, [])
         msgs = []
         for d in dicts:
@@ -131,7 +146,7 @@ class InMemoryStore(SessionStore):
     def save_messages(
         self,
         session_id: str,
-        messages: List,
+        messages: list,
         model: str = "",
         provider: str = "",
     ) -> None:
@@ -143,7 +158,7 @@ class InMemoryStore(SessionStore):
         self._sessions.pop(session_id, None)
         _clear_archive(session_id)
 
-    def get_history_dicts(self, session_id: str) -> List[dict]:
+    def get_history_dicts(self, session_id: str) -> list[dict]:
         dicts = self._sessions.get(session_id, [])
         history = []
         for d in dicts:
@@ -157,12 +172,13 @@ class RedisStore(SessionStore):
     """Redis-backed session store with per-message metadata."""
 
     def __init__(self, redis_url: str, ttl_days: int = 30) -> None:
-        import redis as redis_lib
-
-        self._redis = redis_lib.Redis.from_url(redis_url, decode_responses=True)
+        self._redis = redis_lib.Redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=5.0,
+            socket_timeout=5.0,
+        )
         self._ttl_seconds = ttl_days * 86400
-        # Verify connectivity
-        self._redis.ping()
         logger.info("RedisStore connected to %s", redis_url)
 
     def _meta_key(self, session_id: str) -> str:
@@ -175,7 +191,7 @@ class RedisStore(SessionStore):
         pipe.expire(self._meta_key(session_id), self._ttl_seconds)
         pipe.expire(self._messages_key(session_id), self._ttl_seconds)
 
-    def get_messages(self, session_id: str) -> List:
+    def get_messages(self, session_id: str) -> list:
         raw = self._redis.lrange(self._messages_key(session_id), 0, -1)
         msgs = []
         for item in raw:
@@ -188,7 +204,7 @@ class RedisStore(SessionStore):
     def save_messages(
         self,
         session_id: str,
-        messages: List,
+        messages: list,
         model: str = "",
         provider: str = "",
     ) -> None:
@@ -227,19 +243,20 @@ class RedisStore(SessionStore):
         if store is None:
             return
 
-        async def _do_archive():
-            try:
-                await store.save_messages(
-                    session_id, dicts, {"model": model, "provider": provider}
-                )
-            except Exception as exc:
-                logger.warning("Archive to PostgreSQL failed: %s", exc)
+        max_retries, retry_delay, timeout = _get_archive_settings()
 
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(_do_archive())
-        except RuntimeError:
-            logger.debug("No running event loop, skipping archive for session %s", session_id)
+        async def _do_archive():
+            await store.save_messages(
+                session_id, dicts, {"model": model, "provider": provider}
+            )
+
+        schedule_background_task(
+            _do_archive,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            timeout=timeout,
+            task_name=f"archive_save:{session_id}",
+        )
 
     def clear(self, session_id: str) -> None:
         self._redis.delete(
@@ -248,7 +265,7 @@ class RedisStore(SessionStore):
         )
         _clear_archive(session_id)
 
-    def get_history_dicts(self, session_id: str) -> List[dict]:
+    def get_history_dicts(self, session_id: str) -> list[dict]:
         raw = self._redis.lrange(self._messages_key(session_id), 0, -1)
         history = []
         for item in raw:
@@ -273,7 +290,7 @@ def create_store() -> SessionStore:
             ttl_days=settings.REDIS_SESSION_TTL_DAYS,
         )
         return store
-    except Exception as exc:
+    except (redis_lib.exceptions.ConnectionError, redis_lib.exceptions.TimeoutError, OSError) as exc:
         logger.warning(
             "Failed to connect to Redis (%s), falling back to InMemoryStore",
             exc,

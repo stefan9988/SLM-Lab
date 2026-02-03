@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+__all__ = ["Base", "Session", "Message"]
+
 
 class Base(DeclarativeBase):
     pass
