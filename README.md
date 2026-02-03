@@ -23,6 +23,14 @@ Edit `.env` to set your model, API keys, and other settings. See `.env.example` 
 ollama pull qwen3:14b
 ```
 
+### Using Ollama cloud models
+
+To use Ollama cloud models, you must sign in and set up your API and device keys:
+
+```bash
+ollama signin
+```
+
 ## Running with Docker
 
 ```bash
