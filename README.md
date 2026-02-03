@@ -72,6 +72,35 @@ REDIS_ENABLED=false
 | `REDIS_ENABLED` | `true` | Set to `false` to use in-memory fallback |
 | `REDIS_SESSION_TTL_DAYS` | `30` | Auto-expire inactive sessions after N days |
 
+## PostgreSQL (long-term archive)
+
+In addition to Redis (short-term session state with TTL), PostgreSQL stores the full conversation history permanently — messages are never expired.
+
+When running with Docker Compose, PostgreSQL starts automatically. For local development:
+
+```bash
+docker run -d -p 5432:5432 -e POSTGRES_USER=slmlab -e POSTGRES_PASSWORD=slmlab -e POSTGRES_DB=slmlab postgres:16-alpine
+```
+
+Or disable it in `.env`:
+
+```
+POSTGRES_ENABLED=false
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `POSTGRES_URL` | `postgresql+asyncpg://slmlab:slmlab@localhost:5432/slmlab` | PostgreSQL connection URL |
+| `POSTGRES_ENABLED` | `true` | Set to `false` to disable archiving |
+
+### Archive API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/archive/sessions` | List all archived sessions |
+| `GET` | `/archive/sessions/{id}` | Get full message history for a session |
+| `DELETE` | `/archive/sessions/{id}` | Delete an archived session |
+
 ## Local development (without Docker)
 
 ### Backend

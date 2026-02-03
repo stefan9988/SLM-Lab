@@ -151,11 +151,34 @@ async def lifespan(app: FastAPI):
     tools = get_enabled_tools(settings)
     tool_names = [t.name if hasattr(t, "name") else t.__name__ for t in tools]
     logger.info("General agent tools enabled: %s", tool_names)
+
+    # Initialize PostgreSQL tables if enabled
+    if settings.POSTGRES_ENABLED:
+        try:
+            from BE.database import init_db
+
+            await init_db()
+        except Exception as exc:
+            logger.warning("PostgreSQL init failed (archive disabled): %s", exc)
+
     app.state.general_agent = init_agent(
         system_prompt=GENERAL_AGENT_PROMPT,
         tools=tools,
         maintain_history=True,
     )
+
+    # Log service URLs for easy reference
+    logger.info("=" * 60)
+    logger.info("SLM-Lab services running:")
+    logger.info("  Frontend:   http://localhost:8080")
+    logger.info("  Backend:    http://localhost:8000")
+    logger.info("  Ollama:     %s", settings.OLLAMA_BASE_URL)
+    if settings.REDIS_ENABLED:
+        logger.info("  Redis:      %s", settings.REDIS_URL)
+    if settings.POSTGRES_ENABLED:
+        logger.info("  PostgreSQL: %s", settings.POSTGRES_URL.split("@")[-1])
+    logger.info("=" * 60)
+
     yield
     logger.info("Application shutdown")
 
@@ -260,3 +283,50 @@ async def clear_history(request: Request, session_id: str = Query()):
     agent = request.app.state.general_agent
     agent.clear_history(session_id=session_id)
     return {"status": "cleared"}
+
+
+# --- Archive endpoints (PostgreSQL) ---
+
+
+@app.get("/archive/sessions")
+async def list_archived_sessions():
+    """List all archived sessions."""
+    from BE.archive_store import create_store
+
+    store = create_store()
+    if store is None:
+        return JSONResponse(
+            status_code=503, content={"detail": "Archive store unavailable"}
+        )
+    sessions = await store.get_all_sessions()
+    return {"sessions": sessions}
+
+
+@app.get("/archive/sessions/{session_id}")
+async def get_archived_session(session_id: str):
+    """Get archived messages for a session."""
+    from BE.archive_store import create_store
+
+    store = create_store()
+    if store is None:
+        return JSONResponse(
+            status_code=503, content={"detail": "Archive store unavailable"}
+        )
+    messages = await store.get_messages(session_id)
+    return {"session_id": session_id, "messages": messages}
+
+
+@app.delete("/archive/sessions/{session_id}")
+async def delete_archived_session(session_id: str):
+    """Delete an archived session."""
+    from BE.archive_store import create_store
+
+    store = create_store()
+    if store is None:
+        return JSONResponse(
+            status_code=503, content={"detail": "Archive store unavailable"}
+        )
+    deleted = await store.delete_session(session_id)
+    if not deleted:
+        return JSONResponse(status_code=404, content={"detail": "Session not found"})
+    return {"status": "deleted"}

@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL: bool = False
     GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL: bool = False
 
+    # PostgreSQL settings
+    POSTGRES_URL: str = "postgresql+asyncpg://slmlab:slmlab@localhost:5432/slmlab"
+    POSTGRES_ENABLED: bool = True
+
     # LangSmith settings
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
