@@ -11,13 +11,14 @@ except ImportError:
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
 from AI.agents import init_agent
 from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 from AI.tools import get_enabled_tools
 from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
-from BE.config import settings
+from BE.config import _parse_comma_separated, settings
 from BE.logger import redact_url, setup_logger
 
 logger = setup_logger(__name__)
@@ -181,9 +182,10 @@ async def lifespan(app: FastAPI):
     # Log service URLs for easy reference
     logger.info("=" * 60)
     logger.info("SLM-Lab services running:")
-    logger.info("  Frontend:   http://localhost:8080")
-    logger.info("  Backend:    http://localhost:8000")
+    logger.info("  Frontend:   http://localhost:%s", settings.VITE_PORT)
+    logger.info("  Backend:    %s", settings.VITE_API_URL)
     logger.info("  Ollama:     %s", settings.OLLAMA_BASE_URL)
+    logger.info("  CORS origins: %s", settings.CORS_ALLOW_ORIGINS)
     if settings.REDIS_ENABLED:
         logger.info("  Redis:      %s", settings.REDIS_URL)
     if settings.POSTGRES_ENABLED:
@@ -201,6 +203,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_parse_comma_separated(settings.CORS_ALLOW_ORIGINS),
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=_parse_comma_separated(settings.CORS_ALLOW_METHODS),
+    allow_headers=_parse_comma_separated(settings.CORS_ALLOW_HEADERS),
+    expose_headers=_parse_comma_separated(settings.CORS_EXPOSE_HEADERS),
+    max_age=settings.CORS_MAX_AGE,
+)
 
 @app.exception_handler(ValidationError)
 async def validation_error_handler(request: Request, exc: ValidationError):

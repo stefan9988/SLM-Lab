@@ -1,15 +1,20 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: true,
-    port: 3000,
-    proxy: {
-      '/chat': 'http://localhost:8000',
-      '/history': 'http://localhost:8000',
+export default defineConfig(({ mode }) => {
+  // Load env from root directory (one level up)
+  const env = loadEnv(mode, '../', 'VITE_')
+  
+  return {
+    plugins: [react()],
+    envDir: '../', // Tell Vite to look for .env in parent directory
+    server: {
+      host: true,
+      port: parseInt(env.VITE_PORT || '3000'),
+      proxy: {
+        '/chat': env.VITE_API_URL || 'http://localhost:8000',
+        '/history': env.VITE_API_URL || 'http://localhost:8000',
+      },
     },
-  },
+  }
 })

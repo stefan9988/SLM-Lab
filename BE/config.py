@@ -3,6 +3,15 @@ import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _parse_comma_separated(value: str | list[str]) -> list[str]:
+    """Parse a comma-separated string into a list, or pass through a list."""
+    if isinstance(value, list):
+        return value
+    if not value or not value.strip():
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
 
@@ -12,6 +21,17 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    VITE_API_URL: str = "http://localhost:8000"
+    VITE_PORT: int = 3000
+
+    # CORS settings (comma-separated strings, parsed in app.py)
+    CORS_ALLOW_ORIGINS: str = "http://localhost:3000,http://localhost:8080"
+    CORS_ALLOW_CREDENTIALS: bool = True
+    CORS_ALLOW_METHODS: str = "GET,POST,DELETE,OPTIONS"
+    CORS_ALLOW_HEADERS: str = "Content-Type,Authorization"
+    CORS_EXPOSE_HEADERS: str = ""
+    CORS_MAX_AGE: int = 600
 
     # LLM provider settings
     LLM_PROVIDER: str = "ollama"  # "ollama" | "openrouter"
