@@ -78,7 +78,7 @@ _logger.info(
 
 # Export OLLAMA_API_KEY so the ollama client picks it up for web search/fetch
 if settings.OLLAMA_API_KEY:
-    os.environ.setdefault("OLLAMA_API_KEY", settings.OLLAMA_API_KEY)
+    os.environ["OLLAMA_API_KEY"] = settings.OLLAMA_API_KEY
 
 # Export LangSmith settings to environment so LangChain picks them up
 if settings.LANGSMITH_TRACING:
