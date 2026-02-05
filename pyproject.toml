@@ -20,6 +20,8 @@ dependencies = [
     "langchain-experimental>=0.4.1",
     "asyncpg>=0.30.0",
     "sqlalchemy[asyncio]>=2.0.0",
+    "google-auth>=2.29.0",
+    "PyJWT>=2.8.0",
 ]
 
 [tool.setuptools.packages.find]

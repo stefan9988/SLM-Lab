@@ -1,4 +1,4 @@
-import type { Conversation } from '../types';
+import type { Conversation, AuthUser } from '../types';
 import ConversationItem from './ConversationItem';
 
 interface Props {
@@ -8,9 +8,11 @@ interface Props {
   onNew: () => void;
   onDelete: (id: string) => void;
   onClear: () => void;
+  user?: AuthUser | null;
+  onLogout?: () => void;
 }
 
-export default function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onClear }: Props) {
+export default function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onClear, user, onLogout }: Props) {
   return (
     <aside className="w-64 bg-[#16213e] border-r border-[#334155] flex flex-col h-full">
       <div className="p-4 border-b border-[#334155]">
@@ -33,6 +35,36 @@ export default function Sidebar({ conversations, activeId, onSelect, onNew, onDe
           />
         ))}
       </div>
+      {user && (
+        <div className="p-3 border-t border-[#334155]">
+          <div className="flex items-center gap-2 mb-2">
+            {user.picture ? (
+              <img
+                src={user.picture}
+                alt={user.name}
+                className="w-8 h-8 rounded-full"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-[#7c3aed] flex items-center justify-center text-white text-sm font-medium">
+                {user.name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-[#e2e8f0] truncate">{user.name}</p>
+              <p className="text-xs text-[#64748b] truncate">{user.email}</p>
+            </div>
+          </div>
+          {onLogout && (
+            <button
+              className="w-full rounded-lg border border-[#334155] text-[#64748b] py-1.5 text-sm hover:text-[#ef4444] hover:bg-[#ef4444]/10 transition-colors duration-200"
+              onClick={onLogout}
+            >
+              Sign Out
+            </button>
+          )}
+        </div>
+      )}
       <div className="p-3 border-t border-[#334155]">
         <button
           className="w-full rounded-lg border border-[#334155] text-[#64748b] py-1.5 text-sm hover:text-[#ef4444] hover:bg-[#ef4444]/10 transition-colors duration-200"

@@ -5,6 +5,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from AI.agents.base import Agent
+from BE.auth import UserInfo, get_current_user
+
+MOCK_USER = UserInfo(email="test@example.com", name="Test User", picture="")
 
 
 @pytest.fixture
@@ -23,4 +26,6 @@ def client(mock_agent):
     from BE.app import app
 
     app.state.general_agent = mock_agent
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER
     yield TestClient(app, raise_server_exceptions=False)
+    app.dependency_overrides.clear()

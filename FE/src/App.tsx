@@ -4,11 +4,31 @@ import type { Conversation, FileAttachment } from './types';
 import { loadConversations, addConversation, removeConversation } from './utils/storage';
 import { clearHistory } from './utils/api';
 import { useChat } from './hooks/useChat';
+import { useAuth } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import MessageInput from './components/MessageInput';
+import LoginPage from './components/LoginPage';
 
 function App() {
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#0f172a]">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#7c3aed]" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  return <AuthenticatedApp user={user} onLogout={logout} />;
+}
+
+function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>['user']; onLogout: () => void }) {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [activeId, setActiveId] = useState<string>(() => {
     const saved = loadConversations();
@@ -71,6 +91,8 @@ function App() {
         onNew={handleNew}
         onDelete={handleDelete}
         onClear={handleClear}
+        user={user}
+        onLogout={onLogout}
       />
       <main className="flex-1 flex flex-col">
         <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} onSend={handleSend} />

@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/chat': env.VITE_API_URL || 'http://localhost:8000',
         '/history': env.VITE_API_URL || 'http://localhost:8000',
+        '/auth': env.VITE_API_URL || 'http://localhost:8000',
       },
     },
   }

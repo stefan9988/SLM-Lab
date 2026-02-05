@@ -5,6 +5,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 from BE.app import FileAttachment, build_prompt_with_files
+from BE.auth import get_current_user
 
 
 def _make_text_data_url(text: str, mime: str = "text/plain") -> str:
@@ -308,3 +309,50 @@ class TestExceptionHandler:
         resp = client.post("/chat", json={"message": "hi", "session_id": "s1"})
         assert resp.status_code == 500
         assert "Internal server error" in resp.json()["detail"]
+
+
+# ── Google Auth endpoint tests ──────────────────────────────────────────────
+
+
+class TestGoogleAuthEndpoint:
+    @patch("BE.app.verify_google_token")
+    def test_valid_google_token_returns_200(self, mock_verify, client):
+        from BE.auth import UserInfo
+
+        mock_verify.return_value = UserInfo(
+            email="user@test.com", name="User", picture="pic.jpg"
+        )
+        resp = client.post("/auth/google", json={"token": "valid-google-token"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+        assert data["user"]["email"] == "user@test.com"
+
+    @patch("BE.app.verify_google_token")
+    def test_invalid_google_token_returns_401(self, mock_verify, client):
+        from fastapi import HTTPException
+
+        mock_verify.side_effect = HTTPException(
+            status_code=401, detail="Invalid Google token"
+        )
+        resp = client.post("/auth/google", json={"token": "bad-token"})
+        assert resp.status_code == 401
+
+    def test_missing_token_field_returns_422(self, client):
+        resp = client.post("/auth/google", json={})
+        assert resp.status_code == 422
+
+    def test_protected_route_without_auth_returns_401(self, mock_agent):
+        """Without the dependency override, protected routes require auth."""
+        from fastapi.testclient import TestClient
+        from BE.app import app
+
+        app.state.general_agent = mock_agent
+        # Clear overrides so auth is actually enforced
+        app.dependency_overrides.pop(get_current_user, None)
+        unauthed_client = TestClient(app, raise_server_exceptions=False)
+        resp = unauthed_client.post(
+            "/chat", json={"message": "hi", "session_id": "s1"}
+        )
+        assert resp.status_code == 422  # missing Authorization header

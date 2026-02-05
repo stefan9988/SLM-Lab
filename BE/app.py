@@ -18,6 +18,7 @@ from AI.agents import init_agent
 from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 from AI.tools import get_enabled_tools
 from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
+from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
 from BE.config import _parse_comma_separated, settings
 from BE.logger import redact_url, setup_logger
 
@@ -227,8 +228,26 @@ async def unhandled_error_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
+class GoogleAuthRequest(BaseModel):
+    """Request model for Google OAuth login."""
+
+    token: str
+
+
+@app.post("/auth/google")
+async def google_auth(body: GoogleAuthRequest):
+    """Exchange a Google ID token for an app JWT."""
+    user = verify_google_token(body.token)
+    access_token = create_access_token(user)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user.model_dump(),
+    }
+
+
 @app.post("/chat")
-async def chat(body: ChatRequest, request: Request):
+async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get_current_user)):
     """Send a message and get a complete response."""
     logger.info(
         "POST /chat (session_id=%s, message_preview=%.50s)",
@@ -255,7 +274,7 @@ async def chat(body: ChatRequest, request: Request):
 
 
 @app.post("/chat/stream")
-async def chat_stream(body: ChatRequest, request: Request):
+async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depends(get_current_user)):
     """Send a message and get a streaming SSE response."""
     logger.info(
         "POST /chat/stream (session_id=%s, message_preview=%.50s)",
@@ -292,6 +311,7 @@ async def chat_stream(body: ChatRequest, request: Request):
 async def get_history(
     request: Request,
     session_id: str = Query(min_length=1, max_length=128, pattern=SESSION_ID_PATTERN),
+    user: UserInfo = Depends(get_current_user),
 ):
     """Retrieve conversation history for a session."""
     logger.info("GET /history (session_id=%s)", session_id)
@@ -305,6 +325,7 @@ async def get_history(
 async def clear_history(
     request: Request,
     session_id: str = Query(min_length=1, max_length=128, pattern=SESSION_ID_PATTERN),
+    user: UserInfo = Depends(get_current_user),
 ):
     """Clear conversation history for a session."""
     logger.info("DELETE /history (session_id=%s)", session_id)
@@ -319,6 +340,7 @@ async def clear_history(
 @app.get("/archive/sessions")
 async def list_archived_sessions(
     store: PostgresArchiveStore = Depends(get_archive_store),
+    user: UserInfo = Depends(get_current_user),
 ):
     """List all archived sessions."""
     sessions = await store.get_all_sessions()
@@ -329,6 +351,7 @@ async def list_archived_sessions(
 async def get_archived_session(
     session_id: str,
     store: PostgresArchiveStore = Depends(get_archive_store),
+    user: UserInfo = Depends(get_current_user),
 ):
     """Get archived messages for a session."""
     messages = await store.get_messages(session_id)
@@ -339,6 +362,7 @@ async def get_archived_session(
 async def delete_archived_session(
     session_id: str,
     store: PostgresArchiveStore = Depends(get_archive_store),
+    user: UserInfo = Depends(get_current_user),
 ):
     """Delete an archived session."""
     deleted = await store.delete_session(session_id)

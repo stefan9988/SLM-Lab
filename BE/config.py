@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     CORS_EXPOSE_HEADERS: str = ""
     CORS_MAX_AGE: int = 600
 
+    # Google OAuth / JWT settings
+    GOOGLE_CLIENT_ID: str = ""
+    JWT_SECRET_KEY: str = "change-me-in-production"
+    JWT_EXPIRATION_HOURS: int = 24
+
     # LLM provider settings
     LLM_PROVIDER: str = "ollama"  # "ollama" | "openrouter"
     MODEL_NAME: str = "llama3.1:8b"

@@ -22,3 +22,16 @@ export interface SSEEvent {
   type: 'token' | 'status' | 'thinking';
   content: string;
 }
+
+export interface AuthUser {
+  email: string;
+  name: string;
+  picture: string;
+}
+
+export interface AuthState {
+  user: AuthUser | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
