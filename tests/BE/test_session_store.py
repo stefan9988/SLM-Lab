@@ -94,30 +94,37 @@ class TestHistoryEntryFromDict:
 
 class TestInMemoryStore:
     def test_empty_session(self, in_memory_store):
-        assert in_memory_store.get_messages("none") == []
-        assert in_memory_store.get_history_dicts("none") == []
+        assert in_memory_store.get_messages("none", user_id="u1") == []
+        assert in_memory_store.get_history_dicts("none", user_id="u1") == []
 
     def test_save_and_retrieve(self, in_memory_store, sample_messages):
-        in_memory_store.save_messages("s1", sample_messages, "model", "provider")
-        msgs = in_memory_store.get_messages("s1")
+        in_memory_store.save_messages("s1", sample_messages, "model", "provider", user_id="u1")
+        msgs = in_memory_store.get_messages("s1", user_id="u1")
         assert len(msgs) == 2
         assert isinstance(msgs[0], HumanMessage)
         assert isinstance(msgs[1], AIMessage)
 
     def test_get_history_dicts(self, in_memory_store, sample_messages):
-        in_memory_store.save_messages("s1", sample_messages)
-        history = in_memory_store.get_history_dicts("s1")
+        in_memory_store.save_messages("s1", sample_messages, user_id="u1")
+        history = in_memory_store.get_history_dicts("s1", user_id="u1")
         assert len(history) == 2
         assert history[0]["role"] == "human"
         assert history[1]["thinking"] == "Let me think"
 
     def test_clear(self, in_memory_store, sample_messages):
-        in_memory_store.save_messages("s1", sample_messages)
-        in_memory_store.clear("s1")
-        assert in_memory_store.get_messages("s1") == []
+        in_memory_store.save_messages("s1", sample_messages, user_id="u1")
+        in_memory_store.clear("s1", user_id="u1")
+        assert in_memory_store.get_messages("s1", user_id="u1") == []
 
     def test_clear_nonexistent_no_error(self, in_memory_store):
-        in_memory_store.clear("nope")  # should not raise
+        in_memory_store.clear("nope", user_id="u1")  # should not raise
+
+    def test_user_isolation(self, in_memory_store, sample_messages):
+        """Same session_id, different user_ids can't see each other's data."""
+        in_memory_store.save_messages("s1", sample_messages, user_id="user-a")
+        assert in_memory_store.get_messages("s1", user_id="user-a") != []
+        assert in_memory_store.get_messages("s1", user_id="user-b") == []
+        assert in_memory_store.get_history_dicts("s1", user_id="user-b") == []
 
 
 # --- RedisStore (mocked) ---
@@ -138,8 +145,8 @@ class TestRedisStore:
     def test_get_messages_empty(self, mock_redis):
         store, client = mock_redis
         client.lrange.return_value = []
-        assert store.get_messages("s1") == []
-        client.lrange.assert_called_once_with("session:s1:messages", 0, -1)
+        assert store.get_messages("s1", user_id="u1") == []
+        client.lrange.assert_called_once_with("session:u1:s1:messages", 0, -1)
 
     def test_get_messages_deserializes(self, mock_redis):
         store, client = mock_redis
@@ -161,7 +168,7 @@ class TestRedisStore:
                 }
             ),
         ]
-        msgs = store.get_messages("s1")
+        msgs = store.get_messages("s1", user_id="u1")
         assert len(msgs) == 2
         assert isinstance(msgs[0], HumanMessage)
         assert isinstance(msgs[1], AIMessage)
@@ -171,10 +178,10 @@ class TestRedisStore:
         mock_pipe = MagicMock()
         client.pipeline.return_value = mock_pipe
 
-        store.save_messages("s1", sample_messages, "model", "ollama")
+        store.save_messages("s1", sample_messages, "model", "ollama", user_id="u1")
 
         client.pipeline.assert_called_once_with(transaction=True)
-        mock_pipe.delete.assert_called_once_with("session:s1:messages")
+        mock_pipe.delete.assert_called_once_with("session:u1:s1:messages")
         assert mock_pipe.rpush.call_count == 2
         mock_pipe.hsetnx.assert_called_once()
         mock_pipe.hset.assert_called_once()
@@ -183,8 +190,10 @@ class TestRedisStore:
 
     def test_clear_deletes_both_keys(self, mock_redis):
         store, client = mock_redis
-        store.clear("s1")
-        client.delete.assert_called_once_with("session:s1:meta", "session:s1:messages")
+        store.clear("s1", user_id="u1")
+        client.delete.assert_called_once_with(
+            "session:u1:s1:meta", "session:u1:s1:messages"
+        )
 
     def test_get_history_dicts(self, mock_redis):
         store, client = mock_redis
@@ -192,10 +201,15 @@ class TestRedisStore:
             json.dumps({"type": "human", "content": "q", "thinking": None}),
             json.dumps({"type": "ai", "content": "a", "thinking": "t"}),
         ]
-        history = store.get_history_dicts("s1")
+        history = store.get_history_dicts("s1", user_id="u1")
         assert len(history) == 2
         assert history[0] == {"role": "human", "content": "q"}
         assert history[1] == {"role": "ai", "content": "a", "thinking": "t"}
+
+    def test_redis_key_includes_user_id(self, mock_redis):
+        store, client = mock_redis
+        assert store._meta_key("sess1", "uid1") == "session:uid1:sess1:meta"
+        assert store._messages_key("sess1", "uid1") == "session:uid1:sess1:messages"
 
 
 # --- create_store factory ---

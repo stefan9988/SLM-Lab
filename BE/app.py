@@ -19,6 +19,7 @@ from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 from AI.tools import get_enabled_tools
 from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
+from BE.user_store import upsert_user
 from BE.config import _parse_comma_separated, settings
 from BE.logger import redact_url, setup_logger
 
@@ -238,6 +239,13 @@ class GoogleAuthRequest(BaseModel):
 async def google_auth(body: GoogleAuthRequest):
     """Exchange a Google ID token for an app JWT."""
     user = verify_google_token(body.token)
+    user_id = await upsert_user(
+        email=user.email,
+        name=user.name,
+        picture=user.picture,
+        google_sub=user.google_sub,
+    )
+    user.id = user_id
     access_token = create_access_token(user)
     return {
         "access_token": access_token,
@@ -264,7 +272,7 @@ async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get
         )
 
     agent = request.app.state.general_agent
-    response = agent.invoke(prompt, session_id=body.session_id, images=images or None)
+    response = agent.invoke(prompt, session_id=body.session_id, images=images or None, user_id=user.id)
     logger.info(
         "POST /chat response (session_id=%s, length=%d)",
         body.session_id,
@@ -298,7 +306,7 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
         for warn in file_warnings:
             yield f"data: {json.dumps({'type': 'status', 'content': warn})}\n\n"
         for event in agent.stream(
-            prompt, session_id=body.session_id, images=images or None
+            prompt, session_id=body.session_id, images=images or None, user_id=user.id
         ):
             yield f"data: {json.dumps(event)}\n\n"
         yield "data: [DONE]\n\n"
@@ -316,7 +324,7 @@ async def get_history(
     """Retrieve conversation history for a session."""
     logger.info("GET /history (session_id=%s)", session_id)
     agent = request.app.state.general_agent
-    history = agent.get_history(session_id=session_id)
+    history = agent.get_history(session_id=session_id, user_id=user.id)
     logger.info("GET /history (session_id=%s, messages=%d)", session_id, len(history))
     return {"history": history}
 
@@ -330,7 +338,7 @@ async def clear_history(
     """Clear conversation history for a session."""
     logger.info("DELETE /history (session_id=%s)", session_id)
     agent = request.app.state.general_agent
-    agent.clear_history(session_id=session_id)
+    agent.clear_history(session_id=session_id, user_id=user.id)
     return {"status": "cleared"}
 
 
@@ -343,7 +351,7 @@ async def list_archived_sessions(
     user: UserInfo = Depends(get_current_user),
 ):
     """List all archived sessions."""
-    sessions = await store.get_all_sessions()
+    sessions = await store.get_all_sessions(user_id=user.id)
     return {"sessions": sessions}
 
 
@@ -354,7 +362,7 @@ async def get_archived_session(
     user: UserInfo = Depends(get_current_user),
 ):
     """Get archived messages for a session."""
-    messages = await store.get_messages(session_id)
+    messages = await store.get_messages(session_id, user_id=user.id)
     return {"session_id": session_id, "messages": messages}
 
 
@@ -365,7 +373,7 @@ async def delete_archived_session(
     user: UserInfo = Depends(get_current_user),
 ):
     """Delete an archived session."""
-    deleted = await store.delete_session(session_id)
+    deleted = await store.delete_session(session_id, user_id=user.id)
     if not deleted:
         return JSONResponse(status_code=404, content={"detail": "Session not found"})
     return {"status": "deleted"}

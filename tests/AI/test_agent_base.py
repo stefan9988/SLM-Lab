@@ -31,15 +31,15 @@ def agent_with_history(mock_graph):
 
 class TestGetInputMessages:
     def test_no_history_returns_single_human_message(self, agent_no_history):
-        msgs = agent_no_history._get_input_messages("hello", "s1")
+        msgs = agent_no_history._get_input_messages("hello", "s1", user_id="u1")
         assert len(msgs) == 1
         assert isinstance(msgs[0], HumanMessage)
         assert msgs[0].content == "hello"
 
     def test_with_history_includes_prior_messages(self, agent_with_history):
         prior = [HumanMessage(content="a"), AIMessage(content="b")]
-        agent_with_history._store.save_messages("s1", prior)
-        msgs = agent_with_history._get_input_messages("c", "s1")
+        agent_with_history._store.save_messages("s1", prior, user_id="u1")
+        msgs = agent_with_history._get_input_messages("c", "s1", user_id="u1")
         assert len(msgs) == 3
         assert msgs[-1].content == "c"
 
@@ -47,7 +47,7 @@ class TestGetInputMessages:
 class TestInvoke:
     def test_returns_content(self, agent_no_history, mock_graph):
         mock_graph.invoke.return_value = {"messages": [AIMessage(content="response")]}
-        result = agent_no_history.invoke("hi", "s1")
+        result = agent_no_history.invoke("hi", "s1", user_id="u1")
         assert result == "response"
 
     def test_history_maintained_across_calls(self, agent_with_history, mock_graph):
@@ -57,10 +57,10 @@ class TestInvoke:
                 AIMessage(content="hello"),
             ]
         }
-        agent_with_history.invoke("hi", "s1")
+        agent_with_history.invoke("hi", "s1", user_id="u1")
 
         # Second call should include history
-        agent_with_history.invoke("follow up", "s1")
+        agent_with_history.invoke("follow up", "s1", user_id="u1")
         second_call_msgs = mock_graph.invoke.call_args[0][0]["messages"]
         assert len(second_call_msgs) == 3  # 2 history + 1 new
 
@@ -73,7 +73,7 @@ class TestStream:
                 ("messages", (chunk, {})),
             ]
         )
-        events = list(agent_no_history.stream("hi", "s1"))
+        events = list(agent_no_history.stream("hi", "s1", user_id="u1"))
         assert events == [{"type": "token", "content": "hi"}]
 
     def test_ai_chunk_with_tool_call_yields_status(self, agent_no_history, mock_graph):
@@ -86,7 +86,7 @@ class TestStream:
                 ("messages", (chunk, {})),
             ]
         )
-        events = list(agent_no_history.stream("hi", "s1"))
+        events = list(agent_no_history.stream("hi", "s1", user_id="u1"))
         assert len(events) == 1
         assert events[0]["type"] == "status"
         assert "mytool" in events[0]["content"]
@@ -98,7 +98,7 @@ class TestStream:
                 ("messages", (chunk, {})),
             ]
         )
-        events = list(agent_no_history.stream("hi", "s1"))
+        events = list(agent_no_history.stream("hi", "s1", user_id="u1"))
         assert events == [{"type": "status", "content": "Tool returned result"}]
 
     def test_custom_stream_mode_yields_status(self, agent_no_history, mock_graph):
@@ -107,13 +107,13 @@ class TestStream:
                 ("custom", "Processing..."),
             ]
         )
-        events = list(agent_no_history.stream("hi", "s1"))
+        events = list(agent_no_history.stream("hi", "s1", user_id="u1"))
         assert events == [{"type": "status", "content": "Processing..."}]
 
 
 class TestHistory:
     def test_unknown_session_returns_empty(self, agent_no_history):
-        assert agent_no_history.get_history("unknown") == []
+        assert agent_no_history.get_history("unknown", user_id="u1") == []
 
     def test_after_invoke_returns_messages(self, agent_with_history, mock_graph):
         mock_graph.invoke.return_value = {
@@ -122,8 +122,8 @@ class TestHistory:
                 AIMessage(content="hello"),
             ]
         }
-        agent_with_history.invoke("hi", "s1")
-        history = agent_with_history.get_history("s1")
+        agent_with_history.invoke("hi", "s1", user_id="u1")
+        history = agent_with_history.get_history("s1", user_id="u1")
         assert len(history) == 2
         assert history[0]["role"] == "human"
         assert history[1]["role"] == "ai"
@@ -132,6 +132,6 @@ class TestHistory:
         mock_graph.invoke.return_value = {
             "messages": [HumanMessage(content="hi"), AIMessage(content="hello")]
         }
-        agent_with_history.invoke("hi", "s1")
-        agent_with_history.clear_history("s1")
-        assert agent_with_history.get_history("s1") == []
+        agent_with_history.invoke("hi", "s1", user_id="u1")
+        agent_with_history.clear_history("s1", user_id="u1")
+        assert agent_with_history.get_history("s1", user_id="u1") == []

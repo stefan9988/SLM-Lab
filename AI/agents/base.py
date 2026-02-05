@@ -55,6 +55,7 @@ class Agent:
         prompt: str,
         session_id: str,
         images: Optional[list[dict]] = None,
+        user_id: str = "",
     ) -> str:
         """Get a complete response for the given prompt."""
         logger.info(
@@ -62,10 +63,10 @@ class Agent:
         )
         logger.debug("invoke prompt: %s", prompt)
         try:
-            messages = self._get_input_messages(prompt, session_id, images=images)
+            messages = self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
             result = self._agent.invoke({"messages": messages})
             all_messages = result["messages"]
-            self._save_history(all_messages, session_id)
+            self._save_history(all_messages, session_id, user_id=user_id)
             response = all_messages[-1].content
             logger.info("invoke complete (response_length=%d)", len(response))
             return response
@@ -78,13 +79,14 @@ class Agent:
         prompt: str,
         session_id: str,
         images: Optional[list[dict]] = None,
+        user_id: str = "",
     ):
         logger.info(
             "stream called (prompt_length=%d, session_id=%s)", len(prompt), session_id
         )
         logger.debug("stream prompt: %s", prompt)
         try:
-            messages = self._get_input_messages(prompt, session_id, images=images)
+            messages = self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
 
             full_response = []
             full_thinking = ""
@@ -127,20 +129,20 @@ class Agent:
             if full_thinking:
                 ai_msg.additional_kwargs["thinking"] = full_thinking
             all_messages = list(messages) + [ai_msg]
-            self._save_history(all_messages, session_id)
+            self._save_history(all_messages, session_id, user_id=user_id)
             logger.info("stream complete (tokens=%d)", token_count)
         except Exception:
             logger.error("stream failed", exc_info=True)
             raise
 
-    def clear_history(self, session_id: str) -> None:
+    def clear_history(self, session_id: str, user_id: str = "") -> None:
         """Clear the conversation history for a session."""
-        self._store.clear(session_id)
+        self._store.clear(session_id, user_id=user_id)
         logger.debug("Conversation history cleared (session_id=%s)", session_id)
 
-    def get_history(self, session_id: str) -> List[dict]:
+    def get_history(self, session_id: str, user_id: str = "") -> List[dict]:
         """Get conversation history as serializable dicts for a session."""
-        history = self._store.get_history_dicts(session_id)
+        history = self._store.get_history_dicts(session_id, user_id=user_id)
         logger.debug(
             "get_history called (session_id=%s, messages=%d)", session_id, len(history)
         )
@@ -151,6 +153,7 @@ class Agent:
         prompt: str,
         session_id: str,
         images: Optional[list[dict]] = None,
+        user_id: str = "",
     ) -> List:
         if images:
             content: list[dict] = [{"type": "text", "text": prompt}]
@@ -161,12 +164,12 @@ class Agent:
             human_msg = HumanMessage(content=prompt)
 
         if self.maintain_history:
-            history = self._store.get_messages(session_id)
+            history = self._store.get_messages(session_id, user_id=user_id)
             return list(history) + [human_msg]
         return [human_msg]
 
-    def _save_history(self, messages: List, session_id: str) -> None:
+    def _save_history(self, messages: List, session_id: str, user_id: str = "") -> None:
         if self.maintain_history:
             self._store.save_messages(
-                session_id, messages, self._model_name, self._provider
+                session_id, messages, self._model_name, self._provider, user_id=user_id
             )

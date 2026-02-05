@@ -21,6 +21,7 @@ class TestArchiveEndpoints:
         data = resp.json()
         assert len(data["sessions"]) == 1
         assert data["sessions"][0]["id"] == "s1"
+        mock_store.get_all_sessions.assert_called_once_with(user_id="test-user-id")
 
     @patch("BE.app._create_archive_store", return_value=None)
     def test_get_session_unavailable(self, mock_cs, client):
@@ -39,6 +40,7 @@ class TestArchiveEndpoints:
         data = resp.json()
         assert data["session_id"] == "s1"
         assert len(data["messages"]) == 1
+        mock_store.get_messages.assert_called_once_with("s1", user_id="test-user-id")
 
     @patch("BE.app._create_archive_store", return_value=None)
     def test_delete_session_unavailable(self, mock_cs, client):
@@ -53,6 +55,7 @@ class TestArchiveEndpoints:
         resp = client.delete("/archive/sessions/s1")
         assert resp.status_code == 200
         assert resp.json() == {"status": "deleted"}
+        mock_store.delete_session.assert_called_once_with("s1", user_id="test-user-id")
 
     @patch("BE.app._create_archive_store")
     def test_delete_session_not_found(self, mock_cs, client):

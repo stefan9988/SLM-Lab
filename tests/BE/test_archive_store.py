@@ -7,7 +7,10 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from BE.models import Base
+from BE.models import Base, User
+
+TEST_USER_ID = "test-user-id"
+TEST_USER_ID_2 = "test-user-id-2"
 
 
 @pytest.fixture
@@ -36,10 +39,11 @@ def run(event_loop):
 
 @pytest.fixture
 def archive_store(run, async_engine, session_factory):
-    """Create tables and return a PostgresArchiveStore wired to SQLite."""
+    """Create tables, insert test users, and return a PostgresArchiveStore wired to SQLite."""
     from BE.archive_store import PostgresArchiveStore
 
     run(create_tables(async_engine))
+    run(insert_test_users(session_factory))
 
     store = PostgresArchiveStore.__new__(PostgresArchiveStore)
     store._factory = session_factory
@@ -49,6 +53,31 @@ def archive_store(run, async_engine, session_factory):
 async def create_tables(engine):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def insert_test_users(factory):
+    """Insert test user records needed for FK constraints."""
+    now = datetime.now(timezone.utc)
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(
+                id=TEST_USER_ID,
+                email="test@example.com",
+                google_sub="google-sub-123",
+                name="Test User",
+                picture="",
+                created_at=now,
+                last_login_at=now,
+            ))
+            session.add(User(
+                id=TEST_USER_ID_2,
+                email="other@example.com",
+                google_sub="google-sub-456",
+                name="Other User",
+                picture="",
+                created_at=now,
+                last_login_at=now,
+            ))
 
 
 def _make_messages(n=2):
@@ -73,8 +102,8 @@ def _make_messages(n=2):
 class TestPostgresArchiveStore:
     def test_save_and_get_messages(self, run, archive_store):
         msgs = _make_messages(3)
-        run(archive_store.save_messages("s1", msgs, {"model": "m", "provider": "p"}))
-        result = run(archive_store.get_messages("s1"))
+        run(archive_store.save_messages("s1", msgs, {"model": "m", "provider": "p"}, user_id=TEST_USER_ID))
+        result = run(archive_store.get_messages("s1", user_id=TEST_USER_ID))
         assert len(result) == 3
         assert result[0]["role"] == "human"
         assert result[0]["content"] == "message 0"
@@ -82,46 +111,72 @@ class TestPostgresArchiveStore:
         assert result[1]["thinking"] == "thought"
 
     def test_get_messages_empty_session(self, run, archive_store):
-        result = run(archive_store.get_messages("nonexistent"))
+        result = run(archive_store.get_messages("nonexistent", user_id=TEST_USER_ID))
         assert result == []
 
     def test_save_replaces_messages(self, run, archive_store):
-        run(archive_store.save_messages("s1", _make_messages(2)))
-        run(archive_store.save_messages("s1", _make_messages(4)))
-        result = run(archive_store.get_messages("s1"))
+        run(archive_store.save_messages("s1", _make_messages(2), user_id=TEST_USER_ID))
+        run(archive_store.save_messages("s1", _make_messages(4), user_id=TEST_USER_ID))
+        result = run(archive_store.get_messages("s1", user_id=TEST_USER_ID))
         assert len(result) == 4
 
     def test_get_all_sessions(self, run, archive_store):
-        run(archive_store.save_messages("s1", _make_messages(1), {"model": "m1"}))
-        run(archive_store.save_messages("s2", _make_messages(1), {"model": "m2"}))
-        sessions = run(archive_store.get_all_sessions())
+        run(archive_store.save_messages("s1", _make_messages(1), {"model": "m1"}, user_id=TEST_USER_ID))
+        run(archive_store.save_messages("s2", _make_messages(1), {"model": "m2"}, user_id=TEST_USER_ID))
+        sessions = run(archive_store.get_all_sessions(user_id=TEST_USER_ID))
         assert len(sessions) == 2
         ids = {s["id"] for s in sessions}
         assert ids == {"s1", "s2"}
 
     def test_get_all_sessions_empty(self, run, archive_store):
-        sessions = run(archive_store.get_all_sessions())
+        sessions = run(archive_store.get_all_sessions(user_id=TEST_USER_ID))
         assert sessions == []
 
     def test_delete_session(self, run, archive_store):
-        run(archive_store.save_messages("s1", _make_messages(2)))
-        deleted = run(archive_store.delete_session("s1"))
+        run(archive_store.save_messages("s1", _make_messages(2), user_id=TEST_USER_ID))
+        deleted = run(archive_store.delete_session("s1", user_id=TEST_USER_ID))
         assert deleted is True
-        assert run(archive_store.get_messages("s1")) == []
-        sessions = run(archive_store.get_all_sessions())
+        assert run(archive_store.get_messages("s1", user_id=TEST_USER_ID)) == []
+        sessions = run(archive_store.get_all_sessions(user_id=TEST_USER_ID))
         assert len(sessions) == 0
 
     def test_delete_nonexistent_session(self, run, archive_store):
-        deleted = run(archive_store.delete_session("nope"))
+        deleted = run(archive_store.delete_session("nope", user_id=TEST_USER_ID))
         assert deleted is False
 
     def test_upsert_session_metadata(self, run, archive_store):
-        run(archive_store.save_messages("s1", _make_messages(1), {"model": "m1", "provider": "p1"}))
-        run(archive_store.save_messages("s1", _make_messages(1), {"model": "m2", "provider": "p2"}))
-        sessions = run(archive_store.get_all_sessions())
+        run(archive_store.save_messages("s1", _make_messages(1), {"model": "m1", "provider": "p1"}, user_id=TEST_USER_ID))
+        run(archive_store.save_messages("s1", _make_messages(1), {"model": "m2", "provider": "p2"}, user_id=TEST_USER_ID))
+        sessions = run(archive_store.get_all_sessions(user_id=TEST_USER_ID))
         assert len(sessions) == 1
         assert sessions[0]["model_name"] == "m2"
         assert sessions[0]["provider"] == "p2"
+
+    def test_cross_user_isolation_get_messages(self, run, archive_store):
+        """User B cannot read User A's session messages."""
+        run(archive_store.save_messages("s1", _make_messages(2), user_id=TEST_USER_ID))
+        result = run(archive_store.get_messages("s1", user_id=TEST_USER_ID_2))
+        assert result == []
+
+    def test_cross_user_isolation_get_all_sessions(self, run, archive_store):
+        """get_all_sessions only returns the requesting user's sessions."""
+        run(archive_store.save_messages("s1", _make_messages(1), user_id=TEST_USER_ID))
+        run(archive_store.save_messages("s2", _make_messages(1), user_id=TEST_USER_ID_2))
+        sessions_a = run(archive_store.get_all_sessions(user_id=TEST_USER_ID))
+        sessions_b = run(archive_store.get_all_sessions(user_id=TEST_USER_ID_2))
+        assert len(sessions_a) == 1
+        assert sessions_a[0]["id"] == "s1"
+        assert len(sessions_b) == 1
+        assert sessions_b[0]["id"] == "s2"
+
+    def test_cross_user_isolation_delete(self, run, archive_store):
+        """User B cannot delete User A's session."""
+        run(archive_store.save_messages("s1", _make_messages(2), user_id=TEST_USER_ID))
+        deleted = run(archive_store.delete_session("s1", user_id=TEST_USER_ID_2))
+        assert deleted is False
+        # Original user can still see it
+        result = run(archive_store.get_messages("s1", user_id=TEST_USER_ID))
+        assert len(result) == 2
 
 
 class TestCreateStoreFactory:

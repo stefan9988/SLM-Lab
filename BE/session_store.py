@@ -18,7 +18,7 @@ class SessionStore(ABC):
     """Abstract base class for session storage backends."""
 
     @abstractmethod
-    def get_messages(self, session_id: str) -> list:
+    def get_messages(self, session_id: str, user_id: str = "") -> list:
         """Retrieve LangChain message objects for a session."""
 
     @abstractmethod
@@ -28,15 +28,16 @@ class SessionStore(ABC):
         messages: list,
         model: str = "",
         provider: str = "",
+        user_id: str = "",
     ) -> None:
         """Persist the full message list for a session."""
 
     @abstractmethod
-    def clear(self, session_id: str) -> None:
+    def clear(self, session_id: str, user_id: str = "") -> None:
         """Delete all data for a session."""
 
     @abstractmethod
-    def get_history_dicts(self, session_id: str) -> list[dict]:
+    def get_history_dicts(self, session_id: str, user_id: str = "") -> list[dict]:
         """Return conversation history as serializable dicts."""
 
 
@@ -105,7 +106,7 @@ def _get_archive_settings() -> tuple[int, float, float]:
     )
 
 
-def _clear_archive(session_id: str) -> None:
+def _clear_archive(session_id: str, user_id: str = "") -> None:
     """Best-effort async archive deletion from PostgreSQL."""
     from BE.archive_store import create_store
 
@@ -116,7 +117,7 @@ def _clear_archive(session_id: str) -> None:
     max_retries, retry_delay, timeout = _get_archive_settings()
 
     async def _do_delete():
-        await store.delete_session(session_id)
+        await store.delete_session(session_id, user_id=user_id)
         logger.debug("Cleared archive for session %s", session_id)
 
     schedule_background_task(
@@ -132,10 +133,10 @@ class InMemoryStore(SessionStore):
     """In-memory session store (no persistence across restarts)."""
 
     def __init__(self) -> None:
-        self._sessions: dict[str, list[dict]] = {}
+        self._sessions: dict[tuple[str, str], list[dict]] = {}
 
-    def get_messages(self, session_id: str) -> list:
-        dicts = self._sessions.get(session_id, [])
+    def get_messages(self, session_id: str, user_id: str = "") -> list:
+        dicts = self._sessions.get((user_id, session_id), [])
         msgs = []
         for d in dicts:
             m = _dict_to_message(d)
@@ -149,17 +150,18 @@ class InMemoryStore(SessionStore):
         messages: list,
         model: str = "",
         provider: str = "",
+        user_id: str = "",
     ) -> None:
-        self._sessions[session_id] = [
+        self._sessions[(user_id, session_id)] = [
             _msg_to_dict(m, model, provider) for m in messages
         ]
 
-    def clear(self, session_id: str) -> None:
-        self._sessions.pop(session_id, None)
-        _clear_archive(session_id)
+    def clear(self, session_id: str, user_id: str = "") -> None:
+        self._sessions.pop((user_id, session_id), None)
+        _clear_archive(session_id, user_id=user_id)
 
-    def get_history_dicts(self, session_id: str) -> list[dict]:
-        dicts = self._sessions.get(session_id, [])
+    def get_history_dicts(self, session_id: str, user_id: str = "") -> list[dict]:
+        dicts = self._sessions.get((user_id, session_id), [])
         history = []
         for d in dicts:
             entry = _history_entry_from_dict(d)
@@ -181,18 +183,18 @@ class RedisStore(SessionStore):
         self._ttl_seconds = ttl_days * 86400
         logger.info("RedisStore connected to %s", redis_url)
 
-    def _meta_key(self, session_id: str) -> str:
-        return f"session:{session_id}:meta"
+    def _meta_key(self, session_id: str, user_id: str = "") -> str:
+        return f"session:{user_id}:{session_id}:meta"
 
-    def _messages_key(self, session_id: str) -> str:
-        return f"session:{session_id}:messages"
+    def _messages_key(self, session_id: str, user_id: str = "") -> str:
+        return f"session:{user_id}:{session_id}:messages"
 
-    def _touch_ttl(self, pipe, session_id: str) -> None:
-        pipe.expire(self._meta_key(session_id), self._ttl_seconds)
-        pipe.expire(self._messages_key(session_id), self._ttl_seconds)
+    def _touch_ttl(self, pipe, session_id: str, user_id: str = "") -> None:
+        pipe.expire(self._meta_key(session_id, user_id), self._ttl_seconds)
+        pipe.expire(self._messages_key(session_id, user_id), self._ttl_seconds)
 
-    def get_messages(self, session_id: str) -> list:
-        raw = self._redis.lrange(self._messages_key(session_id), 0, -1)
+    def get_messages(self, session_id: str, user_id: str = "") -> list:
+        raw = self._redis.lrange(self._messages_key(session_id, user_id), 0, -1)
         msgs = []
         for item in raw:
             d = json.loads(item)
@@ -207,9 +209,10 @@ class RedisStore(SessionStore):
         messages: list,
         model: str = "",
         provider: str = "",
+        user_id: str = "",
     ) -> None:
-        meta_key = self._meta_key(session_id)
-        msg_key = self._messages_key(session_id)
+        meta_key = self._meta_key(session_id, user_id)
+        msg_key = self._messages_key(session_id, user_id)
         now = datetime.now(timezone.utc).isoformat()
 
         dicts = [_msg_to_dict(m, model, provider) for m in messages]
@@ -227,14 +230,19 @@ class RedisStore(SessionStore):
                 "provider": provider,
             },
         )
-        self._touch_ttl(pipe, session_id)
+        self._touch_ttl(pipe, session_id, user_id)
         pipe.execute()
 
         # Fire-and-forget archive to PostgreSQL
-        self._archive_to_postgres(session_id, dicts, model, provider)
+        self._archive_to_postgres(session_id, dicts, model, provider, user_id)
 
     def _archive_to_postgres(
-        self, session_id: str, dicts: list[dict], model: str, provider: str
+        self,
+        session_id: str,
+        dicts: list[dict],
+        model: str,
+        provider: str,
+        user_id: str = "",
     ) -> None:
         """Best-effort async archive to PostgreSQL."""
         from BE.archive_store import create_store
@@ -247,7 +255,10 @@ class RedisStore(SessionStore):
 
         async def _do_archive():
             await store.save_messages(
-                session_id, dicts, {"model": model, "provider": provider}
+                session_id,
+                dicts,
+                {"model": model, "provider": provider},
+                user_id=user_id,
             )
 
         schedule_background_task(
@@ -258,15 +269,15 @@ class RedisStore(SessionStore):
             task_name=f"archive_save:{session_id}",
         )
 
-    def clear(self, session_id: str) -> None:
+    def clear(self, session_id: str, user_id: str = "") -> None:
         self._redis.delete(
-            self._meta_key(session_id),
-            self._messages_key(session_id),
+            self._meta_key(session_id, user_id),
+            self._messages_key(session_id, user_id),
         )
-        _clear_archive(session_id)
+        _clear_archive(session_id, user_id=user_id)
 
-    def get_history_dicts(self, session_id: str) -> list[dict]:
-        raw = self._redis.lrange(self._messages_key(session_id), 0, -1)
+    def get_history_dicts(self, session_id: str, user_id: str = "") -> list[dict]:
+        raw = self._redis.lrange(self._messages_key(session_id, user_id), 0, -1)
         history = []
         for item in raw:
             d = json.loads(item)

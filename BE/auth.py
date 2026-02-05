@@ -17,9 +17,11 @@ logger = setup_logger(__name__)
 class UserInfo(BaseModel):
     """Authenticated user information carried in the JWT."""
 
+    id: str = ""
     email: str
     name: str
     picture: str = ""
+    google_sub: str = ""
 
 
 def verify_google_token(token: str) -> UserInfo:
@@ -37,6 +39,7 @@ def verify_google_token(token: str) -> UserInfo:
             email=id_info["email"],
             name=id_info.get("name", ""),
             picture=id_info.get("picture", ""),
+            google_sub=id_info["sub"],
         )
     except (ValueError, KeyError) as exc:
         logger.warning("Google token verification failed: %s", exc)
@@ -50,6 +53,7 @@ def create_access_token(user: UserInfo) -> str:
         "sub": user.email,
         "name": user.name,
         "picture": user.picture,
+        "user_id": user.id,
         "iat": now,
         "exp": now + timedelta(hours=settings.JWT_EXPIRATION_HOURS),
     }
@@ -72,6 +76,7 @@ def get_current_user(authorization: str = Header(...)) -> UserInfo:
             algorithms=["HS256"],
         )
         return UserInfo(
+            id=payload.get("user_id", ""),
             email=payload["sub"],
             name=payload.get("name", ""),
             picture=payload.get("picture", ""),

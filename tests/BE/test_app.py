@@ -262,7 +262,9 @@ class TestChatEndpoint:
         resp = client.post("/chat", json={"message": "hi", "session_id": "s1"})
         assert resp.status_code == 200
         assert resp.json() == {"response": "mock response"}
-        mock_agent.invoke.assert_called_once_with("hi", session_id="s1", images=None)
+        mock_agent.invoke.assert_called_once_with(
+            "hi", session_id="s1", images=None, user_id="test-user-id"
+        )
 
     def test_post_chat_422_missing_fields(self, client):
         resp = client.post("/chat", json={})
@@ -291,6 +293,9 @@ class TestHistoryEndpoints:
         resp = client.get("/history", params={"session_id": "s1"})
         assert resp.status_code == 200
         assert resp.json() == {"history": [{"role": "human", "content": "hi"}]}
+        mock_agent.get_history.assert_called_once_with(
+            session_id="s1", user_id="test-user-id"
+        )
 
     def test_get_history_422_missing_session_id(self, client):
         resp = client.get("/history")
@@ -300,7 +305,9 @@ class TestHistoryEndpoints:
         resp = client.delete("/history", params={"session_id": "s1"})
         assert resp.status_code == 200
         assert resp.json() == {"status": "cleared"}
-        mock_agent.clear_history.assert_called_once_with(session_id="s1")
+        mock_agent.clear_history.assert_called_once_with(
+            session_id="s1", user_id="test-user-id"
+        )
 
 
 class TestExceptionHandler:
@@ -315,19 +322,32 @@ class TestExceptionHandler:
 
 
 class TestGoogleAuthEndpoint:
+    @patch("BE.app.upsert_user")
     @patch("BE.app.verify_google_token")
-    def test_valid_google_token_returns_200(self, mock_verify, client):
+    def test_valid_google_token_returns_200(self, mock_verify, mock_upsert, client):
         from BE.auth import UserInfo
 
         mock_verify.return_value = UserInfo(
-            email="user@test.com", name="User", picture="pic.jpg"
+            email="user@test.com",
+            name="User",
+            picture="pic.jpg",
+            google_sub="gsub-1",
         )
+        mock_upsert.return_value = "uid-abc"
         resp = client.post("/auth/google", json={"token": "valid-google-token"})
         assert resp.status_code == 200
         data = resp.json()
         assert "access_token" in data
         assert data["token_type"] == "bearer"
         assert data["user"]["email"] == "user@test.com"
+        assert data["user"]["id"] == "uid-abc"
+        assert data["user"]["google_sub"] == "gsub-1"
+        mock_upsert.assert_called_once_with(
+            email="user@test.com",
+            name="User",
+            picture="pic.jpg",
+            google_sub="gsub-1",
+        )
 
     @patch("BE.app.verify_google_token")
     def test_invalid_google_token_returns_401(self, mock_verify, client):

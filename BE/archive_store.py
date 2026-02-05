@@ -27,6 +27,7 @@ class PostgresArchiveStore:
         session_id: str,
         messages: list[dict[str, Any]],
         metadata: dict[str, str] | None = None,
+        user_id: str = "",
     ) -> None:
         """Upsert session and replace its messages."""
         metadata = metadata or {}
@@ -35,13 +36,15 @@ class PostgresArchiveStore:
         async with self._factory() as session:
             async with session.begin():
                 # Upsert session row
-                stmt = pg_insert(Session).values(
-                    id=session_id,
-                    created_at=now,
-                    updated_at=now,
-                    model_name=metadata.get("model", None),
-                    provider=metadata.get("provider", None),
-                )
+                values = {
+                    "id": session_id,
+                    "user_id": user_id,
+                    "created_at": now,
+                    "updated_at": now,
+                    "model_name": metadata.get("model", None),
+                    "provider": metadata.get("provider", None),
+                }
+                stmt = pg_insert(Session).values(**values)
                 stmt = stmt.on_conflict_do_update(
                     index_elements=["id"],
                     set_={
@@ -72,9 +75,21 @@ class PostgresArchiveStore:
                         )
                     )
 
-    async def get_messages(self, session_id: str) -> list[dict[str, Any]]:
+    async def get_messages(
+        self, session_id: str, user_id: str = ""
+    ) -> list[dict[str, Any]]:
         """Retrieve full message history for a session."""
         async with self._factory() as session:
+            # Verify ownership if user_id provided
+            if user_id:
+                ownership = await session.execute(
+                    select(Session.id).where(
+                        Session.id == session_id, Session.user_id == user_id
+                    )
+                )
+                if ownership.scalar_one_or_none() is None:
+                    return []
+
             result = await session.execute(
                 select(Message)
                 .where(Message.session_id == session_id)
@@ -94,12 +109,13 @@ class PostgresArchiveStore:
                 for m in rows
             ]
 
-    async def get_all_sessions(self) -> list[dict[str, Any]]:
-        """List all archived sessions with metadata."""
+    async def get_all_sessions(self, user_id: str = "") -> list[dict[str, Any]]:
+        """List all archived sessions with metadata, filtered by user."""
         async with self._factory() as session:
-            result = await session.execute(
-                select(Session).order_by(Session.updated_at.desc())
-            )
+            query = select(Session).order_by(Session.updated_at.desc())
+            if user_id:
+                query = query.where(Session.user_id == user_id)
+            result = await session.execute(query)
             rows = result.scalars().all()
             return [
                 {
@@ -112,17 +128,23 @@ class PostgresArchiveStore:
                 for s in rows
             ]
 
-    async def delete_session(self, session_id: str) -> bool:
+    async def delete_session(self, session_id: str, user_id: str = "") -> bool:
         """Delete an archived session and its messages."""
         async with self._factory() as session:
             async with session.begin():
+                # Delete session with ownership filter first
+                delete_sess = delete(Session).where(Session.id == session_id)
+                if user_id:
+                    delete_sess = delete_sess.where(Session.user_id == user_id)
+                result = await session.execute(delete_sess)
+                if result.rowcount == 0:
+                    return False
+
+                # Only delete messages if session was owned by the user
                 await session.execute(
                     delete(Message).where(Message.session_id == session_id)
                 )
-                result = await session.execute(
-                    delete(Session).where(Session.id == session_id)
-                )
-                return result.rowcount > 0
+                return True
 
 
 _archive_store: PostgresArchiveStore | None = None

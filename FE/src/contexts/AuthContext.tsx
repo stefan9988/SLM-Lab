@@ -67,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem('slm-conversations');
     setToken(null);
     setUser(null);
     logger.info('[Auth] User logged out');

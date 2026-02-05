@@ -18,11 +18,13 @@ class TestVerifyGoogleToken:
             "email": "user@example.com",
             "name": "Test User",
             "picture": "https://example.com/photo.jpg",
+            "sub": "google-sub-abc",
         }
         user = verify_google_token("valid-token")
         assert user.email == "user@example.com"
         assert user.name == "Test User"
         assert user.picture == "https://example.com/photo.jpg"
+        assert user.google_sub == "google-sub-abc"
 
     @patch("BE.auth.google_id_token.verify_oauth2_token")
     def test_invalid_token_raises_401(self, mock_verify):
@@ -33,20 +35,30 @@ class TestVerifyGoogleToken:
 
     @patch("BE.auth.google_id_token.verify_oauth2_token")
     def test_missing_email_raises_401(self, mock_verify):
-        mock_verify.return_value = {"name": "No Email"}
+        mock_verify.return_value = {"name": "No Email", "sub": "sub-123"}
         with pytest.raises(HTTPException) as exc_info:
             verify_google_token("token-no-email")
+        assert exc_info.value.status_code == 401
+
+    @patch("BE.auth.google_id_token.verify_oauth2_token")
+    def test_missing_sub_raises_401(self, mock_verify):
+        mock_verify.return_value = {"email": "a@b.com", "name": "User"}
+        with pytest.raises(HTTPException) as exc_info:
+            verify_google_token("token-no-sub")
         assert exc_info.value.status_code == 401
 
 
 class TestCreateAccessToken:
     def test_jwt_contains_user_info(self):
-        user = UserInfo(email="a@b.com", name="Alice", picture="pic.jpg")
+        user = UserInfo(
+            id="uid-123", email="a@b.com", name="Alice", picture="pic.jpg"
+        )
         token = create_access_token(user)
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=["HS256"])
         assert payload["sub"] == "a@b.com"
         assert payload["name"] == "Alice"
         assert payload["picture"] == "pic.jpg"
+        assert payload["user_id"] == "uid-123"
 
     def test_jwt_has_expiration(self):
         user = UserInfo(email="a@b.com", name="Alice", picture="")
@@ -60,11 +72,12 @@ class TestCreateAccessToken:
 
 class TestGetCurrentUser:
     def test_valid_bearer_token(self):
-        user = UserInfo(email="x@y.com", name="X", picture="")
+        user = UserInfo(id="uid-x", email="x@y.com", name="X", picture="")
         token = create_access_token(user)
         result = get_current_user(f"Bearer {token}")
         assert result.email == "x@y.com"
         assert result.name == "X"
+        assert result.id == "uid-x"
 
     def test_missing_bearer_prefix_raises_401(self):
         user = UserInfo(email="x@y.com", name="X", picture="")
@@ -80,6 +93,7 @@ class TestGetCurrentUser:
             "sub": "x@y.com",
             "name": "X",
             "picture": "",
+            "user_id": "uid-x",
             "iat": now - timedelta(hours=48),
             "exp": now - timedelta(hours=1),
         }
@@ -95,6 +109,7 @@ class TestGetCurrentUser:
             "sub": "x@y.com",
             "name": "X",
             "picture": "",
+            "user_id": "uid-x",
             "iat": now,
             "exp": now + timedelta(hours=1),
         }

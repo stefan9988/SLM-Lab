@@ -7,7 +7,21 @@ import pytest
 from AI.agents.base import Agent
 from BE.auth import UserInfo, get_current_user
 
-MOCK_USER = UserInfo(email="test@example.com", name="Test User", picture="")
+MOCK_USER = UserInfo(
+    id="test-user-id",
+    email="test@example.com",
+    name="Test User",
+    picture="",
+    google_sub="google-sub-123",
+)
+
+MOCK_USER_2 = UserInfo(
+    id="test-user-id-2",
+    email="other@example.com",
+    name="Other User",
+    picture="",
+    google_sub="google-sub-456",
+)
 
 
 @pytest.fixture
