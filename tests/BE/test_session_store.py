@@ -1,7 +1,8 @@
 """Tests for session store implementations."""
 
+import asyncio
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
@@ -10,6 +11,7 @@ from BE.session_store import (
     InMemoryStore,
     RedisStore,
     create_store,
+    warm_session_from_archive,
     _msg_to_dict,
     _dict_to_message,
     _history_entry_from_dict,
@@ -104,6 +106,18 @@ class TestInMemoryStore:
         assert isinstance(msgs[0], HumanMessage)
         assert isinstance(msgs[1], AIMessage)
 
+    def test_save_triggers_archive_to_postgres(self, in_memory_store, sample_messages):
+        """save_messages calls _archive_to_postgres for PostgreSQL persistence."""
+        with patch("BE.session_store._archive_to_postgres") as mock_archive:
+            in_memory_store.save_messages("s1", sample_messages, "model", "prov", user_id="u1")
+            mock_archive.assert_called_once()
+            args = mock_archive.call_args
+            assert args[0][0] == "s1"  # session_id
+            assert len(args[0][1]) == 2  # dicts
+            assert args[0][2] == "model"
+            assert args[0][3] == "prov"
+            assert args[0][4] == "u1"  # user_id
+
     def test_get_history_dicts(self, in_memory_store, sample_messages):
         in_memory_store.save_messages("s1", sample_messages, user_id="u1")
         history = in_memory_store.get_history_dicts("s1", user_id="u1")
@@ -125,6 +139,16 @@ class TestInMemoryStore:
         assert in_memory_store.get_messages("s1", user_id="user-a") != []
         assert in_memory_store.get_messages("s1", user_id="user-b") == []
         assert in_memory_store.get_history_dicts("s1", user_id="user-b") == []
+
+    def test_save_skip_archive_does_not_call_postgres(self, in_memory_store, sample_messages):
+        """save_messages with _skip_archive=True does not call _archive_to_postgres."""
+        with patch("BE.session_store._archive_to_postgres") as mock_archive:
+            in_memory_store.save_messages(
+                "s1", sample_messages, "model", "prov", user_id="u1", _skip_archive=True,
+            )
+            mock_archive.assert_not_called()
+        # Messages should still be stored in memory
+        assert len(in_memory_store.get_messages("s1", user_id="u1")) == 2
 
 
 # --- RedisStore (mocked) ---
@@ -242,3 +266,108 @@ class TestCreateStore:
         mock_settings.REDIS_SESSION_TTL_DAYS = 30
         store = create_store()
         assert isinstance(store, InMemoryStore)
+
+
+# --- warm_session_from_archive ---
+
+
+class TestWarmSessionFromArchive:
+    def test_skips_when_store_already_has_messages(self):
+        store = InMemoryStore()
+        store.save_messages("s1", [HumanMessage(content="hi")], user_id="u1")
+
+        mock_archive = AsyncMock()
+        with patch("BE.archive_store.create_store", return_value=mock_archive):
+            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+        mock_archive.get_messages.assert_not_called()
+
+    def test_skips_when_archive_store_unavailable(self):
+        store = InMemoryStore()
+        with patch("BE.archive_store.create_store", return_value=None):
+            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+        assert store.get_messages("s1", user_id="u1") == []
+
+    def test_skips_when_archive_has_no_messages(self):
+        store = InMemoryStore()
+        mock_archive = AsyncMock()
+        mock_archive.get_messages.return_value = []
+        with patch("BE.archive_store.create_store", return_value=mock_archive):
+            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+        assert store.get_messages("s1", user_id="u1") == []
+
+    def test_loads_and_converts_archive_messages(self):
+        store = InMemoryStore()
+        mock_archive = AsyncMock()
+        mock_archive.get_messages.return_value = [
+            {
+                "role": "human",
+                "content": "Hello",
+                "thinking": None,
+                "model": None,
+                "provider": None,
+                "timestamp": "2025-01-01T00:00:00+00:00",
+                "additional_kwargs": None,
+            },
+            {
+                "role": "ai",
+                "content": "Hi there!",
+                "thinking": "Let me think...",
+                "model": "gpt-4",
+                "provider": "openai",
+                "timestamp": "2025-01-01T00:00:01+00:00",
+                "additional_kwargs": {},
+            },
+        ]
+        with patch("BE.archive_store.create_store", return_value=mock_archive):
+            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+
+        messages = store.get_messages("s1", user_id="u1")
+        assert len(messages) == 2
+        assert isinstance(messages[0], HumanMessage)
+        assert messages[0].content == "Hello"
+        assert isinstance(messages[1], AIMessage)
+        assert messages[1].content == "Hi there!"
+        assert messages[1].additional_kwargs.get("thinking") == "Let me think..."
+
+    def test_warm_up_does_not_re_archive(self):
+        """warm_session_from_archive must not re-archive data back to PostgreSQL."""
+        store = InMemoryStore()
+        mock_archive = AsyncMock()
+        mock_archive.get_messages.return_value = [
+            {
+                "role": "human",
+                "content": "Hello",
+                "thinking": None,
+                "model": "gpt-4",
+                "provider": "openai",
+                "timestamp": "2025-01-01T00:00:00+00:00",
+                "additional_kwargs": {},
+            },
+        ]
+        with patch("BE.archive_store.create_store", return_value=mock_archive), \
+             patch("BE.session_store._archive_to_postgres") as mock_pg:
+            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+            mock_pg.assert_not_called()
+
+        # Messages should still be loaded into memory
+        assert len(store.get_messages("s1", user_id="u1")) == 1
+
+    def test_preserves_user_isolation(self):
+        store = InMemoryStore()
+        mock_archive = AsyncMock()
+        mock_archive.get_messages.return_value = [
+            {
+                "role": "human",
+                "content": "user1 message",
+                "thinking": None,
+                "model": None,
+                "provider": None,
+                "timestamp": "2025-01-01T00:00:00+00:00",
+                "additional_kwargs": None,
+            },
+        ]
+        with patch("BE.archive_store.create_store", return_value=mock_archive):
+            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+
+        assert len(store.get_messages("s1", user_id="u1")) == 1
+        assert len(store.get_messages("s1", user_id="u2")) == 0

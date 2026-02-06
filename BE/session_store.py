@@ -29,6 +29,7 @@ class SessionStore(ABC):
         model: str = "",
         provider: str = "",
         user_id: str = "",
+        _skip_archive: bool = False,
     ) -> None:
         """Persist the full message list for a session."""
 
@@ -106,6 +107,39 @@ def _get_archive_settings() -> tuple[int, float, float]:
     )
 
 
+def _archive_to_postgres(
+    session_id: str,
+    dicts: list[dict],
+    model: str,
+    provider: str,
+    user_id: str = "",
+) -> None:
+    """Best-effort async archive to PostgreSQL."""
+    from BE.archive_store import create_store
+
+    store = create_store()
+    if store is None:
+        return
+
+    max_retries, retry_delay, timeout = _get_archive_settings()
+
+    async def _do_archive():
+        await store.save_messages(
+            session_id,
+            dicts,
+            {"model": model, "provider": provider},
+            user_id=user_id,
+        )
+
+    schedule_background_task(
+        _do_archive,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        timeout=timeout,
+        task_name=f"archive_save:{session_id}",
+    )
+
+
 def _clear_archive(session_id: str, user_id: str = "") -> None:
     """Best-effort async archive deletion from PostgreSQL."""
     from BE.archive_store import create_store
@@ -151,10 +185,12 @@ class InMemoryStore(SessionStore):
         model: str = "",
         provider: str = "",
         user_id: str = "",
+        _skip_archive: bool = False,
     ) -> None:
-        self._sessions[(user_id, session_id)] = [
-            _msg_to_dict(m, model, provider) for m in messages
-        ]
+        dicts = [_msg_to_dict(m, model, provider) for m in messages]
+        self._sessions[(user_id, session_id)] = dicts
+        if not _skip_archive:
+            _archive_to_postgres(session_id, dicts, model, provider, user_id)
 
     def clear(self, session_id: str, user_id: str = "") -> None:
         self._sessions.pop((user_id, session_id), None)
@@ -210,6 +246,7 @@ class RedisStore(SessionStore):
         model: str = "",
         provider: str = "",
         user_id: str = "",
+        _skip_archive: bool = False,
     ) -> None:
         meta_key = self._meta_key(session_id, user_id)
         msg_key = self._messages_key(session_id, user_id)
@@ -233,41 +270,8 @@ class RedisStore(SessionStore):
         self._touch_ttl(pipe, session_id, user_id)
         pipe.execute()
 
-        # Fire-and-forget archive to PostgreSQL
-        self._archive_to_postgres(session_id, dicts, model, provider, user_id)
-
-    def _archive_to_postgres(
-        self,
-        session_id: str,
-        dicts: list[dict],
-        model: str,
-        provider: str,
-        user_id: str = "",
-    ) -> None:
-        """Best-effort async archive to PostgreSQL."""
-        from BE.archive_store import create_store
-
-        store = create_store()
-        if store is None:
-            return
-
-        max_retries, retry_delay, timeout = _get_archive_settings()
-
-        async def _do_archive():
-            await store.save_messages(
-                session_id,
-                dicts,
-                {"model": model, "provider": provider},
-                user_id=user_id,
-            )
-
-        schedule_background_task(
-            _do_archive,
-            max_retries=max_retries,
-            retry_delay=retry_delay,
-            timeout=timeout,
-            task_name=f"archive_save:{session_id}",
-        )
+        if not _skip_archive:
+            _archive_to_postgres(session_id, dicts, model, provider, user_id)
 
     def clear(self, session_id: str, user_id: str = "") -> None:
         self._redis.delete(
@@ -285,6 +289,40 @@ class RedisStore(SessionStore):
             if entry:
                 history.append(entry)
         return history
+
+
+async def warm_session_from_archive(
+    store: SessionStore,
+    session_id: str,
+    user_id: str = "",
+) -> None:
+    """If session store is empty for this session, load from PostgreSQL archive."""
+    if store.get_messages(session_id, user_id):
+        return
+
+    from BE.archive_store import create_store as create_archive_store
+
+    archive = create_archive_store()
+    if archive is None:
+        return
+
+    archive_dicts = await archive.get_messages(session_id, user_id)
+    if not archive_dicts:
+        return
+
+    # Archive dicts use "role" key; _dict_to_message expects "type"
+    messages = []
+    for d in archive_dicts:
+        converted = {**d, "type": d["role"]}
+        msg = _dict_to_message(converted)
+        if msg is not None:
+            messages.append(msg)
+
+    if messages:
+        store.save_messages(session_id, messages, user_id=user_id, _skip_archive=True)
+        logger.info(
+            "Warmed session %s from archive (%d messages)", session_id, len(messages)
+        )
 
 
 def create_store() -> SessionStore:
