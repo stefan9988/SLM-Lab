@@ -1,13 +1,7 @@
 """FastAPI chat server exposing the chat Agent via HTTP endpoints."""
 
-import base64
 import json
 from contextlib import asynccontextmanager
-
-try:
-    import fitz  # PyMuPDF
-except ImportError:
-    fitz = None
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -58,75 +52,23 @@ def get_archive_store() -> PostgresArchiveStore:
     return store
 
 
-def _decode_base64_content(data_url: str) -> bytes:
-    """Extract raw bytes from a data URL (e.g. 'data:text/plain;base64,...')."""
-    if "," in data_url:
-        return base64.b64decode(data_url.split(",", 1)[1])
-    return base64.b64decode(data_url)
-
-
 def build_prompt_with_files(
     message: str, files: list[FileAttachment]
 ) -> tuple[str, list[dict], list[str]]:
-    """Process file attachments and return (augmented_prompt, images_list, warnings)."""
+    """Process file attachments and return (augmented_prompt, images_list, warnings).
+
+    Only image files are processed (kept as multimodal data URLs).
+    Non-image files (text, PDF, etc.) are silently skipped.
+    """
     text_parts: list[str] = []
     images: list[dict] = []
-    warnings: list[str] = []
 
     for f in files:
         mime = f.type or ""
 
         if mime.startswith("image/"):
-            # Keep the full data URL for multimodal message
             images.append({"url": f.content})
             text_parts.append(f"[Attached image: {f.name}]")
-
-        elif mime == "application/pdf":
-            if fitz is None:
-                warn = f"PyMuPDF not installed – cannot extract text from {f.name}"
-                logger.warning(warn)
-                warnings.append(warn)
-                text_parts.append(f"[Attached PDF: {f.name} (PyMuPDF not installed)]")
-                continue
-            try:
-                raw = _decode_base64_content(f.content)
-                doc = fitz.open(stream=raw, filetype="pdf")
-                pdf_text = "\n\n".join(page.get_text() for page in doc)
-                doc.close()
-                if pdf_text.strip():
-                    logger.info("Extracted %d chars from PDF %s", len(pdf_text), f.name)
-                    text_parts.append(
-                        f"--- Content of {f.name} ---\n{pdf_text}\n--- End of {f.name} ---"
-                    )
-                else:
-                    warn = (
-                        f"No extractable text in {f.name} – possibly a scanned document"
-                    )
-                    logger.warning(warn)
-                    warnings.append(warn)
-                    text_parts.append(
-                        f"[Attached PDF: {f.name} (no extractable text – possibly a scanned document)]"
-                    )
-            except (ValueError, RuntimeError, OSError) as exc:
-                warn = f"Failed to extract PDF text from {f.name}: {exc}"
-                logger.warning(warn)
-                warnings.append(warn)
-                text_parts.append(f"[Attached PDF: {f.name} (could not extract text)]")
-
-        else:
-            # Text / code files
-            try:
-                raw = _decode_base64_content(f.content)
-                file_text = raw.decode("utf-8")
-                logger.info("Read %d chars from file %s", len(file_text), f.name)
-                text_parts.append(
-                    f"--- Content of {f.name} ---\n{file_text}\n--- End of {f.name} ---"
-                )
-            except (ValueError, UnicodeDecodeError) as exc:
-                warn = f"Failed to decode text file {f.name}: {exc}"
-                logger.warning(warn)
-                warnings.append(warn)
-                text_parts.append(f"[Attached file: {f.name} (could not decode)]")
 
     augmented = message
     if not message.strip() and text_parts:
@@ -138,7 +80,7 @@ def build_prompt_with_files(
     elif text_parts:
         augmented = "\n\n".join(text_parts) + "\n\n" + message
 
-    return augmented, images, warnings
+    return augmented, images, []
 
 
 def process_files(
