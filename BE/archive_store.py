@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -126,6 +126,44 @@ class PostgresArchiveStore:
                     "provider": s.provider,
                 }
                 for s in rows
+            ]
+
+    async def get_all_sessions_with_titles(
+        self, user_id: str = ""
+    ) -> list[dict[str, Any]]:
+        """List sessions with their first human message as the title."""
+        # Subquery: first human message id per session
+        first_msg_id = (
+            select(func.min(Message.id))
+            .where(Message.session_id == Session.id, Message.role == "human")
+            .correlate(Session)
+            .scalar_subquery()
+        )
+
+        query = (
+            select(
+                Session.id,
+                Session.updated_at,
+                Message.content.label("first_content"),
+            )
+            .outerjoin(Message, Message.id == first_msg_id)
+            .order_by(Session.updated_at.desc())
+        )
+        if user_id:
+            query = query.where(Session.user_id == user_id)
+
+        async with self._factory() as session:
+            result = await session.execute(query)
+            rows = result.all()
+            return [
+                {
+                    "id": row.id,
+                    "title": (row.first_content or "New Chat")[:50],
+                    "updated_at": row.updated_at.isoformat()
+                    if row.updated_at
+                    else None,
+                }
+                for row in rows
             ]
 
     async def delete_session(self, session_id: str, user_id: str = "") -> bool:

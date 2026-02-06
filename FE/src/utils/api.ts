@@ -47,6 +47,27 @@ export async function clearHistory(sessionId: string): Promise<void> {
   logger.info('[API] History cleared successfully');
 }
 
+export interface SessionInfo {
+  id: string;
+  title: string;
+  updated_at: string | null;
+}
+
+export async function fetchSessions(): Promise<SessionInfo[]> {
+  logger.info('[API] Fetching sessions');
+  const res = await fetch('/sessions', {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to fetch sessions:', res.status, res.statusText);
+    throw new Error('Failed to fetch sessions');
+  }
+  const data = await res.json();
+  logger.info('[API] Fetched sessions:', data.sessions.length);
+  return data.sessions;
+}
+
 export async function* streamChat(
   message: string,
   sessionId: string,

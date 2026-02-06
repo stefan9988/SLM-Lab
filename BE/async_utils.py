@@ -7,7 +7,15 @@ from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-__all__ = ["run_with_retry", "schedule_background_task"]
+__all__ = ["init_loop", "run_with_retry", "schedule_background_task"]
+
+_main_loop: asyncio.AbstractEventLoop | None = None
+
+
+def init_loop() -> None:
+    """Capture the main event loop. Call from an async context during startup."""
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
 
 
 async def run_with_retry(
@@ -81,12 +89,6 @@ def schedule_background_task(
     Returns:
         True if the task was scheduled, False if no event loop is running.
     """
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        logger.debug("No running event loop, skipping %s", task_name)
-        return False
-
     async def _run_task() -> None:
         await run_with_retry(
             coro_func,
@@ -96,5 +98,16 @@ def schedule_background_task(
             task_name=task_name,
         )
 
-    loop.create_task(_run_task())
-    return True
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_run_task())
+        return True
+    except RuntimeError:
+        pass
+
+    if _main_loop is not None and _main_loop.is_running():
+        asyncio.run_coroutine_threadsafe(_run_task(), _main_loop)
+        return True
+
+    logger.debug("No event loop available, skipping %s", task_name)
+    return False

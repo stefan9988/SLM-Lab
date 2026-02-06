@@ -179,6 +179,94 @@ class TestPostgresArchiveStore:
         assert len(result) == 2
 
 
+class TestGetAllSessionsWithTitles:
+    def test_returns_first_human_message_as_title(self, run, archive_store):
+        msgs = [
+            {
+                "type": "human",
+                "content": "What is Python?",
+                "thinking": None,
+                "model": "m",
+                "provider": "p",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "additional_kwargs": None,
+            },
+            {
+                "type": "ai",
+                "content": "Python is a programming language.",
+                "thinking": None,
+                "model": "m",
+                "provider": "p",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "additional_kwargs": None,
+            },
+        ]
+        run(archive_store.save_messages("s1", msgs, user_id=TEST_USER_ID))
+        sessions = run(archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID))
+        assert len(sessions) == 1
+        assert sessions[0]["id"] == "s1"
+        assert sessions[0]["title"] == "What is Python?"
+        assert sessions[0]["updated_at"] is not None
+
+    def test_truncates_long_titles_to_50_chars(self, run, archive_store):
+        long_msg = "A" * 100
+        msgs = [
+            {
+                "type": "human",
+                "content": long_msg,
+                "thinking": None,
+                "model": "m",
+                "provider": "p",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "additional_kwargs": None,
+            },
+        ]
+        run(archive_store.save_messages("s1", msgs, user_id=TEST_USER_ID))
+        sessions = run(archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID))
+        assert len(sessions[0]["title"]) == 50
+
+    def test_session_without_human_message_gets_default_title(self, run, archive_store):
+        msgs = [
+            {
+                "type": "ai",
+                "content": "System response",
+                "thinking": None,
+                "model": "m",
+                "provider": "p",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "additional_kwargs": None,
+            },
+        ]
+        run(archive_store.save_messages("s1", msgs, user_id=TEST_USER_ID))
+        sessions = run(archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID))
+        assert sessions[0]["title"] == "New Chat"
+
+    def test_empty_returns_empty_list(self, run, archive_store):
+        sessions = run(archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID))
+        assert sessions == []
+
+    def test_cross_user_isolation(self, run, archive_store):
+        msgs = _make_messages(2)
+        run(archive_store.save_messages("s1", msgs, user_id=TEST_USER_ID))
+        run(archive_store.save_messages("s2", msgs, user_id=TEST_USER_ID_2))
+        sessions_a = run(archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID))
+        sessions_b = run(archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID_2))
+        assert len(sessions_a) == 1
+        assert sessions_a[0]["id"] == "s1"
+        assert len(sessions_b) == 1
+        assert sessions_b[0]["id"] == "s2"
+
+    def test_ordered_by_updated_at_desc(self, run, archive_store):
+        msgs = _make_messages(1)
+        run(archive_store.save_messages("s1", msgs, user_id=TEST_USER_ID))
+        run(archive_store.save_messages("s2", msgs, user_id=TEST_USER_ID))
+        sessions = run(archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID))
+        assert len(sessions) == 2
+        # s2 was saved last, so should appear first
+        assert sessions[0]["id"] == "s2"
+        assert sessions[1]["id"] == "s1"
+
+
 class TestCreateStoreFactory:
     @patch("BE.config.settings")
     def test_disabled_returns_none(self, mock_settings):

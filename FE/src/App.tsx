@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Conversation, FileAttachment } from './types';
-import { loadConversations, addConversation, removeConversation } from './utils/storage';
-import { clearHistory } from './utils/api';
+import { loadConversations, addConversation, removeConversation, saveConversations } from './utils/storage';
+import { clearHistory, fetchSessions } from './utils/api';
 import { useChat } from './hooks/useChat';
 import { useAuth } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
@@ -40,6 +40,26 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
   useEffect(() => {
     loadHistory();
   }, [loadHistory, activeId]);
+
+  // Sync conversation list from backend on mount
+  useEffect(() => {
+    fetchSessions()
+      .then((backendSessions) => {
+        const local = loadConversations();
+        const localIds = new Set(local.map((c) => c.id));
+        const newFromBackend = backendSessions
+          .filter((s) => !localIds.has(s.id))
+          .map((s) => ({ id: s.id, title: s.title }));
+        if (newFromBackend.length > 0) {
+          const merged = [...newFromBackend, ...local];
+          saveConversations(merged);
+          setConversations(merged);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to sync sessions from backend:', err);
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSend = useCallback(
     (text: string, files?: FileAttachment[]) => {

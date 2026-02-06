@@ -1,9 +1,11 @@
 """Tests for BE.app FastAPI endpoints."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from BE.app import FileAttachment, build_prompt_with_files
+import pytest
+
+from BE.app import FileAttachment, build_prompt_with_files, get_archive_store
 from BE.auth import get_current_user
 
 
@@ -190,3 +192,42 @@ class TestGoogleAuthEndpoint:
             "/chat", json={"message": "hi", "session_id": "s1"}
         )
         assert resp.status_code == 422  # missing Authorization header
+
+
+# ── GET /sessions endpoint tests ─────────────────────────────────────────
+
+
+class TestSessionsEndpoint:
+    @pytest.fixture
+    def client_with_archive(self, mock_agent):
+        from fastapi.testclient import TestClient
+        from BE.app import app
+
+        mock_archive = AsyncMock()
+        app.state.general_agent = mock_agent
+        app.dependency_overrides[get_current_user] = lambda: MagicMock(
+            id="test-user-id", email="test@example.com"
+        )
+        app.dependency_overrides[get_archive_store] = lambda: mock_archive
+        yield TestClient(app, raise_server_exceptions=False), mock_archive
+        app.dependency_overrides.clear()
+
+    def test_get_sessions_returns_list(self, client_with_archive):
+        client, mock_archive = client_with_archive
+        mock_archive.get_all_sessions_with_titles.return_value = [
+            {"id": "s1", "title": "Hello world", "updated_at": "2025-01-01T00:00:00"},
+            {"id": "s2", "title": "Another chat", "updated_at": "2025-01-02T00:00:00"},
+        ]
+        resp = client.get("/sessions")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["sessions"]) == 2
+        assert data["sessions"][0]["id"] == "s1"
+        assert data["sessions"][0]["title"] == "Hello world"
+
+    def test_get_sessions_empty(self, client_with_archive):
+        client, mock_archive = client_with_archive
+        mock_archive.get_all_sessions_with_titles.return_value = []
+        resp = client.get("/sessions")
+        assert resp.status_code == 200
+        assert resp.json() == {"sessions": []}

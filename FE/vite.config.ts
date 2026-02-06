@@ -14,9 +14,11 @@ export default defineConfig(({ mode }) => {
       host: true,
       port: parseInt(env.VITE_PORT || '3000'),
       proxy: {
-        '/chat': env.VITE_API_URL || 'http://localhost:8000',
-        '/history': env.VITE_API_URL || 'http://localhost:8000',
-        '/auth': env.VITE_API_URL || 'http://localhost:8000',
+        '/chat': { target: env.VITE_API_URL || 'http://localhost:8000' },
+        '/history': { target: env.VITE_API_URL || 'http://localhost:8000' },
+        '/auth': { target: env.VITE_API_URL || 'http://localhost:8000' },
+        '/sessions': { target: env.VITE_API_URL || 'http://localhost:8000' },
+        '/archive': { target: env.VITE_API_URL || 'http://localhost:8000' },
       },
     },
   }

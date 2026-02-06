@@ -6,6 +6,7 @@ import pytest
 
 from AI.agents.base import Agent
 from BE.auth import UserInfo, get_current_user
+from BE.session_store import InMemoryStore
 
 MOCK_USER = UserInfo(
     id="test-user-id",
@@ -31,15 +32,19 @@ def mock_agent():
     agent.stream.return_value = iter([{"type": "token", "content": "hello"}])
     agent.get_history.return_value = []
     agent.clear_history.return_value = None
+    agent._store = InMemoryStore()
     return agent
 
 
 @pytest.fixture
 def client(mock_agent):
+    from unittest.mock import patch as mock_patch
+
     from fastapi.testclient import TestClient
     from BE.app import app
 
     app.state.general_agent = mock_agent
     app.dependency_overrides[get_current_user] = lambda: MOCK_USER
-    yield TestClient(app, raise_server_exceptions=False)
+    with mock_patch("BE.app.warm_session_from_archive"):
+        yield TestClient(app, raise_server_exceptions=False)
     app.dependency_overrides.clear()

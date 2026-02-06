@@ -1,11 +1,13 @@
 """Tests for BE.async_utils module."""
 
 import asyncio
+import threading
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from BE.async_utils import run_with_retry, schedule_background_task
+import BE.async_utils as async_utils_module
+from BE.async_utils import init_loop, run_with_retry, schedule_background_task
 
 
 @pytest.fixture
@@ -189,3 +191,74 @@ class TestScheduleBackgroundTask:
 
         run(test_coro())
         assert call_count == 2
+
+
+class TestInitLoop:
+    """Tests for init_loop and cross-thread scheduling."""
+
+    def setup_method(self):
+        """Reset _main_loop before each test."""
+        async_utils_module._main_loop = None
+
+    def teardown_method(self):
+        """Reset _main_loop after each test."""
+        async_utils_module._main_loop = None
+
+    def test_init_loop_captures_running_loop(self):
+        """init_loop stores the current event loop."""
+        assert async_utils_module._main_loop is None
+
+        async def _init():
+            init_loop()
+
+        asyncio.run(_init())
+        assert async_utils_module._main_loop is not None
+
+    def test_schedule_from_worker_thread_via_init_loop(self):
+        """schedule_background_task works from a non-event-loop thread
+        when init_loop has been called."""
+        executed = threading.Event()
+        loop = asyncio.new_event_loop()
+
+        async def _init_and_wait():
+            init_loop()
+            # Spawn a worker thread that schedules a background task
+            thread_result = {}
+
+            def worker():
+                async def set_flag():
+                    executed.set()
+
+                thread_result["scheduled"] = schedule_background_task(
+                    set_flag,
+                    max_retries=1,
+                    retry_delay=0.01,
+                    timeout=1.0,
+                    task_name="cross_thread_test",
+                )
+
+            t = threading.Thread(target=worker)
+            t.start()
+            t.join(timeout=2.0)
+
+            assert thread_result["scheduled"] is True
+            # Give the scheduled coroutine time to execute
+            await asyncio.sleep(0.1)
+
+        loop.run_until_complete(_init_and_wait())
+        loop.close()
+        assert executed.is_set()
+
+    def test_schedule_fails_without_init_loop_and_no_event_loop(self):
+        """Without init_loop, scheduling from a plain thread returns False."""
+        async def dummy():
+            pass
+
+        result = schedule_background_task(
+            dummy,
+            max_retries=1,
+            retry_delay=0.01,
+            timeout=1.0,
+            task_name="test_task",
+        )
+        assert result is False

@@ -12,7 +12,9 @@ from AI.agents import init_agent
 from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 from AI.tools import get_enabled_tools
 from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
+from BE.async_utils import init_loop
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
+from BE.session_store import warm_session_from_archive
 from BE.user_store import upsert_user
 from BE.config import _parse_comma_separated, settings
 from BE.logger import redact_url, setup_logger
@@ -104,6 +106,7 @@ def process_files(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application startup")
+    init_loop()
     tools = get_enabled_tools(settings)
     tool_names = [t.name if hasattr(t, "name") else t.__name__ for t in tools]
     logger.info("General agent tools enabled: %s", tool_names)
@@ -243,6 +246,7 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
         )
 
     agent = request.app.state.general_agent
+    await warm_session_from_archive(agent._store, body.session_id, user_id=user.id)
 
     def generate():
         for warn in file_warnings:
@@ -266,6 +270,7 @@ async def get_history(
     """Retrieve conversation history for a session."""
     logger.info("GET /history (session_id=%s)", session_id)
     agent = request.app.state.general_agent
+    await warm_session_from_archive(agent._store, session_id, user_id=user.id)
     history = agent.get_history(session_id=session_id, user_id=user.id)
     logger.info("GET /history (session_id=%s, messages=%d)", session_id, len(history))
     return {"history": history}
@@ -282,6 +287,16 @@ async def clear_history(
     agent = request.app.state.general_agent
     agent.clear_history(session_id=session_id, user_id=user.id)
     return {"status": "cleared"}
+
+
+@app.get("/sessions")
+async def list_sessions(
+    store: PostgresArchiveStore = Depends(get_archive_store),
+    user: UserInfo = Depends(get_current_user),
+):
+    """List all sessions with titles for the sidebar."""
+    sessions = await store.get_all_sessions_with_titles(user_id=user.id)
+    return {"sessions": sessions}
 
 
 # --- Archive endpoints (PostgreSQL) ---
