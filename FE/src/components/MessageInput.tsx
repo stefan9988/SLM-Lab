@@ -33,6 +33,12 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
     el.style.height = `${Math.max(newHeight, MIN_ROWS * LINE_HEIGHT)}px`;
   }, [text]);
 
+  useEffect(() => {
+    if (!disabled && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [disabled]);
+
   const handleFiles = (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const selected = Array.from(e.target.files);

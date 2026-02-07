@@ -122,7 +122,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
             : 'max-w-[750px] bg-[#1e293b] text-[#e2e8f0] border border-[#334155] shadow-sm'
         }`}
       >
-        <CopyMessageButton text={normalizedContent} />
+        {normalizedContent.length > 2000 && <CopyMessageButton text={normalizedContent} />}
 
         {isUser && files && files.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-1">
