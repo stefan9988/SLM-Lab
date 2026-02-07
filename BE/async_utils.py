@@ -7,15 +7,27 @@ from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-__all__ = ["init_loop", "run_with_retry", "schedule_background_task"]
+__all__ = ["init_loop", "run_with_retry", "schedule_background_task", "shutdown_tasks"]
 
 _main_loop: asyncio.AbstractEventLoop | None = None
+_background_tasks: set[asyncio.Task] = set()
 
 
 def init_loop() -> None:
     """Capture the main event loop. Call from an async context during startup."""
     global _main_loop
     _main_loop = asyncio.get_running_loop()
+
+
+async def shutdown_tasks() -> None:
+    """Cancel and await all tracked background tasks. Call during app shutdown."""
+    if not _background_tasks:
+        return
+    logger.info("Cancelling %d background tasks", len(_background_tasks))
+    for task in _background_tasks:
+        task.cancel()
+    await asyncio.gather(*_background_tasks, return_exceptions=True)
+    _background_tasks.clear()
 
 
 async def run_with_retry(
@@ -100,7 +112,9 @@ def schedule_background_task(
 
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_run_task())
+        task = loop.create_task(_run_task(), name=task_name)
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
         return True
     except RuntimeError:
         pass

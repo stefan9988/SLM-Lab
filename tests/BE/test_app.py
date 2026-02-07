@@ -22,17 +22,15 @@ class TestBuildPromptWithFiles:
     def test_image_file_added_to_images(self):
         data_url = "data:image/png;base64,iVBOR"
         f = FileAttachment(name="pic.png", type="image/png", content=data_url, size=10)
-        prompt, images, warnings = build_prompt_with_files("describe", [f])
+        prompt, images = build_prompt_with_files("describe", [f])
         assert len(images) == 1
         assert images[0]["url"] == data_url
         assert prompt.endswith("describe")
-        assert warnings == []
 
     def test_no_files_returns_original_message(self):
-        prompt, images, warnings = build_prompt_with_files("hello", [])
+        prompt, images = build_prompt_with_files("hello", [])
         assert prompt == "hello"
         assert images == []
-        assert warnings == []
 
     def test_non_image_file_is_ignored(self):
         """Non-image files (text, PDF, etc.) should be silently skipped."""
@@ -48,12 +46,11 @@ class TestBuildPromptWithFiles:
             content="data:application/pdf;base64,ZmFrZQ==",
             size=50,
         )
-        prompt, images, warnings = build_prompt_with_files(
+        prompt, images = build_prompt_with_files(
             "summarize", [text_file, pdf_file]
         )
         assert prompt == "summarize"
         assert images == []
-        assert warnings == []
 
 
 # ── Endpoint tests with file attachments ────────────────────────────────────

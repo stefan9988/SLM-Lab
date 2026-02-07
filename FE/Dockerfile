@@ -2,7 +2,7 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 COPY FE/package.json FE/package-lock.json* ./
-RUN npm install
+RUN npm ci
 COPY FE/ .
 RUN npm run build
 

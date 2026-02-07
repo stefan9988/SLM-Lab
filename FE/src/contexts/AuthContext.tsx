@@ -73,6 +73,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logger.info('[Auth] User logged out');
   }, []);
 
+  // Proactively check token expiration every 60 seconds
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      if (isTokenExpired(token)) {
+        logger.info('[Auth] Token expired, logging out');
+        logout();
+      }
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [token, logout]);
+
   return (
     <AuthContext.Provider
       value={{

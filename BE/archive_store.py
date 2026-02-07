@@ -15,6 +15,8 @@ logger = setup_logger(__name__)
 
 __all__ = ["PostgresArchiveStore", "create_store"]
 
+SESSION_TITLE_MAX_LENGTH = 50
+
 
 class PostgresArchiveStore:
     """Stores conversation history permanently in PostgreSQL."""
@@ -162,7 +164,7 @@ class PostgresArchiveStore:
             return [
                 {
                     "id": row.id,
-                    "title": (row.first_content or "New Chat")[:50],
+                    "title": (row.first_content or "New Chat")[:SESSION_TITLE_MAX_LENGTH],
                     "updated_at": row.updated_at.isoformat()
                     if row.updated_at
                     else None,

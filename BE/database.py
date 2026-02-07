@@ -7,7 +7,7 @@ from BE.models import Base
 
 logger = setup_logger(__name__)
 
-__all__ = ["get_session_factory", "init_db"]
+__all__ = ["get_session_factory", "init_db", "dispose_engine"]
 
 _engine = None
 _session_factory = None
@@ -49,3 +49,13 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("PostgreSQL tables initialized")
+
+
+async def dispose_engine() -> None:
+    """Dispose the async engine, releasing all pooled connections."""
+    global _engine, _session_factory
+    if _engine is not None:
+        await _engine.dispose()
+        _engine = None
+        _session_factory = None
+        logger.info("PostgreSQL engine disposed")
