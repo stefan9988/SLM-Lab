@@ -56,14 +56,17 @@ def get_archive_store() -> PostgresArchiveStore:
 
 def build_prompt_with_files(
     message: str, files: list[FileAttachment]
-) -> tuple[str, list[dict]]:
-    """Process file attachments and return (augmented_prompt, images_list).
+) -> tuple[str, list[dict], list[dict]]:
+    """Process file attachments and return (augmented_prompt, images_list, file_meta).
 
     Only image files are processed (kept as multimodal data URLs).
     Non-image files (text, PDF, etc.) are silently skipped.
+    ``file_meta`` contains lightweight metadata (name, type) for each image
+    so it can be persisted on the message and restored after a page reload.
     """
     text_parts: list[str] = []
     images: list[dict] = []
+    file_meta: list[dict] = []
 
     for f in files:
         mime = f.type or ""
@@ -71,6 +74,7 @@ def build_prompt_with_files(
         if mime.startswith("image/"):
             images.append({"url": f.content})
             text_parts.append(f"[Attached image: {f.name}]")
+            file_meta.append({"name": f.name, "type": f.type})
 
     augmented = message
     if not message.strip() and text_parts:
@@ -82,25 +86,25 @@ def build_prompt_with_files(
     elif text_parts:
         augmented = "\n\n".join(text_parts) + "\n\n" + message
 
-    return augmented, images
+    return augmented, images, file_meta
 
 
 def process_files(
     message: str, files: list[FileAttachment] | None
-) -> tuple[str, list[dict]]:
+) -> tuple[str, list[dict], list[dict]]:
     """Validate file sizes and build augmented prompt.
 
-    Returns (prompt, images).
+    Returns (prompt, images, file_attachments).
     Raises FileSizeLimitExceeded if total size exceeds MAX_TOTAL_FILE_SIZE.
     """
     if not files:
-        return message, []
+        return message, [], []
     total_size = sum(f.size for f in files)
     if total_size > MAX_TOTAL_FILE_SIZE:
         raise FileSizeLimitExceeded()
-    prompt, images = build_prompt_with_files(message, files)
+    prompt, images, file_attachments = build_prompt_with_files(message, files)
     logger.info("Augmented prompt length: %d chars", len(prompt))
-    return prompt, images
+    return prompt, images, file_attachments
 
 
 _INSECURE_JWT_DEFAULTS = {"change-me-in-production", "change-me-to-a-random-secret"}
@@ -229,7 +233,7 @@ async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get
     )
 
     try:
-        prompt, images = process_files(body.message, body.files)
+        prompt, images, file_attachments = process_files(body.message, body.files)
     except FileSizeLimitExceeded:
         return JSONResponse(
             status_code=413,
@@ -238,7 +242,13 @@ async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get
 
     agent = request.app.state.general_agent
     await agent.warm_session(body.session_id, user_id=user.id)
-    response = await agent.invoke(prompt, session_id=body.session_id, images=images or None, user_id=user.id)
+    response = await agent.invoke(
+        prompt,
+        session_id=body.session_id,
+        images=images or None,
+        file_attachments=file_attachments or None,
+        user_id=user.id,
+    )
     logger.info(
         "POST /chat response (session_id=%s, length=%d)",
         body.session_id,
@@ -259,7 +269,7 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
     logger.info("Files received: %d", len(body.files) if body.files else 0)
 
     try:
-        prompt, images = process_files(body.message, body.files)
+        prompt, images, file_attachments = process_files(body.message, body.files)
     except FileSizeLimitExceeded:
         return JSONResponse(
             status_code=413,
@@ -271,7 +281,11 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
 
     async def generate():
         async for event in agent.stream(
-            prompt, session_id=body.session_id, images=images or None, user_id=user.id
+            prompt,
+            session_id=body.session_id,
+            images=images or None,
+            file_attachments=file_attachments or None,
+            user_id=user.id,
         ):
             yield f"data: {json.dumps(event)}\n\n"
         yield "data: [DONE]\n\n"

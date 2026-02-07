@@ -1,8 +1,8 @@
 export interface FileAttachment {
   name: string;
   type: string;
-  content: string;
-  size: number;
+  content?: string;
+  size?: number;
 }
 
 export interface ToolUsage {

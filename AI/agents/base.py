@@ -56,6 +56,7 @@ class Agent:
         prompt: str,
         session_id: str,
         images: Optional[list[dict]] = None,
+        file_attachments: Optional[list[dict]] = None,
         user_id: str = "",
     ) -> str:
         """Get a complete response for the given prompt."""
@@ -64,7 +65,9 @@ class Agent:
         )
         logger.debug("invoke prompt: %.200s", prompt)
         try:
-            messages = await self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
+            messages = await self._get_input_messages(
+                prompt, session_id, images=images, file_attachments=file_attachments, user_id=user_id
+            )
             result = await self._agent.ainvoke({"messages": messages})
             all_messages = result["messages"]
             await self._save_history(all_messages, session_id, user_id=user_id)
@@ -80,6 +83,7 @@ class Agent:
         prompt: str,
         session_id: str,
         images: Optional[list[dict]] = None,
+        file_attachments: Optional[list[dict]] = None,
         user_id: str = "",
     ):
         logger.info(
@@ -87,7 +91,9 @@ class Agent:
         )
         logger.debug("stream prompt: %.200s", prompt)
         try:
-            messages = await self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
+            messages = await self._get_input_messages(
+                prompt, session_id, images=images, file_attachments=file_attachments, user_id=user_id
+            )
 
             full_response = []
             full_thinking = ""
@@ -180,15 +186,20 @@ class Agent:
         prompt: str,
         session_id: str,
         images: Optional[list[dict]] = None,
+        file_attachments: Optional[list[dict]] = None,
         user_id: str = "",
     ) -> List:
+        additional_kwargs = {}
+        if file_attachments:
+            additional_kwargs["file_attachments"] = file_attachments
+
         if images:
             content: list[dict] = [{"type": "text", "text": prompt}]
             for img in images:
                 content.append({"type": "image_url", "image_url": {"url": img["url"]}})
-            human_msg = HumanMessage(content=content)
+            human_msg = HumanMessage(content=content, additional_kwargs=additional_kwargs)
         else:
-            human_msg = HumanMessage(content=prompt)
+            human_msg = HumanMessage(content=prompt, additional_kwargs=additional_kwargs)
 
         if self.maintain_history:
             history = await self._store.get_messages(session_id, user_id=user_id)

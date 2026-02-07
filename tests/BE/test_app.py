@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from BE.app import FileAttachment, build_prompt_with_files, get_archive_store
+from BE.app import FileAttachment, build_prompt_with_files, process_files, get_archive_store
 from BE.auth import get_current_user
 
 
@@ -22,15 +22,17 @@ class TestBuildPromptWithFiles:
     def test_image_file_added_to_images(self):
         data_url = "data:image/png;base64,iVBOR"
         f = FileAttachment(name="pic.png", type="image/png", content=data_url, size=10)
-        prompt, images = build_prompt_with_files("describe", [f])
+        prompt, images, file_meta = build_prompt_with_files("describe", [f])
         assert len(images) == 1
         assert images[0]["url"] == data_url
         assert prompt.endswith("describe")
+        assert file_meta == [{"name": "pic.png", "type": "image/png"}]
 
     def test_no_files_returns_original_message(self):
-        prompt, images = build_prompt_with_files("hello", [])
+        prompt, images, file_meta = build_prompt_with_files("hello", [])
         assert prompt == "hello"
         assert images == []
+        assert file_meta == []
 
     def test_non_image_file_is_ignored(self):
         """Non-image files (text, PDF, etc.) should be silently skipped."""
@@ -46,11 +48,35 @@ class TestBuildPromptWithFiles:
             content="data:application/pdf;base64,ZmFrZQ==",
             size=50,
         )
-        prompt, images = build_prompt_with_files(
+        prompt, images, file_meta = build_prompt_with_files(
             "summarize", [text_file, pdf_file]
         )
         assert prompt == "summarize"
         assert images == []
+        assert file_meta == []
+
+    def test_multiple_images_returns_metadata(self):
+        f1 = FileAttachment(name="a.png", type="image/png", content="data:image/png;base64,x", size=10)
+        f2 = FileAttachment(name="b.jpg", type="image/jpeg", content="data:image/jpeg;base64,y", size=20)
+        prompt, images, file_meta = build_prompt_with_files("describe", [f1, f2])
+        assert len(images) == 2
+        assert len(file_meta) == 2
+        assert file_meta[0] == {"name": "a.png", "type": "image/png"}
+        assert file_meta[1] == {"name": "b.jpg", "type": "image/jpeg"}
+
+
+class TestProcessFiles:
+    def test_no_files_returns_empty_metadata(self):
+        prompt, images, file_meta = process_files("hello", None)
+        assert prompt == "hello"
+        assert images == []
+        assert file_meta == []
+
+    def test_image_files_return_metadata(self):
+        f = FileAttachment(name="pic.png", type="image/png", content="data:image/png;base64,x", size=10)
+        prompt, images, file_meta = process_files("describe", [f])
+        assert len(images) == 1
+        assert file_meta == [{"name": "pic.png", "type": "image/png"}]
 
 
 # ── Endpoint tests with file attachments ────────────────────────────────────
@@ -82,7 +108,7 @@ class TestChatEndpoint:
         assert resp.status_code == 200
         assert resp.json() == {"response": "mock response"}
         mock_agent.invoke.assert_called_once_with(
-            "hi", session_id="s1", images=None, user_id="test-user-id"
+            "hi", session_id="s1", images=None, file_attachments=None, user_id="test-user-id"
         )
 
     def test_post_chat_422_missing_fields(self, client):
