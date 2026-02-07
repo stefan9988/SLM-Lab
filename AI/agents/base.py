@@ -1,6 +1,6 @@
 """LangGraph-based reactive agent wrapper."""
 
-from typing import Iterator, List, Optional
+from typing import AsyncIterator, List, Optional
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -61,10 +61,10 @@ class Agent:
         logger.info(
             "invoke called (prompt_length=%d, session_id=%s)", len(prompt), session_id
         )
-        logger.debug("invoke prompt: %s", prompt)
+        logger.debug("invoke prompt: %.200s", prompt)
         try:
             messages = await self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
-            result = self._agent.invoke({"messages": messages})
+            result = await self._agent.ainvoke({"messages": messages})
             all_messages = result["messages"]
             await self._save_history(all_messages, session_id, user_id=user_id)
             response = all_messages[-1].content
@@ -84,7 +84,7 @@ class Agent:
         logger.info(
             "stream called (prompt_length=%d, session_id=%s)", len(prompt), session_id
         )
-        logger.debug("stream prompt: %s", prompt)
+        logger.debug("stream prompt: %.200s", prompt)
         try:
             messages = await self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
 
@@ -93,7 +93,7 @@ class Agent:
             chunk_count = 0
             thinking_started = False
             tool_messages = []
-            for stream_mode, chunk in self._agent.stream(
+            async for stream_mode, chunk in self._agent.astream(
                 {"messages": messages}, stream_mode=["messages", "custom"]
             ):
                 if stream_mode == "custom":

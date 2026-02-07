@@ -12,7 +12,7 @@ from AI.agents import init_agent
 from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 from AI.tools import get_enabled_tools
 from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
-from BE.async_utils import init_loop
+from BE.async_utils import init_loop, shutdown_tasks
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
 from BE.user_store import upsert_user
 from BE.config import _parse_comma_separated, init_config, settings
@@ -56,8 +56,8 @@ def get_archive_store() -> PostgresArchiveStore:
 
 def build_prompt_with_files(
     message: str, files: list[FileAttachment]
-) -> tuple[str, list[dict], list[str]]:
-    """Process file attachments and return (augmented_prompt, images_list, warnings).
+) -> tuple[str, list[dict]]:
+    """Process file attachments and return (augmented_prompt, images_list).
 
     Only image files are processed (kept as multimodal data URLs).
     Non-image files (text, PDF, etc.) are silently skipped.
@@ -82,25 +82,25 @@ def build_prompt_with_files(
     elif text_parts:
         augmented = "\n\n".join(text_parts) + "\n\n" + message
 
-    return augmented, images, []
+    return augmented, images
 
 
 def process_files(
     message: str, files: list[FileAttachment] | None
-) -> tuple[str, list[dict], list[str]]:
+) -> tuple[str, list[dict]]:
     """Validate file sizes and build augmented prompt.
 
-    Returns (prompt, images, warnings).
+    Returns (prompt, images).
     Raises FileSizeLimitExceeded if total size exceeds MAX_TOTAL_FILE_SIZE.
     """
     if not files:
-        return message, [], []
+        return message, []
     total_size = sum(f.size for f in files)
     if total_size > MAX_TOTAL_FILE_SIZE:
         raise FileSizeLimitExceeded()
-    prompt, images, warnings = build_prompt_with_files(message, files)
+    prompt, images = build_prompt_with_files(message, files)
     logger.info("Augmented prompt length: %d chars", len(prompt))
-    return prompt, images, warnings
+    return prompt, images
 
 
 _INSECURE_JWT_DEFAULTS = {"change-me-in-production", "change-me-to-a-random-secret"}
@@ -154,7 +154,13 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
 
     yield
+
     logger.info("Application shutdown")
+    await shutdown_tasks()
+    if settings.POSTGRES_ENABLED:
+        from BE.database import dispose_engine
+
+        await dispose_engine()
 
 
 app = FastAPI(
@@ -223,7 +229,7 @@ async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get
     )
 
     try:
-        prompt, images, file_warnings = process_files(body.message, body.files)
+        prompt, images = process_files(body.message, body.files)
     except FileSizeLimitExceeded:
         return JSONResponse(
             status_code=413,
@@ -253,7 +259,7 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
     logger.info("Files received: %d", len(body.files) if body.files else 0)
 
     try:
-        prompt, images, file_warnings = process_files(body.message, body.files)
+        prompt, images = process_files(body.message, body.files)
     except FileSizeLimitExceeded:
         return JSONResponse(
             status_code=413,
@@ -264,8 +270,6 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
     await agent.warm_session(body.session_id, user_id=user.id)
 
     async def generate():
-        for warn in file_warnings:
-            yield f"data: {json.dumps({'type': 'status', 'content': warn})}\n\n"
         async for event in agent.stream(
             prompt, session_id=body.session_id, images=images or None, user_id=user.id
         ):
@@ -273,7 +277,15 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
         yield "data: [DONE]\n\n"
         logger.info("POST /chat/stream complete (session_id=%s)", body.session_id)
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.get("/history")
