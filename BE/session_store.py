@@ -55,7 +55,7 @@ def _msg_to_dict(msg, model: str = "", provider: str = "") -> dict:
         additional = {k: v for k, v in msg.additional_kwargs.items() if k != "thinking"}
     return {
         "type": msg.type,
-        "content": msg.content,
+        "content": json.dumps(msg.content) if isinstance(msg.content, list) else msg.content,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "model": model,
         "provider": provider,
@@ -69,15 +69,33 @@ def _dict_to_message(d: dict):
     from langchain_core.messages import AIMessage, HumanMessage
 
     content = d["content"]
-    additional_kwargs = d.get("additional_kwargs", {})
+    if isinstance(content, str) and content.startswith("["):
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                content = parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+    additional_kwargs = d.get("additional_kwargs") or {}
     if d.get("thinking"):
         additional_kwargs["thinking"] = d["thinking"]
 
     if d["type"] == "human":
-        return HumanMessage(content=content)
+        return HumanMessage(content=content, additional_kwargs=additional_kwargs)
     elif d["type"] == "ai":
         return AIMessage(content=content, additional_kwargs=additional_kwargs)
     return None
+
+
+_ATTACHED_IMAGE_RE = None
+
+
+def _get_attached_image_re():
+    global _ATTACHED_IMAGE_RE
+    if _ATTACHED_IMAGE_RE is None:
+        import re
+        _ATTACHED_IMAGE_RE = re.compile(r"\[Attached image: [^\]]+\]\n*")
+    return _ATTACHED_IMAGE_RE
 
 
 def _history_entry_from_dict(d: dict) -> dict | None:
@@ -85,16 +103,35 @@ def _history_entry_from_dict(d: dict) -> dict | None:
     if d["type"] not in ("human", "ai"):
         return None
     content = d["content"]
+    if isinstance(content, str) and content.startswith("["):
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                content = " ".join(
+                    block.get("text", "")
+                    for block in parsed
+                    if isinstance(block, dict) and block.get("type") == "text"
+                )
+        except (json.JSONDecodeError, ValueError):
+            pass
     if isinstance(content, list):
         content = " ".join(
             block.get("text", "")
             for block in content
             if isinstance(block, dict) and block.get("type") == "text"
         )
+    additional = d.get("additional_kwargs") or {}
+    file_attachments = additional.get("file_attachments")
+
+    if file_attachments and isinstance(content, str):
+        content = _get_attached_image_re().sub("", content).strip()
+
     entry: dict = {"role": d["type"], "content": content}
+    if file_attachments:
+        entry["files"] = [{"name": f["name"], "type": f["type"]} for f in file_attachments]
     if d.get("thinking"):
         entry["thinking"] = d["thinking"]
-    tools_used = d.get("additional_kwargs", {}).get("tools_used")
+    tools_used = additional.get("tools_used")
     if tools_used:
         entry["tools_used"] = tools_used
     return entry

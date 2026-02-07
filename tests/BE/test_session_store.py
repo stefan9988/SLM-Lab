@@ -79,6 +79,71 @@ class TestMessageSerialization:
         assert isinstance(restored, AIMessage)
         assert restored.additional_kwargs["tools_used"] == tools
 
+    def test_human_message_with_file_attachments_round_trip(self):
+        file_meta = [{"name": "photo.png", "type": "image/png"}]
+        msg = HumanMessage(
+            content="[Attached image: photo.png]\n\ndescribe this",
+            additional_kwargs={"file_attachments": file_meta},
+        )
+        d = _msg_to_dict(msg)
+        assert d["additional_kwargs"]["file_attachments"] == file_meta
+        restored = _dict_to_message(d)
+        assert isinstance(restored, HumanMessage)
+        assert restored.additional_kwargs["file_attachments"] == file_meta
+        assert restored.content == "[Attached image: photo.png]\n\ndescribe this"
+
+    def test_human_message_preserves_additional_kwargs_from_archive(self):
+        """_dict_to_message must pass additional_kwargs for human messages (archive warm-up)."""
+        d = {
+            "type": "human",
+            "content": "describe",
+            "thinking": None,
+            "additional_kwargs": {"file_attachments": [{"name": "img.jpg", "type": "image/jpeg"}]},
+        }
+        restored = _dict_to_message(d)
+        assert isinstance(restored, HumanMessage)
+        assert restored.additional_kwargs["file_attachments"] == [{"name": "img.jpg", "type": "image/jpeg"}]
+
+    def test_msg_to_dict_serializes_multimodal_content(self):
+        """List content (multimodal) is JSON-serialized for PostgreSQL compatibility."""
+        multimodal_content = [
+            {"type": "text", "text": "[Attached image: photo.png]\n\ndescribe"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+        ]
+        msg = HumanMessage(content=multimodal_content)
+        d = _msg_to_dict(msg)
+        assert isinstance(d["content"], str)
+        assert json.loads(d["content"]) == multimodal_content
+
+    def test_dict_to_message_parses_multimodal_content(self):
+        """JSON-encoded list content is parsed back to a list for HumanMessage."""
+        multimodal_content = [
+            {"type": "text", "text": "describe"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+        ]
+        d = {
+            "type": "human",
+            "content": json.dumps(multimodal_content),
+            "thinking": None,
+            "additional_kwargs": {},
+        }
+        restored = _dict_to_message(d)
+        assert isinstance(restored, HumanMessage)
+        assert isinstance(restored.content, list)
+        assert restored.content == multimodal_content
+
+    def test_multimodal_round_trip_through_serialization(self):
+        """Full round-trip: HumanMessage with list content -> dict -> message."""
+        multimodal_content = [
+            {"type": "text", "text": "hello"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,xyz"}},
+        ]
+        msg = HumanMessage(content=multimodal_content)
+        d = _msg_to_dict(msg)
+        restored = _dict_to_message(d)
+        assert isinstance(restored, HumanMessage)
+        assert restored.content == multimodal_content
+
     def test_unknown_type_returns_none(self):
         d = {"type": "tool", "content": "x", "thinking": None, "additional_kwargs": {}}
         assert _dict_to_message(d) is None
@@ -102,6 +167,20 @@ class TestHistoryEntryFromDict:
                 {"type": "text", "text": "describe"},
                 {"type": "image_url", "image_url": {"url": "data:..."}},
             ],
+            "thinking": None,
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["content"] == "describe"
+
+    def test_multimodal_json_string_content_flattened(self):
+        """JSON-encoded multimodal content (from PostgreSQL) is parsed and flattened."""
+        multimodal_content = [
+            {"type": "text", "text": "describe"},
+            {"type": "image_url", "image_url": {"url": "data:..."}},
+        ]
+        d = {
+            "type": "human",
+            "content": json.dumps(multimodal_content),
             "thinking": None,
         }
         entry = _history_entry_from_dict(d)
@@ -136,6 +215,64 @@ class TestHistoryEntryFromDict:
         d = {"type": "ai", "content": "result", "thinking": None}
         entry = _history_entry_from_dict(d)
         assert "tools_used" not in entry
+
+    def test_human_entry_with_file_attachments(self):
+        file_meta = [{"name": "photo.png", "type": "image/png"}]
+        d = {
+            "type": "human",
+            "content": "[Attached image: photo.png]\n\ndescribe this",
+            "thinking": None,
+            "additional_kwargs": {"file_attachments": file_meta},
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["files"] == [{"name": "photo.png", "type": "image/png"}]
+        assert entry["content"] == "describe this"
+        assert "[Attached image:" not in entry["content"]
+
+    def test_human_entry_with_multiple_file_attachments(self):
+        file_meta = [
+            {"name": "a.png", "type": "image/png"},
+            {"name": "b.jpg", "type": "image/jpeg"},
+        ]
+        d = {
+            "type": "human",
+            "content": "[Attached image: a.png]\n\n[Attached image: b.jpg]\n\ndescribe these",
+            "thinking": None,
+            "additional_kwargs": {"file_attachments": file_meta},
+        }
+        entry = _history_entry_from_dict(d)
+        assert len(entry["files"]) == 2
+        assert entry["content"] == "describe these"
+
+    def test_human_entry_without_file_attachments_unchanged(self):
+        d = {
+            "type": "human",
+            "content": "hello",
+            "thinking": None,
+            "additional_kwargs": {},
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["content"] == "hello"
+        assert "files" not in entry
+
+    def test_human_entry_image_only_no_message(self):
+        """When user uploads image(s) without a message, content is the fallback text."""
+        file_meta = [{"name": "pic.png", "type": "image/png"}]
+        d = {
+            "type": "human",
+            "content": (
+                "[Attached image: pic.png]\n\n"
+                "The user uploaded the above file(s) without a message."
+                " Please review and summarize the content."
+            ),
+            "thinking": None,
+            "additional_kwargs": {"file_attachments": file_meta},
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["files"] == [{"name": "pic.png", "type": "image/png"}]
+        # The fallback text should remain (only [Attached image: ...] stripped)
+        assert "Please review and summarize" in entry["content"]
+        assert "[Attached image:" not in entry["content"]
 
 
 # --- InMemoryStore ---
