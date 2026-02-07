@@ -9,6 +9,12 @@ from BE.app import FileAttachment, build_prompt_with_files, get_archive_store
 from BE.auth import get_current_user
 
 
+async def _async_gen(items):
+    """Helper to create an async generator from a list."""
+    for item in items:
+        yield item
+
+
 # ── build_prompt_with_files unit tests ──────────────────────────────────────
 
 
@@ -89,7 +95,7 @@ class TestChatEndpoint:
 
 class TestChatStreamEndpoint:
     def test_returns_sse_with_done(self, client, mock_agent):
-        mock_agent.stream.return_value = iter(
+        mock_agent.stream.return_value = _async_gen(
             [
                 {"type": "token", "content": "hi"},
             ]

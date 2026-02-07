@@ -9,7 +9,7 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from BE.logger import setup_logger
-from BE.session_store import SessionStore, InMemoryStore
+from BE.session_store import SessionStore, InMemoryStore, warm_session_from_archive
 
 logger = setup_logger(__name__)
 
@@ -50,7 +50,7 @@ class Agent:
             logger.error("Failed to initialize Agent", exc_info=True)
             raise
 
-    def invoke(
+    async def invoke(
         self,
         prompt: str,
         session_id: str,
@@ -63,10 +63,10 @@ class Agent:
         )
         logger.debug("invoke prompt: %s", prompt)
         try:
-            messages = self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
+            messages = await self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
             result = self._agent.invoke({"messages": messages})
             all_messages = result["messages"]
-            self._save_history(all_messages, session_id, user_id=user_id)
+            await self._save_history(all_messages, session_id, user_id=user_id)
             response = all_messages[-1].content
             logger.info("invoke complete (response_length=%d)", len(response))
             return response
@@ -74,7 +74,7 @@ class Agent:
             logger.error("invoke failed", exc_info=True)
             raise
 
-    def stream(
+    async def stream(
         self,
         prompt: str,
         session_id: str,
@@ -86,12 +86,13 @@ class Agent:
         )
         logger.debug("stream prompt: %s", prompt)
         try:
-            messages = self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
+            messages = await self._get_input_messages(prompt, session_id, images=images, user_id=user_id)
 
             full_response = []
             full_thinking = ""
-            token_count = 0
+            chunk_count = 0
             thinking_started = False
+            tool_messages = []
             for stream_mode, chunk in self._agent.stream(
                 {"messages": messages}, stream_mode=["messages", "custom"]
             ):
@@ -120,35 +121,40 @@ class Agent:
                                     }
                         elif msg_chunk.content:
                             full_response.append(msg_chunk.content)
-                            token_count += 1
+                            chunk_count += 1
                             yield {"type": "token", "content": msg_chunk.content}
                     elif isinstance(msg_chunk, ToolMessage):
+                        tool_messages.append(msg_chunk)
                         yield {"type": "status", "content": "Tool returned result"}
 
             ai_msg = AIMessage(content="".join(full_response))
             if full_thinking:
                 ai_msg.additional_kwargs["thinking"] = full_thinking
-            all_messages = list(messages) + [ai_msg]
-            self._save_history(all_messages, session_id, user_id=user_id)
-            logger.info("stream complete (tokens=%d)", token_count)
+            all_messages = list(messages) + tool_messages + [ai_msg]
+            await self._save_history(all_messages, session_id, user_id=user_id)
+            logger.info("stream complete (chunks=%d)", chunk_count)
         except Exception:
             logger.error("stream failed", exc_info=True)
             raise
 
-    def clear_history(self, session_id: str, user_id: str = "") -> None:
+    async def warm_session(self, session_id: str, user_id: str = "") -> None:
+        """Load session history from the archive if the session store is empty."""
+        await warm_session_from_archive(self._store, session_id, user_id=user_id)
+
+    async def clear_history(self, session_id: str, user_id: str = "") -> None:
         """Clear the conversation history for a session."""
-        self._store.clear(session_id, user_id=user_id)
+        await self._store.clear(session_id, user_id=user_id)
         logger.debug("Conversation history cleared (session_id=%s)", session_id)
 
-    def get_history(self, session_id: str, user_id: str = "") -> List[dict]:
+    async def get_history(self, session_id: str, user_id: str = "") -> List[dict]:
         """Get conversation history as serializable dicts for a session."""
-        history = self._store.get_history_dicts(session_id, user_id=user_id)
+        history = await self._store.get_history_dicts(session_id, user_id=user_id)
         logger.debug(
             "get_history called (session_id=%s, messages=%d)", session_id, len(history)
         )
         return history
 
-    def _get_input_messages(
+    async def _get_input_messages(
         self,
         prompt: str,
         session_id: str,
@@ -164,12 +170,12 @@ class Agent:
             human_msg = HumanMessage(content=prompt)
 
         if self.maintain_history:
-            history = self._store.get_messages(session_id, user_id=user_id)
+            history = await self._store.get_messages(session_id, user_id=user_id)
             return list(history) + [human_msg]
         return [human_msg]
 
-    def _save_history(self, messages: List, session_id: str, user_id: str = "") -> None:
+    async def _save_history(self, messages: List, session_id: str, user_id: str = "") -> None:
         if self.maintain_history:
-            self._store.save_messages(
+            await self._store.save_messages(
                 session_id, messages, self._model_name, self._provider, user_id=user_id
             )

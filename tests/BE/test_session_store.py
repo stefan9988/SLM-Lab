@@ -21,6 +21,18 @@ from BE.session_store import (
 
 
 @pytest.fixture
+def event_loop():
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture
+def run(event_loop):
+    return event_loop.run_until_complete
+
+
+@pytest.fixture
 def in_memory_store():
     return InMemoryStore()
 
@@ -95,21 +107,21 @@ class TestHistoryEntryFromDict:
 
 
 class TestInMemoryStore:
-    def test_empty_session(self, in_memory_store):
-        assert in_memory_store.get_messages("none", user_id="u1") == []
-        assert in_memory_store.get_history_dicts("none", user_id="u1") == []
+    def test_empty_session(self, run, in_memory_store):
+        assert run(in_memory_store.get_messages("none", user_id="u1")) == []
+        assert run(in_memory_store.get_history_dicts("none", user_id="u1")) == []
 
-    def test_save_and_retrieve(self, in_memory_store, sample_messages):
-        in_memory_store.save_messages("s1", sample_messages, "model", "provider", user_id="u1")
-        msgs = in_memory_store.get_messages("s1", user_id="u1")
+    def test_save_and_retrieve(self, run, in_memory_store, sample_messages):
+        run(in_memory_store.save_messages("s1", sample_messages, "model", "provider", user_id="u1"))
+        msgs = run(in_memory_store.get_messages("s1", user_id="u1"))
         assert len(msgs) == 2
         assert isinstance(msgs[0], HumanMessage)
         assert isinstance(msgs[1], AIMessage)
 
-    def test_save_triggers_archive_to_postgres(self, in_memory_store, sample_messages):
+    def test_save_triggers_archive_to_postgres(self, run, in_memory_store, sample_messages):
         """save_messages calls _archive_to_postgres for PostgreSQL persistence."""
         with patch("BE.session_store._archive_to_postgres") as mock_archive:
-            in_memory_store.save_messages("s1", sample_messages, "model", "prov", user_id="u1")
+            run(in_memory_store.save_messages("s1", sample_messages, "model", "prov", user_id="u1"))
             mock_archive.assert_called_once()
             args = mock_archive.call_args
             assert args[0][0] == "s1"  # session_id
@@ -118,37 +130,37 @@ class TestInMemoryStore:
             assert args[0][3] == "prov"
             assert args[0][4] == "u1"  # user_id
 
-    def test_get_history_dicts(self, in_memory_store, sample_messages):
-        in_memory_store.save_messages("s1", sample_messages, user_id="u1")
-        history = in_memory_store.get_history_dicts("s1", user_id="u1")
+    def test_get_history_dicts(self, run, in_memory_store, sample_messages):
+        run(in_memory_store.save_messages("s1", sample_messages, user_id="u1"))
+        history = run(in_memory_store.get_history_dicts("s1", user_id="u1"))
         assert len(history) == 2
         assert history[0]["role"] == "human"
         assert history[1]["thinking"] == "Let me think"
 
-    def test_clear(self, in_memory_store, sample_messages):
-        in_memory_store.save_messages("s1", sample_messages, user_id="u1")
-        in_memory_store.clear("s1", user_id="u1")
-        assert in_memory_store.get_messages("s1", user_id="u1") == []
+    def test_clear(self, run, in_memory_store, sample_messages):
+        run(in_memory_store.save_messages("s1", sample_messages, user_id="u1"))
+        run(in_memory_store.clear("s1", user_id="u1"))
+        assert run(in_memory_store.get_messages("s1", user_id="u1")) == []
 
-    def test_clear_nonexistent_no_error(self, in_memory_store):
-        in_memory_store.clear("nope", user_id="u1")  # should not raise
+    def test_clear_nonexistent_no_error(self, run, in_memory_store):
+        run(in_memory_store.clear("nope", user_id="u1"))  # should not raise
 
-    def test_user_isolation(self, in_memory_store, sample_messages):
+    def test_user_isolation(self, run, in_memory_store, sample_messages):
         """Same session_id, different user_ids can't see each other's data."""
-        in_memory_store.save_messages("s1", sample_messages, user_id="user-a")
-        assert in_memory_store.get_messages("s1", user_id="user-a") != []
-        assert in_memory_store.get_messages("s1", user_id="user-b") == []
-        assert in_memory_store.get_history_dicts("s1", user_id="user-b") == []
+        run(in_memory_store.save_messages("s1", sample_messages, user_id="user-a"))
+        assert run(in_memory_store.get_messages("s1", user_id="user-a")) != []
+        assert run(in_memory_store.get_messages("s1", user_id="user-b")) == []
+        assert run(in_memory_store.get_history_dicts("s1", user_id="user-b")) == []
 
-    def test_save_skip_archive_does_not_call_postgres(self, in_memory_store, sample_messages):
+    def test_save_skip_archive_does_not_call_postgres(self, run, in_memory_store, sample_messages):
         """save_messages with _skip_archive=True does not call _archive_to_postgres."""
         with patch("BE.session_store._archive_to_postgres") as mock_archive:
-            in_memory_store.save_messages(
+            run(in_memory_store.save_messages(
                 "s1", sample_messages, "model", "prov", user_id="u1", _skip_archive=True,
-            )
+            ))
             mock_archive.assert_not_called()
         # Messages should still be stored in memory
-        assert len(in_memory_store.get_messages("s1", user_id="u1")) == 2
+        assert len(run(in_memory_store.get_messages("s1", user_id="u1"))) == 2
 
 
 # --- RedisStore (mocked) ---
@@ -157,22 +169,21 @@ class TestInMemoryStore:
 class TestRedisStore:
     @pytest.fixture
     def mock_redis(self):
-        with patch("BE.session_store.redis_lib", create=True):
-            mock_client = MagicMock()
-            mock_client.ping.return_value = True
-            with patch("redis.Redis.from_url", return_value=mock_client):
-                store = RedisStore.__new__(RedisStore)
-                store._redis = mock_client
-                store._ttl_seconds = 30 * 86400
-                yield store, mock_client
+        mock_client = AsyncMock()
+        mock_client.ping.return_value = True
+        with patch("BE.session_store.aioredis.from_url", return_value=mock_client):
+            store = RedisStore.__new__(RedisStore)
+            store._redis = mock_client
+            store._ttl_seconds = 30 * 86400
+            yield store, mock_client
 
-    def test_get_messages_empty(self, mock_redis):
+    def test_get_messages_empty(self, run, mock_redis):
         store, client = mock_redis
         client.lrange.return_value = []
-        assert store.get_messages("s1", user_id="u1") == []
+        assert run(store.get_messages("s1", user_id="u1")) == []
         client.lrange.assert_called_once_with("session:u1:s1:messages", 0, -1)
 
-    def test_get_messages_deserializes(self, mock_redis):
+    def test_get_messages_deserializes(self, run, mock_redis):
         store, client = mock_redis
         client.lrange.return_value = [
             json.dumps(
@@ -192,17 +203,18 @@ class TestRedisStore:
                 }
             ),
         ]
-        msgs = store.get_messages("s1", user_id="u1")
+        msgs = run(store.get_messages("s1", user_id="u1"))
         assert len(msgs) == 2
         assert isinstance(msgs[0], HumanMessage)
         assert isinstance(msgs[1], AIMessage)
 
-    def test_save_messages_uses_pipeline(self, mock_redis, sample_messages):
+    def test_save_messages_uses_pipeline(self, run, mock_redis, sample_messages):
         store, client = mock_redis
         mock_pipe = MagicMock()
-        client.pipeline.return_value = mock_pipe
+        mock_pipe.execute = AsyncMock()
+        client.pipeline = MagicMock(return_value=mock_pipe)
 
-        store.save_messages("s1", sample_messages, "model", "ollama", user_id="u1")
+        run(store.save_messages("s1", sample_messages, "model", "ollama", user_id="u1"))
 
         client.pipeline.assert_called_once_with(transaction=True)
         mock_pipe.delete.assert_called_once_with("session:u1:s1:messages")
@@ -212,20 +224,20 @@ class TestRedisStore:
         assert mock_pipe.expire.call_count == 2
         mock_pipe.execute.assert_called_once()
 
-    def test_clear_deletes_both_keys(self, mock_redis):
+    def test_clear_deletes_both_keys(self, run, mock_redis):
         store, client = mock_redis
-        store.clear("s1", user_id="u1")
+        run(store.clear("s1", user_id="u1"))
         client.delete.assert_called_once_with(
             "session:u1:s1:meta", "session:u1:s1:messages"
         )
 
-    def test_get_history_dicts(self, mock_redis):
+    def test_get_history_dicts(self, run, mock_redis):
         store, client = mock_redis
         client.lrange.return_value = [
             json.dumps({"type": "human", "content": "q", "thinking": None}),
             json.dumps({"type": "ai", "content": "a", "thinking": "t"}),
         ]
-        history = store.get_history_dicts("s1", user_id="u1")
+        history = run(store.get_history_dicts("s1", user_id="u1"))
         assert len(history) == 2
         assert history[0] == {"role": "human", "content": "q"}
         assert history[1] == {"role": "ai", "content": "a", "thinking": "t"}
@@ -272,35 +284,35 @@ class TestCreateStore:
 
 
 class TestWarmSessionFromArchive:
-    def test_skips_when_store_already_has_messages(self):
+    def test_skips_when_store_already_has_messages(self, run):
         store = InMemoryStore()
-        store.save_messages("s1", [HumanMessage(content="hi")], user_id="u1")
+        run(store.save_messages("s1", [HumanMessage(content="hi")], user_id="u1"))
 
         mock_archive = AsyncMock()
         with patch("BE.archive_store.create_store", return_value=mock_archive):
-            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+            run(warm_session_from_archive(store, "s1", user_id="u1"))
         mock_archive.get_messages.assert_not_called()
 
-    def test_skips_when_archive_store_unavailable(self):
+    def test_skips_when_archive_store_unavailable(self, run):
         store = InMemoryStore()
         with patch("BE.archive_store.create_store", return_value=None):
-            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
-        assert store.get_messages("s1", user_id="u1") == []
+            run(warm_session_from_archive(store, "s1", user_id="u1"))
+        assert run(store.get_messages("s1", user_id="u1")) == []
 
-    def test_skips_when_archive_has_no_messages(self):
+    def test_skips_when_archive_has_no_messages(self, run):
         store = InMemoryStore()
         mock_archive = AsyncMock()
         mock_archive.get_messages.return_value = []
         with patch("BE.archive_store.create_store", return_value=mock_archive):
-            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
-        assert store.get_messages("s1", user_id="u1") == []
+            run(warm_session_from_archive(store, "s1", user_id="u1"))
+        assert run(store.get_messages("s1", user_id="u1")) == []
 
-    def test_loads_and_converts_archive_messages(self):
+    def test_loads_and_converts_archive_messages(self, run):
         store = InMemoryStore()
         mock_archive = AsyncMock()
         mock_archive.get_messages.return_value = [
             {
-                "role": "human",
+                "type": "human",
                 "content": "Hello",
                 "thinking": None,
                 "model": None,
@@ -309,7 +321,7 @@ class TestWarmSessionFromArchive:
                 "additional_kwargs": None,
             },
             {
-                "role": "ai",
+                "type": "ai",
                 "content": "Hi there!",
                 "thinking": "Let me think...",
                 "model": "gpt-4",
@@ -319,9 +331,9 @@ class TestWarmSessionFromArchive:
             },
         ]
         with patch("BE.archive_store.create_store", return_value=mock_archive):
-            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+            run(warm_session_from_archive(store, "s1", user_id="u1"))
 
-        messages = store.get_messages("s1", user_id="u1")
+        messages = run(store.get_messages("s1", user_id="u1"))
         assert len(messages) == 2
         assert isinstance(messages[0], HumanMessage)
         assert messages[0].content == "Hello"
@@ -329,13 +341,13 @@ class TestWarmSessionFromArchive:
         assert messages[1].content == "Hi there!"
         assert messages[1].additional_kwargs.get("thinking") == "Let me think..."
 
-    def test_warm_up_does_not_re_archive(self):
+    def test_warm_up_does_not_re_archive(self, run):
         """warm_session_from_archive must not re-archive data back to PostgreSQL."""
         store = InMemoryStore()
         mock_archive = AsyncMock()
         mock_archive.get_messages.return_value = [
             {
-                "role": "human",
+                "type": "human",
                 "content": "Hello",
                 "thinking": None,
                 "model": "gpt-4",
@@ -346,18 +358,18 @@ class TestWarmSessionFromArchive:
         ]
         with patch("BE.archive_store.create_store", return_value=mock_archive), \
              patch("BE.session_store._archive_to_postgres") as mock_pg:
-            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+            run(warm_session_from_archive(store, "s1", user_id="u1"))
             mock_pg.assert_not_called()
 
         # Messages should still be loaded into memory
-        assert len(store.get_messages("s1", user_id="u1")) == 1
+        assert len(run(store.get_messages("s1", user_id="u1"))) == 1
 
-    def test_preserves_user_isolation(self):
+    def test_preserves_user_isolation(self, run):
         store = InMemoryStore()
         mock_archive = AsyncMock()
         mock_archive.get_messages.return_value = [
             {
-                "role": "human",
+                "type": "human",
                 "content": "user1 message",
                 "thinking": None,
                 "model": None,
@@ -367,7 +379,7 @@ class TestWarmSessionFromArchive:
             },
         ]
         with patch("BE.archive_store.create_store", return_value=mock_archive):
-            asyncio.run(warm_session_from_archive(store, "s1", user_id="u1"))
+            run(warm_session_from_archive(store, "s1", user_id="u1"))
 
-        assert len(store.get_messages("s1", user_id="u1")) == 1
-        assert len(store.get_messages("s1", user_id="u2")) == 0
+        assert len(run(store.get_messages("s1", user_id="u1"))) == 1
+        assert len(run(store.get_messages("s1", user_id="u2"))) == 0

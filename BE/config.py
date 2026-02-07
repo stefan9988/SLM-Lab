@@ -89,28 +89,38 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Set LOG_LEVEL in environment so logger.py can read it before config is imported
-os.environ.setdefault("LOG_LEVEL", settings.LOG_LEVEL)
+_initialized = False
 
-from BE.logger import setup_logger
 
-_logger = setup_logger(__name__)
-_logger.info(
-    "Configuration loaded (model=%s, base_url=%s)",
-    settings.MODEL_NAME,
-    settings.OLLAMA_BASE_URL,
-)
+def init_config() -> None:
+    """Apply side effects: set env vars, configure logging and LangSmith.
 
-# Export OLLAMA_API_KEY so the ollama client picks it up for web search/fetch
-if settings.OLLAMA_API_KEY:
-    os.environ["OLLAMA_API_KEY"] = settings.OLLAMA_API_KEY
+    Safe to call multiple times; runs only once.
+    """
+    global _initialized
+    if _initialized:
+        return
+    _initialized = True
 
-# Export LangSmith settings to environment so LangChain picks them up
-if settings.LANGSMITH_TRACING:
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGSMITH_ENDPOINT
-    os.environ["LANGCHAIN_API_KEY"] = settings.LANGSMITH_API_KEY
-    os.environ["LANGCHAIN_PROJECT"] = settings.LANGSMITH_PROJECT
-    _logger.info("LangSmith tracing enabled (project=%s)", settings.LANGSMITH_PROJECT)
-else:
-    _logger.debug("LangSmith tracing disabled")
+    os.environ.setdefault("LOG_LEVEL", settings.LOG_LEVEL)
+
+    from BE.logger import setup_logger
+
+    _logger = setup_logger(__name__)
+    _logger.info(
+        "Configuration loaded (model=%s, base_url=%s)",
+        settings.MODEL_NAME,
+        settings.OLLAMA_BASE_URL,
+    )
+
+    if settings.OLLAMA_API_KEY:
+        os.environ["OLLAMA_API_KEY"] = settings.OLLAMA_API_KEY
+
+    if settings.LANGSMITH_TRACING:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGSMITH_ENDPOINT
+        os.environ["LANGCHAIN_API_KEY"] = settings.LANGSMITH_API_KEY
+        os.environ["LANGCHAIN_PROJECT"] = settings.LANGSMITH_PROJECT
+        _logger.info("LangSmith tracing enabled (project=%s)", settings.LANGSMITH_PROJECT)
+    else:
+        _logger.debug("LangSmith tracing disabled")

@@ -105,9 +105,9 @@ class TestPostgresArchiveStore:
         run(archive_store.save_messages("s1", msgs, {"model": "m", "provider": "p"}, user_id=TEST_USER_ID))
         result = run(archive_store.get_messages("s1", user_id=TEST_USER_ID))
         assert len(result) == 3
-        assert result[0]["role"] == "human"
+        assert result[0]["type"] == "human"
         assert result[0]["content"] == "message 0"
-        assert result[1]["role"] == "ai"
+        assert result[1]["type"] == "ai"
         assert result[1]["thinking"] == "thought"
 
     def test_get_messages_empty_session(self, run, archive_store):

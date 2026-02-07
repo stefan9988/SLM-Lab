@@ -3,7 +3,7 @@
 import json
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
@@ -14,11 +14,11 @@ from AI.tools import get_enabled_tools
 from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
 from BE.async_utils import init_loop
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
-from BE.session_store import warm_session_from_archive
 from BE.user_store import upsert_user
-from BE.config import _parse_comma_separated, settings
+from BE.config import _parse_comma_separated, init_config, settings
 from BE.logger import redact_url, setup_logger
 
+init_config()
 logger = setup_logger(__name__)
 
 __all__ = ["app"]
@@ -103,9 +103,23 @@ def process_files(
     return prompt, images, warnings
 
 
+_INSECURE_JWT_DEFAULTS = {"change-me-in-production", "change-me-to-a-random-secret"}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application startup")
+
+    if settings.JWT_SECRET_KEY in _INSECURE_JWT_DEFAULTS:
+        raise RuntimeError(
+            "JWT_SECRET_KEY is set to an insecure default. "
+            "Set a strong random secret via the JWT_SECRET_KEY environment variable."
+        )
+    if not settings.GOOGLE_CLIENT_ID:
+        logger.warning(
+            "GOOGLE_CLIENT_ID is empty — Google OAuth login will not work."
+        )
+
     init_loop()
     tools = get_enabled_tools(settings)
     tool_names = [t.name if hasattr(t, "name") else t.__name__ for t in tools]
@@ -217,7 +231,8 @@ async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get
         )
 
     agent = request.app.state.general_agent
-    response = agent.invoke(prompt, session_id=body.session_id, images=images or None, user_id=user.id)
+    await agent.warm_session(body.session_id, user_id=user.id)
+    response = await agent.invoke(prompt, session_id=body.session_id, images=images or None, user_id=user.id)
     logger.info(
         "POST /chat response (session_id=%s, length=%d)",
         body.session_id,
@@ -246,12 +261,12 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
         )
 
     agent = request.app.state.general_agent
-    await warm_session_from_archive(agent._store, body.session_id, user_id=user.id)
+    await agent.warm_session(body.session_id, user_id=user.id)
 
-    def generate():
+    async def generate():
         for warn in file_warnings:
             yield f"data: {json.dumps({'type': 'status', 'content': warn})}\n\n"
-        for event in agent.stream(
+        async for event in agent.stream(
             prompt, session_id=body.session_id, images=images or None, user_id=user.id
         ):
             yield f"data: {json.dumps(event)}\n\n"
@@ -270,8 +285,8 @@ async def get_history(
     """Retrieve conversation history for a session."""
     logger.info("GET /history (session_id=%s)", session_id)
     agent = request.app.state.general_agent
-    await warm_session_from_archive(agent._store, session_id, user_id=user.id)
-    history = agent.get_history(session_id=session_id, user_id=user.id)
+    await agent.warm_session(session_id, user_id=user.id)
+    history = await agent.get_history(session_id=session_id, user_id=user.id)
     logger.info("GET /history (session_id=%s, messages=%d)", session_id, len(history))
     return {"history": history}
 
@@ -285,7 +300,7 @@ async def clear_history(
     """Clear conversation history for a session."""
     logger.info("DELETE /history (session_id=%s)", session_id)
     agent = request.app.state.general_agent
-    agent.clear_history(session_id=session_id, user_id=user.id)
+    await agent.clear_history(session_id=session_id, user_id=user.id)
     return {"status": "cleared"}
 
 
@@ -314,7 +329,7 @@ async def list_archived_sessions(
 
 @app.get("/archive/sessions/{session_id}")
 async def get_archived_session(
-    session_id: str,
+    session_id: str = Path(max_length=128, pattern=SESSION_ID_PATTERN),
     store: PostgresArchiveStore = Depends(get_archive_store),
     user: UserInfo = Depends(get_current_user),
 ):
@@ -325,7 +340,7 @@ async def get_archived_session(
 
 @app.delete("/archive/sessions/{session_id}")
 async def delete_archived_session(
-    session_id: str,
+    session_id: str = Path(max_length=128, pattern=SESSION_ID_PATTERN),
     store: PostgresArchiveStore = Depends(get_archive_store),
     user: UserInfo = Depends(get_current_user),
 ):

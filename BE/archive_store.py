@@ -27,9 +27,12 @@ class PostgresArchiveStore:
         session_id: str,
         messages: list[dict[str, Any]],
         metadata: dict[str, str] | None = None,
-        user_id: str = "",
+        *,
+        user_id: str,
     ) -> None:
         """Upsert session and replace its messages."""
+        if not user_id:
+            raise ValueError("user_id is required for save_messages")
         metadata = metadata or {}
         now = datetime.now(timezone.utc)
 
@@ -76,19 +79,19 @@ class PostgresArchiveStore:
                     )
 
     async def get_messages(
-        self, session_id: str, user_id: str = ""
+        self, session_id: str, *, user_id: str
     ) -> list[dict[str, Any]]:
         """Retrieve full message history for a session."""
+        if not user_id:
+            raise ValueError("user_id is required for get_messages")
         async with self._factory() as session:
-            # Verify ownership if user_id provided
-            if user_id:
-                ownership = await session.execute(
-                    select(Session.id).where(
-                        Session.id == session_id, Session.user_id == user_id
-                    )
+            ownership = await session.execute(
+                select(Session.id).where(
+                    Session.id == session_id, Session.user_id == user_id
                 )
-                if ownership.scalar_one_or_none() is None:
-                    return []
+            )
+            if ownership.scalar_one_or_none() is None:
+                return []
 
             result = await session.execute(
                 select(Message)
@@ -98,7 +101,7 @@ class PostgresArchiveStore:
             rows = result.scalars().all()
             return [
                 {
-                    "role": m.role,
+                    "type": m.role,
                     "content": m.content,
                     "thinking": m.thinking,
                     "model": m.model,
@@ -109,12 +112,12 @@ class PostgresArchiveStore:
                 for m in rows
             ]
 
-    async def get_all_sessions(self, user_id: str = "") -> list[dict[str, Any]]:
+    async def get_all_sessions(self, *, user_id: str) -> list[dict[str, Any]]:
         """List all archived sessions with metadata, filtered by user."""
+        if not user_id:
+            raise ValueError("user_id is required for get_all_sessions")
         async with self._factory() as session:
-            query = select(Session).order_by(Session.updated_at.desc())
-            if user_id:
-                query = query.where(Session.user_id == user_id)
+            query = select(Session).where(Session.user_id == user_id).order_by(Session.updated_at.desc())
             result = await session.execute(query)
             rows = result.scalars().all()
             return [
@@ -129,9 +132,11 @@ class PostgresArchiveStore:
             ]
 
     async def get_all_sessions_with_titles(
-        self, user_id: str = ""
+        self, *, user_id: str
     ) -> list[dict[str, Any]]:
         """List sessions with their first human message as the title."""
+        if not user_id:
+            raise ValueError("user_id is required for get_all_sessions_with_titles")
         # Subquery: first human message id per session
         first_msg_id = (
             select(func.min(Message.id))
@@ -147,10 +152,9 @@ class PostgresArchiveStore:
                 Message.content.label("first_content"),
             )
             .outerjoin(Message, Message.id == first_msg_id)
+            .where(Session.user_id == user_id)
             .order_by(Session.updated_at.desc())
         )
-        if user_id:
-            query = query.where(Session.user_id == user_id)
 
         async with self._factory() as session:
             result = await session.execute(query)
@@ -166,14 +170,15 @@ class PostgresArchiveStore:
                 for row in rows
             ]
 
-    async def delete_session(self, session_id: str, user_id: str = "") -> bool:
+    async def delete_session(self, session_id: str, *, user_id: str) -> bool:
         """Delete an archived session and its messages."""
+        if not user_id:
+            raise ValueError("user_id is required for delete_session")
         async with self._factory() as session:
             async with session.begin():
-                # Delete session with ownership filter first
-                delete_sess = delete(Session).where(Session.id == session_id)
-                if user_id:
-                    delete_sess = delete_sess.where(Session.user_id == user_id)
+                delete_sess = delete(Session).where(
+                    Session.id == session_id, Session.user_id == user_id
+                )
                 result = await session.execute(delete_sess)
                 if result.rowcount == 0:
                     return False
