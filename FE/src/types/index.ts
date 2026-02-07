@@ -5,12 +5,18 @@ export interface FileAttachment {
   size: number;
 }
 
+export interface ToolUsage {
+  name: string;
+  args: Record<string, unknown>;
+}
+
 export interface Message {
   id?: string;
   role: 'human' | 'ai';
   content: string | Array<{ type?: string; text?: string }>;
   files?: FileAttachment[];
   thinking?: string;
+  tools_used?: ToolUsage[];
 }
 
 export interface Conversation {
@@ -19,7 +25,7 @@ export interface Conversation {
 }
 
 export interface SSEEvent {
-  type: 'token' | 'status' | 'thinking';
+  type: 'token' | 'status' | 'thinking' | 'tool_use';
   content: string;
 }
 

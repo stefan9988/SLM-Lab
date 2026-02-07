@@ -94,6 +94,9 @@ def _history_entry_from_dict(d: dict) -> dict | None:
     entry: dict = {"role": d["type"], "content": content}
     if d.get("thinking"):
         entry["thinking"] = d["thinking"]
+    tools_used = d.get("additional_kwargs", {}).get("tools_used")
+    if tools_used:
+        entry["tools_used"] = tools_used
     return entry
 
 

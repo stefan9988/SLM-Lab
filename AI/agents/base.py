@@ -1,5 +1,6 @@
 """LangGraph-based reactive agent wrapper."""
 
+import json
 from typing import AsyncIterator, List, Optional
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -93,6 +94,8 @@ class Agent:
             chunk_count = 0
             thinking_started = False
             tool_messages = []
+            pending_tool_calls = {}   # {index: {"name": str, "args": str}}
+            completed_tools = []      # [{"name": str, "args": dict}, ...]
             async for stream_mode, chunk in self._agent.astream(
                 {"messages": messages}, stream_mode=["messages", "custom"]
             ):
@@ -113,23 +116,41 @@ class Agent:
 
                         if msg_chunk.tool_call_chunks:
                             for tc in msg_chunk.tool_call_chunks:
+                                idx = tc.get("index", 0)
                                 if tc.get("name"):
+                                    pending_tool_calls[idx] = {"name": tc["name"], "args": ""}
                                     logger.info("Tool call: %s", tc["name"])
                                     yield {
                                         "type": "status",
                                         "content": f"Calling tool: {tc['name']}",
                                     }
+                                if tc.get("args") and idx in pending_tool_calls:
+                                    pending_tool_calls[idx]["args"] += tc["args"]
                         elif msg_chunk.content:
                             full_response.append(msg_chunk.content)
                             chunk_count += 1
                             yield {"type": "token", "content": msg_chunk.content}
                     elif isinstance(msg_chunk, ToolMessage):
                         tool_messages.append(msg_chunk)
+                        for idx in sorted(pending_tool_calls):
+                            info = pending_tool_calls[idx]
+                            try:
+                                args = json.loads(info["args"]) if info["args"] else {}
+                            except json.JSONDecodeError:
+                                args = {}
+                            completed_tools.append({"name": info["name"], "args": args})
+                            yield {
+                                "type": "tool_use",
+                                "content": json.dumps({"name": info["name"], "args": args}),
+                            }
+                        pending_tool_calls.clear()
                         yield {"type": "status", "content": "Tool returned result"}
 
             ai_msg = AIMessage(content="".join(full_response))
             if full_thinking:
                 ai_msg.additional_kwargs["thinking"] = full_thinking
+            if completed_tools:
+                ai_msg.additional_kwargs["tools_used"] = completed_tools
             all_messages = list(messages) + tool_messages + [ai_msg]
             await self._save_history(all_messages, session_id, user_id=user_id)
             logger.info("stream complete (chunks=%d)", chunk_count)

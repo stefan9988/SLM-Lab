@@ -72,6 +72,14 @@ export function useChat(sessionId: string) {
               next[next.length - 1] = { ...aiMsg };
               return next;
             });
+          } else if (event.type === 'tool_use') {
+            const toolInfo = JSON.parse(event.content);
+            aiMsg.tools_used = [...(aiMsg.tools_used || []), toolInfo];
+            setMessages((prev) => {
+              const next = [...prev];
+              next[next.length - 1] = { ...aiMsg };
+              return next;
+            });
           } else if (event.type === 'status') {
             logger.debug('[useChat] Tool status:', event.content);
             setToolStatus(event.content);

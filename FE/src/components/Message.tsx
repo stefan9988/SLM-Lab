@@ -76,7 +76,7 @@ function CopyButton({ code }: { code: string }) {
   );
 }
 
-export default function Message({ role, content, files, thinking, isThinking }: Props) {
+export default function Message({ role, content, files, thinking, tools_used, isThinking }: Props) {
   const isUser = role === 'human';
   // Normalize content: multimodal format (array of blocks) → plain string
   const normalizedContent = Array.isArray(content)
@@ -86,6 +86,7 @@ export default function Message({ role, content, files, thinking, isThinking }: 
         .join(' ')
     : content;
   const [showThinking, setShowThinking] = useState(false);
+  const [showTools, setShowTools] = useState(false);
   const thinkingRef = useRef<HTMLDivElement>(null);
   const thinkingUserScrolledUp = useRef(false);
   const thinkingLastScrollTop = useRef(0);
@@ -173,6 +174,42 @@ export default function Message({ role, content, files, thinking, isThinking }: 
             {showThinking && (
               <div className="mt-1 pl-3 border-l-2 border-[#334155] text-sm text-[#94a3b8] italic whitespace-pre-wrap max-h-60 overflow-y-auto">
                 {thinking}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tools used: collapsible summary */}
+        {!isUser && tools_used && tools_used.length > 0 && (
+          <div className="mb-2">
+            <button
+              onClick={() => setShowTools((v) => !v)}
+              className="text-xs text-[#94a3b8] hover:text-[#e2e8f0] flex items-center gap-1 transition-colors"
+            >
+              <span
+                className="inline-block transition-transform duration-200"
+                style={{ transform: showTools ? 'rotate(90deg)' : 'rotate(0deg)' }}
+              >
+                &#9654;
+              </span>
+              Used {tools_used.length} tool{tools_used.length !== 1 ? 's' : ''}
+            </button>
+            {showTools && (
+              <div className="mt-1 pl-3 border-l-2 border-[#334155] text-sm text-[#94a3b8] max-h-60 overflow-y-auto">
+                {tools_used.map((tool, i) => (
+                  <div key={i} className="mb-1.5 last:mb-0">
+                    <span className="font-semibold text-[#e2e8f0]">{tool.name}</span>
+                    {Object.keys(tool.args).length > 0 && (
+                      <div className="pl-3 mt-0.5">
+                        {Object.entries(tool.args).map(([key, value]) => (
+                          <div key={key} className="text-xs text-[#64748b]">
+                            {key}: <span className="text-[#94a3b8]">{typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>

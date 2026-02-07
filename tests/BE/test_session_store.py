@@ -70,6 +70,15 @@ class TestMessageSerialization:
         assert isinstance(restored, AIMessage)
         assert restored.additional_kwargs["thinking"] == "reason"
 
+    def test_ai_message_with_tools_used_round_trip(self):
+        tools = [{"name": "search", "args": {"query": "test"}}]
+        msg = AIMessage(content="answer", additional_kwargs={"tools_used": tools})
+        d = _msg_to_dict(msg)
+        assert d["additional_kwargs"]["tools_used"] == tools
+        restored = _dict_to_message(d)
+        assert isinstance(restored, AIMessage)
+        assert restored.additional_kwargs["tools_used"] == tools
+
     def test_unknown_type_returns_none(self):
         d = {"type": "tool", "content": "x", "thinking": None, "additional_kwargs": {}}
         assert _dict_to_message(d) is None
@@ -101,6 +110,32 @@ class TestHistoryEntryFromDict:
     def test_tool_type_skipped(self):
         d = {"type": "tool", "content": "result", "thinking": None}
         assert _history_entry_from_dict(d) is None
+
+    def test_ai_entry_with_tools_used(self):
+        tools = [{"name": "brave_search", "args": {"query": "test"}}]
+        d = {
+            "type": "ai",
+            "content": "result",
+            "thinking": None,
+            "additional_kwargs": {"tools_used": tools},
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["tools_used"] == tools
+
+    def test_ai_entry_without_tools_used(self):
+        d = {
+            "type": "ai",
+            "content": "result",
+            "thinking": None,
+            "additional_kwargs": {},
+        }
+        entry = _history_entry_from_dict(d)
+        assert "tools_used" not in entry
+
+    def test_ai_entry_no_additional_kwargs_key(self):
+        d = {"type": "ai", "content": "result", "thinking": None}
+        entry = _history_entry_from_dict(d)
+        assert "tools_used" not in entry
 
 
 # --- InMemoryStore ---
