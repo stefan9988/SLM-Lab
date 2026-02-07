@@ -25,7 +25,11 @@ def _get_repl() -> PythonREPLTool:
 
 @tool
 def python_repl_tool(code: str) -> str:
-    """Execute Python code in a REPL. Use this to run Python snippets and return their output."""
+    """Execute Python code in a REPL and return stdout.
+
+        IMPORTANT:
+        - This tool ONLY returns what is printed to stdout.
+        - If you want to see a result, you MUST use print()."""
     logger.info("python_repl_tool invoked (code=%s)", code[:100])
     writer = get_stream_writer()
     writer("Executing Python code")
