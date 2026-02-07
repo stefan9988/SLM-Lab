@@ -35,7 +35,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     return saved.length > 0 ? saved[0].id : uuidv4();
   });
 
-  const { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, clearChat, stopStreaming } = useChat(activeId);
+  const { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, stopStreaming } = useChat(activeId);
 
   useEffect(() => {
     loadHistory();
@@ -98,10 +98,6 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     [activeId],
   );
 
-  const handleClear = useCallback(() => {
-    clearChat();
-  }, [clearChat]);
-
   return (
     <div className="flex h-screen bg-[#0f172a] text-[#e2e8f0]">
       <Sidebar
@@ -110,7 +106,6 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
         onSelect={handleSelect}
         onNew={handleNew}
         onDelete={handleDelete}
-        onClear={handleClear}
         user={user}
         onLogout={onLogout}
       />

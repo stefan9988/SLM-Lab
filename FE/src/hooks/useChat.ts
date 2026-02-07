@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { Message, FileAttachment } from '../types';
-import { streamChat, fetchHistory, clearHistory } from '../utils/api';
+import { streamChat, fetchHistory } from '../utils/api';
 import logger from '../utils/logger';
 
 export function useChat(sessionId: string) {
@@ -100,14 +100,5 @@ export function useChat(sessionId: string) {
     [sessionId, streaming],
   );
 
-  const clearChat = useCallback(async () => {
-    try {
-      await clearHistory(sessionId);
-    } catch (err) {
-      logger.error('[useChat] Failed to clear history:', err);
-    }
-    setMessages([]);
-  }, [sessionId]);
-
-  return { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, clearChat, stopStreaming };
+  return { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, stopStreaming };
 }

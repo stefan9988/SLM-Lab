@@ -7,12 +7,11 @@ interface Props {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
-  onClear: () => void;
   user?: AuthUser | null;
   onLogout?: () => void;
 }
 
-export default function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onClear, user, onLogout }: Props) {
+export default function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, user, onLogout }: Props) {
   return (
     <aside className="w-64 bg-[#16213e] border-r border-[#334155] flex flex-col h-full">
       <div className="p-4 border-b border-[#334155]">
@@ -65,14 +64,6 @@ export default function Sidebar({ conversations, activeId, onSelect, onNew, onDe
           )}
         </div>
       )}
-      <div className="p-3 border-t border-[#334155]">
-        <button
-          className="w-full rounded-lg border border-[#334155] text-[#64748b] py-1.5 text-sm hover:text-[#ef4444] hover:bg-[#ef4444]/10 transition-colors duration-200"
-          onClick={onClear}
-        >
-          Clear Chat
-        </button>
-      </div>
     </aside>
   );
 }
