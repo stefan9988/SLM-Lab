@@ -7,6 +7,7 @@ export function useChat(sessionId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [toolStatus, setToolStatus] = useState<string | null>(null);
+  const [thinkingActive, setThinkingActive] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const loadHistory = useCallback(async () => {
@@ -26,6 +27,7 @@ export function useChat(sessionId: string) {
     abortRef.current = null;
     setStreaming(false);
     setToolStatus(null);
+    setThinkingActive(false);
   }, []);
 
   const sendMessage = useCallback(
@@ -40,6 +42,7 @@ export function useChat(sessionId: string) {
       setMessages((prev) => [...prev, userMsg]);
       setStreaming(true);
       setToolStatus(null);
+      setThinkingActive(false);
 
       const aiMsg: Message = { id: crypto.randomUUID(), role: 'ai', content: '' };
       setMessages((prev) => [...prev, { ...aiMsg }]);
@@ -53,6 +56,7 @@ export function useChat(sessionId: string) {
           if (event.type === 'token') {
             aiMsg.content += event.content;
             setToolStatus(null);
+            setThinkingActive(false);
             setMessages((prev) => {
               const next = [...prev];
               next[next.length - 1] = { ...aiMsg };
@@ -62,6 +66,7 @@ export function useChat(sessionId: string) {
             logger.debug('[useChat] Received thinking block');
             aiMsg.thinking = (aiMsg.thinking || '') + event.content;
             setToolStatus(null);
+            setThinkingActive(true);
             setMessages((prev) => {
               const next = [...prev];
               next[next.length - 1] = { ...aiMsg };
@@ -70,6 +75,7 @@ export function useChat(sessionId: string) {
           } else if (event.type === 'status') {
             logger.debug('[useChat] Tool status:', event.content);
             setToolStatus(event.content);
+            setThinkingActive(false);
           }
         }
       } catch (err) {
@@ -88,6 +94,7 @@ export function useChat(sessionId: string) {
         abortRef.current = null;
         setStreaming(false);
         setToolStatus(null);
+        setThinkingActive(false);
       }
     },
     [sessionId, streaming],
@@ -102,5 +109,5 @@ export function useChat(sessionId: string) {
     setMessages([]);
   }, [sessionId]);
 
-  return { messages, streaming, toolStatus, sendMessage, loadHistory, clearChat, stopStreaming };
+  return { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, clearChat, stopStreaming };
 }

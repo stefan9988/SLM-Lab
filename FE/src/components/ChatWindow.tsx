@@ -7,6 +7,7 @@ interface Props {
   messages: MessageType[];
   toolStatus: string | null;
   streaming?: boolean;
+  thinkingActive?: boolean;
   onSend: (text: string) => void;
 }
 
@@ -16,7 +17,7 @@ const suggestions = [
   'Help me configure a new experiment',
 ];
 
-export default function ChatWindow({ messages, toolStatus, streaming, onSend }: Props) {
+export default function ChatWindow({ messages, toolStatus, streaming, thinkingActive, onSend }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const userScrolledUp = useRef(false);
   const lastScrollTop = useRef(0);
@@ -67,7 +68,7 @@ export default function ChatWindow({ messages, toolStatus, streaming, onSend }: 
       )}
       {messages.map((msg, i) => {
         const isLastAi = msg.role === 'ai' && i === messages.length - 1;
-        const isThinking = isLastAi && streaming && msg.thinking && !msg.content;
+        const isThinking = isLastAi && streaming && thinkingActive && !!msg.thinking;
         return <Message key={msg.id ?? i} {...msg} isThinking={!!isThinking} />;
       })}
       {toolStatus && <ToolNotification status={toolStatus} />}

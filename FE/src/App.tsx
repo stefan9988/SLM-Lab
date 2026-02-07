@@ -35,7 +35,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     return saved.length > 0 ? saved[0].id : uuidv4();
   });
 
-  const { messages, streaming, toolStatus, sendMessage, loadHistory, clearChat, stopStreaming } = useChat(activeId);
+  const { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, clearChat, stopStreaming } = useChat(activeId);
 
   useEffect(() => {
     loadHistory();
@@ -115,7 +115,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
         onLogout={onLogout}
       />
       <main className="flex-1 flex flex-col">
-        <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} onSend={handleSend} />
+        <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} thinkingActive={thinkingActive} onSend={handleSend} />
         <MessageInput onSend={handleSend} disabled={streaming} streaming={streaming} onStop={stopStreaming} />
       </main>
     </div>
