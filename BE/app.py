@@ -152,7 +152,7 @@ async def lifespan(app: FastAPI):
     logger.info("  Ollama:     %s", settings.OLLAMA_BASE_URL)
     logger.info("  CORS origins: %s", settings.CORS_ALLOW_ORIGINS)
     if settings.REDIS_ENABLED:
-        logger.info("  Redis:      %s", settings.REDIS_URL)
+        logger.info("  Redis:      %s", redact_url(settings.REDIS_URL))
     if settings.POSTGRES_ENABLED:
         logger.info("  PostgreSQL: %s", redact_url(settings.POSTGRES_URL))
     logger.info("=" * 60)

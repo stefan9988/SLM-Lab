@@ -8,7 +8,7 @@ import redis.asyncio as aioredis
 import redis.exceptions as redis_exceptions
 
 from BE.async_utils import schedule_background_task
-from BE.logger import setup_logger
+from BE.logger import redact_url, setup_logger
 
 logger = setup_logger(__name__)
 
@@ -258,7 +258,7 @@ class RedisStore(SessionStore):
             socket_timeout=5.0,
         )
         self._ttl_seconds = ttl_days * 86400
-        logger.info("RedisStore connected to %s", redis_url)
+        logger.info("RedisStore connected to %s", redact_url(redis_url))
 
     def _meta_key(self, session_id: str, user_id: str = "") -> str:
         return f"session:{user_id}:{session_id}:meta"

@@ -434,19 +434,19 @@ class TestCreateStore:
     @patch("BE.config.settings")
     def test_enabled_returns_redis(self, mock_settings, mock_redis_cls):
         mock_settings.REDIS_ENABLED = True
-        mock_settings.REDIS_URL = "redis://localhost:6379/0"
+        mock_settings.REDIS_URL = "redis://default:slmlab@localhost:6379/0"
         mock_settings.REDIS_SESSION_TTL_DAYS = 30
         mock_redis_cls.return_value = MagicMock(spec=RedisStore)
         store = create_store()
         mock_redis_cls.assert_called_once_with(
-            redis_url="redis://localhost:6379/0", ttl_days=30
+            redis_url="redis://default:slmlab@localhost:6379/0", ttl_days=30
         )
 
     @patch("BE.session_store.RedisStore", side_effect=ConnectionError("refused"))
     @patch("BE.config.settings")
     def test_fallback_on_connection_error(self, mock_settings, mock_redis_cls):
         mock_settings.REDIS_ENABLED = True
-        mock_settings.REDIS_URL = "redis://localhost:6379/0"
+        mock_settings.REDIS_URL = "redis://default:slmlab@localhost:6379/0"
         mock_settings.REDIS_SESSION_TTL_DAYS = 30
         store = create_store()
         assert isinstance(store, InMemoryStore)

@@ -5,7 +5,9 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-slmlab}
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-slmlab}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

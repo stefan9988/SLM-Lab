@@ -56,7 +56,8 @@ class Settings(BaseSettings):
     BRAVE_SEARCH_API_KEY: str = "YOUR_BRAVE_SEARCH_API_KEY_HERE"
 
     # Redis settings
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str = "redis://default:slmlab@localhost:6379/0"
+    REDIS_PASSWORD: str = "slmlab"
     REDIS_ENABLED: bool = True
     REDIS_SESSION_TTL_DAYS: int = 30
 
