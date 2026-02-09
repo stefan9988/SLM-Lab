@@ -87,15 +87,15 @@ def _dict_to_message(d: dict):
     return None
 
 
-_ATTACHED_IMAGE_RE = None
+_ATTACHED_FILE_RE = None
 
 
-def _get_attached_image_re():
-    global _ATTACHED_IMAGE_RE
-    if _ATTACHED_IMAGE_RE is None:
+def _get_attached_file_re():
+    global _ATTACHED_FILE_RE
+    if _ATTACHED_FILE_RE is None:
         import re
-        _ATTACHED_IMAGE_RE = re.compile(r"\[Attached image: [^\]]+\]\n*")
-    return _ATTACHED_IMAGE_RE
+        _ATTACHED_FILE_RE = re.compile(r"\[Attached (?:image|file): [^\]]+\]\n*")
+    return _ATTACHED_FILE_RE
 
 
 def _history_entry_from_dict(d: dict) -> dict | None:
@@ -124,11 +124,14 @@ def _history_entry_from_dict(d: dict) -> dict | None:
     file_attachments = additional.get("file_attachments")
 
     if file_attachments and isinstance(content, str):
-        content = _get_attached_image_re().sub("", content).strip()
+        content = _get_attached_file_re().sub("", content).strip()
 
     entry: dict = {"role": d["type"], "content": content}
     if file_attachments:
-        entry["files"] = [{"name": f["name"], "type": f["type"]} for f in file_attachments]
+        entry["files"] = [
+            {k: v for k, v in f.items() if k in ("name", "type", "file_id")}
+            for f in file_attachments
+        ]
     if d.get("thinking"):
         entry["thinking"] = d["thinking"]
     tools_used = additional.get("tools_used")

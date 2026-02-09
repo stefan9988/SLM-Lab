@@ -255,6 +255,80 @@ class TestHistoryEntryFromDict:
         assert entry["content"] == "hello"
         assert "files" not in entry
 
+    def test_human_entry_with_attached_file_text_stripped(self):
+        """[Attached file: ...] prefix is stripped from content on reload."""
+        file_meta = [{"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-123"}]
+        d = {
+            "type": "human",
+            "content": "[Attached file: doc.pdf (file_id: uuid-123)]\n\nsummarize",
+            "thinking": None,
+            "additional_kwargs": {"file_attachments": file_meta},
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["content"] == "summarize"
+        assert "[Attached file:" not in entry["content"]
+        assert len(entry["files"]) == 1
+
+    def test_human_entry_with_file_id_preserved(self):
+        """file_id from file_attachments is preserved in the files list."""
+        file_meta = [{"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-456"}]
+        d = {
+            "type": "human",
+            "content": "summarize",
+            "thinking": None,
+            "additional_kwargs": {"file_attachments": file_meta},
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["files"] == [{"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-456"}]
+
+    def test_human_entry_mixed_image_and_file_stripped(self):
+        """Both [Attached image: ...] and [Attached file: ...] prefixes are stripped."""
+        file_meta = [
+            {"name": "photo.png", "type": "image/png"},
+            {"name": "notes.txt", "type": "text/plain", "file_id": "uuid-789"},
+        ]
+        d = {
+            "type": "human",
+            "content": (
+                "[Attached image: photo.png]\n\n"
+                "[Attached file: notes.txt (file_id: uuid-789)]\n\n"
+                "describe both"
+            ),
+            "thinking": None,
+            "additional_kwargs": {"file_attachments": file_meta},
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["content"] == "describe both"
+        assert "[Attached image:" not in entry["content"]
+        assert "[Attached file:" not in entry["content"]
+        assert len(entry["files"]) == 2
+
+    def test_human_entry_content_not_stored_stripped(self):
+        """[Attached file: X (content not stored)] is also stripped."""
+        file_meta = [{"name": "big.bin", "type": "application/octet-stream"}]
+        d = {
+            "type": "human",
+            "content": "[Attached file: big.bin (content not stored)]\n\ncheck this",
+            "thinking": None,
+            "additional_kwargs": {"file_attachments": file_meta},
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["content"] == "check this"
+        assert "[Attached file:" not in entry["content"]
+
+    def test_human_entry_file_without_file_id_omits_key(self):
+        """Files without file_id don't get a file_id key in the output."""
+        file_meta = [{"name": "photo.png", "type": "image/png"}]
+        d = {
+            "type": "human",
+            "content": "describe",
+            "thinking": None,
+            "additional_kwargs": {"file_attachments": file_meta},
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["files"] == [{"name": "photo.png", "type": "image/png"}]
+        assert "file_id" not in entry["files"][0]
+
     def test_human_entry_image_only_no_message(self):
         """When user uploads image(s) without a message, content is the fallback text."""
         file_meta = [{"name": "pic.png", "type": "image/png"}]
