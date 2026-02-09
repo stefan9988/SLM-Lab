@@ -3,6 +3,7 @@ export interface FileAttachment {
   type: string;
   content?: string;
   size?: number;
+  file_id?: string;
 }
 
 export interface ToolUsage {

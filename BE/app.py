@@ -16,6 +16,7 @@ from BE.async_utils import init_loop, shutdown_tasks
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
 from BE.user_store import upsert_user
 from BE.config import _parse_comma_separated, init_config, settings
+from BE.file_store import save_file
 from BE.logger import redact_url, setup_logger
 
 init_config()
@@ -54,15 +55,18 @@ def get_archive_store() -> PostgresArchiveStore:
     return store
 
 
-def build_prompt_with_files(
-    message: str, files: list[FileAttachment]
+async def build_prompt_with_files(
+    message: str,
+    files: list[FileAttachment],
+    user_id: str,
+    session_id: str | None = None,
 ) -> tuple[str, list[dict], list[dict]]:
     """Process file attachments and return (augmented_prompt, images_list, file_meta).
 
-    Only image files are processed (kept as multimodal data URLs).
-    Non-image files (text, PDF, etc.) are silently skipped.
-    ``file_meta`` contains lightweight metadata (name, type) for each image
-    so it can be persisted on the message and restored after a page reload.
+    Image files are kept as multimodal data URLs.
+    Non-image files are saved to PostgreSQL and referenced by UUID.
+    ``file_meta`` contains lightweight metadata (name, type, and optionally
+    file_id) so it can be persisted on the message and restored after reload.
     """
     text_parts: list[str] = []
     images: list[dict] = []
@@ -75,6 +79,21 @@ def build_prompt_with_files(
             images.append({"url": f.content})
             text_parts.append(f"[Attached image: {f.name}]")
             file_meta.append({"name": f.name, "type": f.type})
+        else:
+            file_id = await save_file(
+                original_name=f.name,
+                mime_type=mime,
+                data_url_content=f.content,
+                size_bytes=f.size,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            if file_id:
+                text_parts.append(f"[Attached file: {f.name} (file_id: {file_id})]")
+                file_meta.append({"name": f.name, "type": f.type, "file_id": file_id})
+            else:
+                text_parts.append(f"[Attached file: {f.name} (content not stored)]")
+                file_meta.append({"name": f.name, "type": f.type})
 
     augmented = message
     if not message.strip() and text_parts:
@@ -89,8 +108,11 @@ def build_prompt_with_files(
     return augmented, images, file_meta
 
 
-def process_files(
-    message: str, files: list[FileAttachment] | None
+async def process_files(
+    message: str,
+    files: list[FileAttachment] | None,
+    user_id: str,
+    session_id: str | None = None,
 ) -> tuple[str, list[dict], list[dict]]:
     """Validate file sizes and build augmented prompt.
 
@@ -102,7 +124,9 @@ def process_files(
     total_size = sum(f.size for f in files)
     if total_size > MAX_TOTAL_FILE_SIZE:
         raise FileSizeLimitExceeded()
-    prompt, images, file_attachments = build_prompt_with_files(message, files)
+    prompt, images, file_attachments = await build_prompt_with_files(
+        message, files, user_id=user_id, session_id=session_id
+    )
     logger.info("Augmented prompt length: %d chars", len(prompt))
     return prompt, images, file_attachments
 
@@ -233,7 +257,9 @@ async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get
     )
 
     try:
-        prompt, images, file_attachments = process_files(body.message, body.files)
+        prompt, images, file_attachments = await process_files(
+            body.message, body.files, user_id=user.id, session_id=body.session_id
+        )
     except FileSizeLimitExceeded:
         return JSONResponse(
             status_code=413,
@@ -269,7 +295,9 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
     logger.info("Files received: %d", len(body.files) if body.files else 0)
 
     try:
-        prompt, images, file_attachments = process_files(body.message, body.files)
+        prompt, images, file_attachments = await process_files(
+            body.message, body.files, user_id=user.id, session_id=body.session_id
+        )
     except FileSizeLimitExceeded:
         return JSONResponse(
             status_code=413,

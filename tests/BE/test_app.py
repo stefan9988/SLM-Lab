@@ -1,5 +1,7 @@
 """Tests for BE.app FastAPI endpoints."""
 
+import asyncio
+import base64
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,27 +17,47 @@ async def _async_gen(items):
         yield item
 
 
+@pytest.fixture
+def event_loop():
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture
+def run(event_loop):
+    """Helper to run coroutines in the test event loop."""
+    return event_loop.run_until_complete
+
+
 # ── build_prompt_with_files unit tests ──────────────────────────────────────
 
 
 class TestBuildPromptWithFiles:
-    def test_image_file_added_to_images(self):
+    @patch("BE.app.save_file", new_callable=AsyncMock, return_value=None)
+    def test_image_file_added_to_images(self, _mock_save, run):
         data_url = "data:image/png;base64,iVBOR"
         f = FileAttachment(name="pic.png", type="image/png", content=data_url, size=10)
-        prompt, images, file_meta = build_prompt_with_files("describe", [f])
+        prompt, images, file_meta = run(
+            build_prompt_with_files("describe", [f], user_id="u1")
+        )
         assert len(images) == 1
         assert images[0]["url"] == data_url
         assert prompt.endswith("describe")
         assert file_meta == [{"name": "pic.png", "type": "image/png"}]
 
-    def test_no_files_returns_original_message(self):
-        prompt, images, file_meta = build_prompt_with_files("hello", [])
+    @patch("BE.app.save_file", new_callable=AsyncMock, return_value=None)
+    def test_no_files_returns_original_message(self, _mock_save, run):
+        prompt, images, file_meta = run(
+            build_prompt_with_files("hello", [], user_id="u1")
+        )
         assert prompt == "hello"
         assert images == []
         assert file_meta == []
 
-    def test_non_image_file_is_ignored(self):
-        """Non-image files (text, PDF, etc.) should be silently skipped."""
+    @patch("BE.app.save_file", new_callable=AsyncMock, return_value="uuid-123")
+    def test_non_image_file_is_saved_and_referenced(self, mock_save, run):
+        """Non-image files should be saved to DB and referenced by file_id."""
         text_file = FileAttachment(
             name="data.csv",
             type="text/csv",
@@ -48,35 +70,106 @@ class TestBuildPromptWithFiles:
             content="data:application/pdf;base64,ZmFrZQ==",
             size=50,
         )
-        prompt, images, file_meta = build_prompt_with_files(
-            "summarize", [text_file, pdf_file]
+        prompt, images, file_meta = run(
+            build_prompt_with_files(
+                "summarize", [text_file, pdf_file], user_id="u1", session_id="s1"
+            )
         )
-        assert prompt == "summarize"
         assert images == []
-        assert file_meta == []
+        assert "file_id: uuid-123" in prompt
+        assert "[Attached file: data.csv" in prompt
+        assert "[Attached file: doc.pdf" in prompt
+        assert len(file_meta) == 2
+        assert file_meta[0] == {"name": "data.csv", "type": "text/csv", "file_id": "uuid-123"}
+        assert file_meta[1] == {"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-123"}
+        assert mock_save.call_count == 2
 
-    def test_multiple_images_returns_metadata(self):
+    @patch("BE.app.save_file", new_callable=AsyncMock, return_value=None)
+    def test_non_image_file_degradation(self, _mock_save, run):
+        """When save_file returns None, file is referenced as 'content not stored'."""
+        text_file = FileAttachment(
+            name="data.csv",
+            type="text/csv",
+            content="data:text/csv;base64,YSxiLGMKMSwyLDM=",
+            size=20,
+        )
+        prompt, images, file_meta = run(
+            build_prompt_with_files("summarize", [text_file], user_id="u1")
+        )
+        assert "(content not stored)" in prompt
+        assert file_meta == [{"name": "data.csv", "type": "text/csv"}]
+
+    @patch("BE.app.save_file", new_callable=AsyncMock, return_value=None)
+    def test_multiple_images_returns_metadata(self, _mock_save, run):
         f1 = FileAttachment(name="a.png", type="image/png", content="data:image/png;base64,x", size=10)
         f2 = FileAttachment(name="b.jpg", type="image/jpeg", content="data:image/jpeg;base64,y", size=20)
-        prompt, images, file_meta = build_prompt_with_files("describe", [f1, f2])
+        prompt, images, file_meta = run(
+            build_prompt_with_files("describe", [f1, f2], user_id="u1")
+        )
         assert len(images) == 2
         assert len(file_meta) == 2
         assert file_meta[0] == {"name": "a.png", "type": "image/png"}
         assert file_meta[1] == {"name": "b.jpg", "type": "image/jpeg"}
 
+    @patch("BE.app.save_file", new_callable=AsyncMock, return_value="uuid-abc")
+    def test_mixed_image_and_text_files(self, mock_save, run):
+        """Images go to multimodal, text files get saved to DB."""
+        img = FileAttachment(name="pic.png", type="image/png", content="data:image/png;base64,x", size=10)
+        txt = FileAttachment(
+            name="notes.txt",
+            type="text/plain",
+            content="data:text/plain;base64,aGVsbG8=",
+            size=5,
+        )
+        prompt, images, file_meta = run(
+            build_prompt_with_files("review", [img, txt], user_id="u1", session_id="s1")
+        )
+        assert len(images) == 1
+        assert images[0]["url"] == "data:image/png;base64,x"
+        assert "[Attached image: pic.png]" in prompt
+        assert "[Attached file: notes.txt (file_id: uuid-abc)]" in prompt
+        assert file_meta[0] == {"name": "pic.png", "type": "image/png"}
+        assert file_meta[1] == {"name": "notes.txt", "type": "text/plain", "file_id": "uuid-abc"}
+        mock_save.assert_called_once()
+
 
 class TestProcessFiles:
-    def test_no_files_returns_empty_metadata(self):
-        prompt, images, file_meta = process_files("hello", None)
+    def test_no_files_returns_empty_metadata(self, run):
+        prompt, images, file_meta = run(
+            process_files("hello", None, user_id="u1")
+        )
         assert prompt == "hello"
         assert images == []
         assert file_meta == []
 
-    def test_image_files_return_metadata(self):
+    @patch("BE.app.save_file", new_callable=AsyncMock, return_value=None)
+    def test_image_files_return_metadata(self, _mock_save, run):
         f = FileAttachment(name="pic.png", type="image/png", content="data:image/png;base64,x", size=10)
-        prompt, images, file_meta = process_files("describe", [f])
+        prompt, images, file_meta = run(
+            process_files("describe", [f], user_id="u1")
+        )
         assert len(images) == 1
         assert file_meta == [{"name": "pic.png", "type": "image/png"}]
+
+    @patch("BE.app.save_file", new_callable=AsyncMock, return_value="uuid-456")
+    def test_text_file_saved_and_referenced(self, mock_save, run):
+        raw = b"a,b,c\n1,2,3"
+        data_url = f"data:text/csv;base64,{base64.b64encode(raw).decode()}"
+        f = FileAttachment(name="data.csv", type="text/csv", content=data_url, size=len(raw))
+        prompt, images, file_meta = run(
+            process_files("analyze", [f], user_id="u1", session_id="s1")
+        )
+        assert images == []
+        assert "file_id: uuid-456" in prompt
+        assert file_meta == [{"name": "data.csv", "type": "text/csv", "file_id": "uuid-456"}]
+        mock_save.assert_called_once_with(
+            original_name="data.csv",
+            mime_type="text/csv",
+            data_url_content=data_url,
+            size_bytes=len(raw),
+            user_id="u1",
+            session_id="s1",
+        )
 
 
 # ── Endpoint tests with file attachments ────────────────────────────────────

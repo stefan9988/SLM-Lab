@@ -3,10 +3,10 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-__all__ = ["Base", "User", "Session", "Message"]
+__all__ = ["Base", "User", "Session", "Message", "FileUpload"]
 
 
 class Base(DeclarativeBase):
@@ -77,3 +77,22 @@ class Message(Base):
     additional_kwargs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     session: Mapped["Session"] = relationship(back_populates="messages")
+
+
+class FileUpload(Base):
+    __tablename__ = "file_uploads"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid4())
+    )
+    original_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    session_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
