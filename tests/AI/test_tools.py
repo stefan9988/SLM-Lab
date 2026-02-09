@@ -63,15 +63,18 @@ class TestGetCurrentDateAndTime:
 
 class TestBraveSearchTool:
     @patch("AI.tools.brave_search.get_stream_writer")
-    @patch("AI.tools.brave_search._brave")
-    def test_passthrough(self, mock_brave, mock_get_writer):
+    @patch("AI.tools.brave_search._get_brave")
+    def test_passthrough(self, mock_get_brave, mock_get_writer):
         mock_get_writer.return_value = MagicMock()
-        mock_brave.invoke.return_value = "search results"
+        mock_brave_instance = MagicMock()
+        mock_brave_instance.invoke.return_value = "search results"
+        mock_get_brave.return_value = mock_brave_instance
         from AI.tools.brave_search import brave_search_tool
 
         result = brave_search_tool.invoke({"query": "test"})
         assert result == "search results"
-        mock_brave.invoke.assert_called_once_with("test")
+        mock_get_brave.assert_called_once_with(3)
+        mock_brave_instance.invoke.assert_called_once_with("test")
 
 
 class TestPythonReplTool:
