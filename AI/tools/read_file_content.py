@@ -1,0 +1,52 @@
+from langchain_core.tools import tool
+from langgraph.config import get_stream_writer
+
+from BE.async_utils import run_async_from_sync
+from BE.file_store import get_file_content
+from BE.logger import setup_logger
+
+logger = setup_logger(__name__)
+
+MAX_RETURN_CHARS = 500_000
+
+
+@tool
+def read_file_content_tool(file_id: str) -> str:
+    """Read the text content of an uploaded file by its file_id.
+
+    Use this tool when the user attaches a file and you need to read its
+    contents.  The file_id is found in the attachment annotation, e.g.
+    ``[Attached file: report.pdf (file_id: abc-123)]``.
+
+    Args:
+        file_id: The UUID of the uploaded file.
+    """
+    logger.info("read_file_content_tool invoked (file_id=%s)", file_id)
+    writer = get_stream_writer()
+    writer(f"Reading uploaded file (id={file_id})")
+
+    try:
+        content = run_async_from_sync(get_file_content(file_id))
+    except FileNotFoundError as exc:
+        logger.warning("File not found: %s", exc)
+        return f"Error: {exc}"
+    except ValueError as exc:
+        logger.warning("Unsupported file: %s", exc)
+        return f"Error: {exc}"
+    except RuntimeError as exc:
+        logger.warning("Runtime error reading file: %s", exc)
+        return f"Error: {exc}"
+
+    if len(content) > MAX_RETURN_CHARS:
+        content = content[:MAX_RETURN_CHARS] + (
+            f"\n\n[Content truncated — showed first {MAX_RETURN_CHARS:,} of "
+            f"{len(content):,} characters]"
+        )
+
+    logger.info(
+        "read_file_content_tool complete (file_id=%s, length=%d)",
+        file_id,
+        len(content),
+    )
+    writer("File read complete")
+    return content

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from BE.file_store import _decode_data_url, save_file
+from BE.file_store import _decode_data_url, get_file_content, save_file
 
 
 @pytest.fixture
@@ -157,3 +157,73 @@ class TestSaveFile:
             user_id="user-1",
         ))
         assert result is None
+
+
+class TestGetFileContent:
+    @patch("BE.database.get_session_factory")
+    @patch("BE.config.settings")
+    def test_returns_text_content(self, mock_settings, mock_factory, run):
+        mock_settings.POSTGRES_ENABLED = True
+
+        upload = MagicMock()
+        upload.content = b"hello world"
+        upload.mime_type = "text/plain"
+        upload.original_name = "readme.txt"
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = upload
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_factory.return_value = MagicMock(return_value=mock_session)
+
+        result = run(get_file_content("file-123"))
+        assert result == "hello world"
+
+    @patch("BE.database.get_session_factory")
+    @patch("BE.config.settings")
+    def test_file_not_found_raises(self, mock_settings, mock_factory, run):
+        mock_settings.POSTGRES_ENABLED = True
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_factory.return_value = MagicMock(return_value=mock_session)
+
+        with pytest.raises(FileNotFoundError, match="No file found"):
+            run(get_file_content("nonexistent"))
+
+    @patch("BE.config.settings")
+    def test_postgres_disabled_raises(self, mock_settings, run):
+        mock_settings.POSTGRES_ENABLED = False
+
+        with pytest.raises(RuntimeError, match="PostgreSQL is disabled"):
+            run(get_file_content("any-id"))
+
+    @patch("BE.database.get_session_factory")
+    @patch("BE.config.settings")
+    def test_binary_file_raises_value_error(self, mock_settings, mock_factory, run):
+        mock_settings.POSTGRES_ENABLED = True
+
+        upload = MagicMock()
+        upload.content = bytes(range(256))  # non-UTF-8 binary
+        upload.mime_type = "application/octet-stream"
+        upload.original_name = "data.bin"
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = upload
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_factory.return_value = MagicMock(return_value=mock_session)
+
+        with pytest.raises(ValueError, match="binary"):
+            run(get_file_content("bin-file"))

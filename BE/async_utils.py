@@ -7,7 +7,13 @@ from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-__all__ = ["init_loop", "run_with_retry", "schedule_background_task", "shutdown_tasks"]
+__all__ = [
+    "init_loop",
+    "run_async_from_sync",
+    "run_with_retry",
+    "schedule_background_task",
+    "shutdown_tasks",
+]
 
 _main_loop: asyncio.AbstractEventLoop | None = None
 _background_tasks: set[asyncio.Task] = set()
@@ -17,6 +23,20 @@ def init_loop() -> None:
     """Capture the main event loop. Call from an async context during startup."""
     global _main_loop
     _main_loop = asyncio.get_running_loop()
+
+
+def run_async_from_sync(coro):
+    """Run an async coroutine from a synchronous thread.
+
+    Schedules *coro* on the main event loop captured by :func:`init_loop` and
+    blocks until the result is available (up to 30 s).
+
+    Raises ``RuntimeError`` if the main loop has not been initialised yet.
+    """
+    if _main_loop is None or not _main_loop.is_running():
+        raise RuntimeError("Main event loop not available — call init_loop() first")
+    future = asyncio.run_coroutine_threadsafe(coro, _main_loop)
+    return future.result(timeout=30)
 
 
 async def shutdown_tasks() -> None:

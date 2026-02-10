@@ -15,9 +15,10 @@ class TestGetEnabledTools:
             GENERAL_AGENT_PYTHON_REPL_TOOL=True,
             GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL=True,
             GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=True,
+            GENERAL_AGENT_READ_FILE_CONTENT_TOOL=True,
         )
         tools = get_enabled_tools(settings)
-        assert len(tools) == 5
+        assert len(tools) == 6
 
     def test_disable_one_tool(self):
         settings = SimpleNamespace(
@@ -146,3 +147,49 @@ class TestOllamaWebFetchTool:
 
         with pytest.raises(ConnectionError, match="timeout"):
             ollama_web_fetch_tool.invoke({"url": "https://bad.com"})
+
+
+class TestReadFileContentTool:
+    @patch("AI.tools.read_file_content.get_stream_writer")
+    @patch("AI.tools.read_file_content.run_async_from_sync")
+    def test_returns_file_content(self, mock_run, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_run.return_value = "file text here"
+        from AI.tools.read_file_content import read_file_content_tool
+
+        result = read_file_content_tool.invoke({"file_id": "abc-123"})
+        assert result == "file text here"
+
+    @patch("AI.tools.read_file_content.get_stream_writer")
+    @patch("AI.tools.read_file_content.run_async_from_sync")
+    def test_file_not_found_returns_error_message(self, mock_run, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_run.side_effect = FileNotFoundError("No file found with id 'bad-id'")
+        from AI.tools.read_file_content import read_file_content_tool
+
+        result = read_file_content_tool.invoke({"file_id": "bad-id"})
+        assert "Error" in result
+        assert "No file found" in result
+
+    @patch("AI.tools.read_file_content.get_stream_writer")
+    @patch("AI.tools.read_file_content.run_async_from_sync")
+    def test_unsupported_file_returns_error_message(self, mock_run, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_run.side_effect = ValueError("appears to be binary")
+        from AI.tools.read_file_content import read_file_content_tool
+
+        result = read_file_content_tool.invoke({"file_id": "bin-id"})
+        assert "Error" in result
+        assert "binary" in result
+
+    @patch("AI.tools.read_file_content.get_stream_writer")
+    @patch("AI.tools.read_file_content.run_async_from_sync")
+    def test_truncates_large_content(self, mock_run, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        large = "x" * 600_000
+        mock_run.return_value = large
+        from AI.tools.read_file_content import read_file_content_tool
+
+        result = read_file_content_tool.invoke({"file_id": "big-id"})
+        assert len(result) < len(large)
+        assert "truncated" in result.lower()
