@@ -1,5 +1,7 @@
+import re
+
 from langchain_core.tools import tool
-from langgraph.config import get_stream_writer
+from langgraph.config import get_config, get_stream_writer
 
 from BE.async_utils import run_async_from_sync
 from BE.file_store import get_file_content
@@ -8,6 +10,11 @@ from BE.logger import setup_logger
 logger = setup_logger(__name__)
 
 MAX_RETURN_CHARS = 500_000
+
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
 @tool
@@ -25,8 +32,18 @@ def read_file_content_tool(file_id: str) -> str:
     writer = get_stream_writer()
     writer(f"Reading uploaded file (id={file_id})")
 
+    if not _UUID_RE.match(file_id):
+        logger.warning("Invalid UUID format: %s", file_id)
+        return "Error: Invalid file_id format — expected a UUID."
+
+    config = get_config()
+    user_id: str = config.get("configurable", {}).get("user_id", "")
+    if not user_id:
+        logger.warning("No user_id in config — cannot verify file ownership")
+        return "Error: Unable to verify file ownership."
+
     try:
-        content = run_async_from_sync(get_file_content(file_id))
+        content = run_async_from_sync(get_file_content(file_id, user_id=user_id))
     except FileNotFoundError as exc:
         logger.warning("File not found: %s", exc)
         return f"Error: {exc}"

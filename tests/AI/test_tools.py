@@ -149,47 +149,76 @@ class TestOllamaWebFetchTool:
             ollama_web_fetch_tool.invoke({"url": "https://bad.com"})
 
 
+_VALID_UUID = "12345678-1234-1234-1234-123456789abc"
+_CONFIG_WITH_USER = {"configurable": {"user_id": "user-1"}}
+
+
 class TestReadFileContentTool:
+    @patch("AI.tools.read_file_content.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.read_file_content.get_stream_writer")
     @patch("AI.tools.read_file_content.run_async_from_sync")
-    def test_returns_file_content(self, mock_run, mock_get_writer):
+    def test_returns_file_content(self, mock_run, mock_get_writer, mock_get_config):
         mock_get_writer.return_value = MagicMock()
         mock_run.return_value = "file text here"
         from AI.tools.read_file_content import read_file_content_tool
 
-        result = read_file_content_tool.invoke({"file_id": "abc-123"})
+        result = read_file_content_tool.invoke({"file_id": _VALID_UUID})
         assert result == "file text here"
 
+    @patch("AI.tools.read_file_content.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.read_file_content.get_stream_writer")
     @patch("AI.tools.read_file_content.run_async_from_sync")
-    def test_file_not_found_returns_error_message(self, mock_run, mock_get_writer):
+    def test_file_not_found_returns_error_message(self, mock_run, mock_get_writer, mock_get_config):
         mock_get_writer.return_value = MagicMock()
         mock_run.side_effect = FileNotFoundError("No file found with id 'bad-id'")
         from AI.tools.read_file_content import read_file_content_tool
 
-        result = read_file_content_tool.invoke({"file_id": "bad-id"})
+        result = read_file_content_tool.invoke({"file_id": _VALID_UUID})
         assert "Error" in result
         assert "No file found" in result
 
+    @patch("AI.tools.read_file_content.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.read_file_content.get_stream_writer")
     @patch("AI.tools.read_file_content.run_async_from_sync")
-    def test_unsupported_file_returns_error_message(self, mock_run, mock_get_writer):
+    def test_unsupported_file_returns_error_message(self, mock_run, mock_get_writer, mock_get_config):
         mock_get_writer.return_value = MagicMock()
         mock_run.side_effect = ValueError("appears to be binary")
         from AI.tools.read_file_content import read_file_content_tool
 
-        result = read_file_content_tool.invoke({"file_id": "bin-id"})
+        result = read_file_content_tool.invoke({"file_id": _VALID_UUID})
         assert "Error" in result
         assert "binary" in result
 
+    @patch("AI.tools.read_file_content.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.read_file_content.get_stream_writer")
     @patch("AI.tools.read_file_content.run_async_from_sync")
-    def test_truncates_large_content(self, mock_run, mock_get_writer):
+    def test_truncates_large_content(self, mock_run, mock_get_writer, mock_get_config):
         mock_get_writer.return_value = MagicMock()
         large = "x" * 600_000
         mock_run.return_value = large
         from AI.tools.read_file_content import read_file_content_tool
 
-        result = read_file_content_tool.invoke({"file_id": "big-id"})
+        result = read_file_content_tool.invoke({"file_id": _VALID_UUID})
         assert len(result) < len(large)
         assert "truncated" in result.lower()
+
+    @patch("AI.tools.read_file_content.get_stream_writer")
+    def test_invalid_uuid_returns_error(self, mock_get_writer):
+        """Issue 4: Non-UUID file_id is rejected without a DB query."""
+        mock_get_writer.return_value = MagicMock()
+        from AI.tools.read_file_content import read_file_content_tool
+
+        result = read_file_content_tool.invoke({"file_id": "not-a-uuid"})
+        assert "Error" in result
+        assert "Invalid file_id format" in result
+
+    @patch("AI.tools.read_file_content.get_config", return_value={"configurable": {}})
+    @patch("AI.tools.read_file_content.get_stream_writer")
+    def test_missing_user_id_returns_error(self, mock_get_writer, mock_get_config):
+        """Issue 1: Missing user_id in config returns an ownership error."""
+        mock_get_writer.return_value = MagicMock()
+        from AI.tools.read_file_content import read_file_content_tool
+
+        result = read_file_content_tool.invoke({"file_id": _VALID_UUID})
+        assert "Error" in result
+        assert "ownership" in result.lower()

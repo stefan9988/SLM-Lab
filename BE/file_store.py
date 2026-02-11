@@ -2,6 +2,7 @@
 
 import base64
 import os
+import re
 from typing import Optional
 from uuid import uuid4
 
@@ -10,6 +11,7 @@ from BE.logger import setup_logger
 logger = setup_logger(__name__)
 
 MAX_READABLE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB per file
 
 _TEXT_MIME_PREFIXES = (
     "text/",
@@ -28,6 +30,19 @@ _TEXT_EXTENSIONS = {
     ".java", ".c", ".cpp", ".h", ".hpp", ".rs", ".go", ".rb", ".sh",
     ".bat", ".ps1", ".sql", ".log", ".ini", ".cfg", ".conf", ".env",
 }
+
+
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def sanitize_filename(name: str) -> str:
+    """Sanitize a user-provided filename for safe embedding in prompts.
+
+    Strips control characters, removes square brackets, and limits length.
+    """
+    name = _CONTROL_CHARS_RE.sub("", name)
+    name = name.replace("[", "").replace("]", "")
+    return name[:255]
 
 
 def _decode_data_url(data_url: str) -> bytes:
@@ -51,6 +66,8 @@ async def save_file(
     (PostgreSQL disabled, empty content, invalid base64, DB error) so callers
     can degrade gracefully.
     """
+    original_name = sanitize_filename(original_name)
+
     from BE.config import settings
 
     if not settings.POSTGRES_ENABLED:
@@ -71,6 +88,14 @@ async def save_file(
         logger.warning("Decoded 0 bytes for file %s — skipping", original_name)
         return None
 
+    actual_size = len(raw_bytes)
+    if actual_size > MAX_UPLOAD_SIZE:
+        logger.warning(
+            "File %s exceeds per-file limit (%d > %d) — skipping",
+            original_name, actual_size, MAX_UPLOAD_SIZE,
+        )
+        return None
+
     try:
         from BE.database import get_session_factory
         from BE.models import FileUpload
@@ -82,7 +107,7 @@ async def save_file(
                 id=file_id,
                 original_name=original_name,
                 mime_type=mime_type,
-                size_bytes=size_bytes,
+                size_bytes=actual_size,
                 content=raw_bytes,
                 user_id=user_id,
                 session_id=session_id,
@@ -121,12 +146,16 @@ def _extract_pdf_text(raw: bytes) -> str:
     return "\n".join(pages)
 
 
-async def get_file_content(file_id: str) -> str:
+async def get_file_content(file_id: str, user_id: str) -> str:
     """Retrieve and return the text content of an uploaded file.
+
+    Args:
+        file_id: UUID of the file to read.
+        user_id: ID of the requesting user (ownership check).
 
     Raises:
         RuntimeError: If PostgreSQL is disabled.
-        FileNotFoundError: If the file_id does not exist.
+        FileNotFoundError: If the file_id does not exist or belongs to another user.
         ValueError: If the file content is binary / unreadable.
     """
     from BE.config import settings
@@ -141,7 +170,10 @@ async def get_file_content(file_id: str) -> str:
     factory = get_session_factory()
     async with factory() as session:
         result = await session.execute(
-            select(FileUpload).where(FileUpload.id == file_id)
+            select(FileUpload).where(
+                FileUpload.id == file_id,
+                FileUpload.user_id == user_id,
+            )
         )
         upload = result.scalar_one_or_none()
 
@@ -159,15 +191,28 @@ async def get_file_content(file_id: str) -> str:
 
     # PDF extraction
     if mime == "application/pdf" or name.lower().endswith(".pdf"):
-        return _extract_pdf_text(raw)
+        try:
+            return _extract_pdf_text(raw)
+        except Exception as exc:
+            raise ValueError(f"Failed to extract text from PDF '{name}': {exc}") from exc
 
     # Known text MIME type
     if _is_text_mime(mime):
-        return raw.decode("utf-8")
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError(
+                f"File '{name}' has MIME type '{mime}' but is not valid UTF-8 text"
+            )
 
     # Known text extension
     if _looks_like_text_extension(name):
-        return raw.decode("utf-8")
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError(
+                f"File '{name}' has a text extension but is not valid UTF-8 text"
+            )
 
     # Fallback: try UTF-8 decode
     try:

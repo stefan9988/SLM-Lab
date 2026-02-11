@@ -16,7 +16,7 @@ from BE.async_utils import init_loop, shutdown_tasks
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
 from BE.user_store import upsert_user
 from BE.config import _parse_comma_separated, init_config, settings
-from BE.file_store import save_file
+from BE.file_store import sanitize_filename, save_file
 from BE.logger import redact_url, setup_logger
 
 init_config()
@@ -33,10 +33,10 @@ class FileSizeLimitExceeded(Exception):
 
 
 class FileAttachment(BaseModel):
-    name: str
-    type: str
+    name: str = Field(max_length=255)
+    type: str = Field(max_length=255)
     content: str
-    size: int
+    size: int = Field(ge=0, le=20_000_000)
 
 
 class ChatRequest(BaseModel):
@@ -74,14 +74,15 @@ async def build_prompt_with_files(
 
     for f in files:
         mime = f.type or ""
+        safe_name = sanitize_filename(f.name)
 
         if mime.startswith("image/"):
             images.append({"url": f.content})
-            text_parts.append(f"[Attached image: {f.name}]")
-            file_meta.append({"name": f.name, "type": f.type})
+            text_parts.append(f"[Attached image: {safe_name}]")
+            file_meta.append({"name": safe_name, "type": f.type})
         else:
             file_id = await save_file(
-                original_name=f.name,
+                original_name=safe_name,
                 mime_type=mime,
                 data_url_content=f.content,
                 size_bytes=f.size,
@@ -89,11 +90,11 @@ async def build_prompt_with_files(
                 session_id=session_id,
             )
             if file_id:
-                text_parts.append(f"[Attached file: {f.name} (file_id: {file_id})]")
-                file_meta.append({"name": f.name, "type": f.type, "file_id": file_id})
+                text_parts.append(f"[Attached file: {safe_name} (file_id: {file_id})]")
+                file_meta.append({"name": safe_name, "type": f.type, "file_id": file_id})
             else:
-                text_parts.append(f"[Attached file: {f.name} (content not stored)]")
-                file_meta.append({"name": f.name, "type": f.type})
+                text_parts.append(f"[Attached file: {safe_name} (content not stored)]")
+                file_meta.append({"name": safe_name, "type": f.type})
 
     augmented = message
     if not message.strip() and text_parts:
@@ -121,6 +122,8 @@ async def process_files(
     """
     if not files:
         return message, [], []
+    if len(files) > 20:
+        raise FileSizeLimitExceeded()
     total_size = sum(f.size for f in files)
     if total_size > MAX_TOTAL_FILE_SIZE:
         raise FileSizeLimitExceeded()

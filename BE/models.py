@@ -92,7 +92,9 @@ class FileUpload(Base):
     user_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    session_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    session_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

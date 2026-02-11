@@ -68,7 +68,8 @@ class Agent:
             messages = await self._get_input_messages(
                 prompt, session_id, images=images, file_attachments=file_attachments, user_id=user_id
             )
-            result = await self._agent.ainvoke({"messages": messages})
+            config = {"configurable": {"user_id": user_id}} if user_id else None
+            result = await self._agent.ainvoke({"messages": messages}, config=config)
             all_messages = result["messages"]
             await self._save_history(all_messages, session_id, user_id=user_id)
             response = all_messages[-1].content
@@ -102,8 +103,9 @@ class Agent:
             tool_messages = []
             pending_tool_calls = {}   # {index: {"name": str, "args": str}}
             completed_tools = []      # [{"name": str, "args": dict}, ...]
+            config = {"configurable": {"user_id": user_id}} if user_id else None
             async for stream_mode, chunk in self._agent.astream(
-                {"messages": messages}, stream_mode=["messages", "custom"]
+                {"messages": messages}, config=config, stream_mode=["messages", "custom"]
             ):
                 if stream_mode == "custom":
                     yield {"type": "status", "content": chunk}

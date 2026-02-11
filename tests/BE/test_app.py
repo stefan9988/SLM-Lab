@@ -177,6 +177,7 @@ class TestProcessFiles:
 
 class TestChatWithFiles:
     def test_file_size_limit_returns_413(self, client):
+        # Use multiple files whose declared sizes sum to > 20MB total
         resp = client.post(
             "/chat",
             json={
@@ -184,7 +185,32 @@ class TestChatWithFiles:
                 "session_id": "s1",
                 "files": [
                     {
-                        "name": "big.bin",
+                        "name": "big1.bin",
+                        "type": "application/octet-stream",
+                        "content": "data:application/octet-stream;base64,eA==",
+                        "size": 15_000_000,
+                    },
+                    {
+                        "name": "big2.bin",
+                        "type": "application/octet-stream",
+                        "content": "data:application/octet-stream;base64,eA==",
+                        "size": 10_000_001,
+                    },
+                ],
+            },
+        )
+        assert resp.status_code == 413
+
+    def test_file_size_field_validation_returns_422(self, client):
+        """Field-level size constraint (le=20_000_000) rejects oversized declarations."""
+        resp = client.post(
+            "/chat",
+            json={
+                "message": "hi",
+                "session_id": "s1",
+                "files": [
+                    {
+                        "name": "huge.bin",
                         "type": "application/octet-stream",
                         "content": "data:application/octet-stream;base64,eA==",
                         "size": 25_000_000,
@@ -192,7 +218,7 @@ class TestChatWithFiles:
                 ],
             },
         )
-        assert resp.status_code == 413
+        assert resp.status_code == 422
 
 
 class TestChatEndpoint:
