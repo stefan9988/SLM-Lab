@@ -40,7 +40,7 @@ docker compose up --build
 - **Frontend:** `http://localhost:8080`
 - **Backend API:** `http://localhost:8000`
 
-The stack includes a Redis container for persistent session/conversation history. Both backend and frontend use `network_mode: host`, so they share the host's network. This allows the backend to reach Ollama on `localhost:11434` and Redis on `localhost:6379` directly.
+The stack includes Redis for persistent session/conversation history and Qdrant for vector similarity search. Both backend and frontend use `network_mode: host`, so they share the host's network. This allows the backend to reach Ollama on `localhost:11434`, Redis on `localhost:6379`, and Qdrant on `localhost:6333` directly.
 
 To stop:
 
@@ -108,6 +108,30 @@ POSTGRES_ENABLED=false
 | `GET` | `/archive/sessions` | List all archived sessions |
 | `GET` | `/archive/sessions/{id}` | Get full message history for a session |
 | `DELETE` | `/archive/sessions/{id}` | Delete an archived session |
+
+## Qdrant (vector database)
+
+Qdrant provides vector similarity search for embeddings. When running with Docker Compose, Qdrant starts automatically.
+
+For local development, either start Qdrant separately:
+
+```bash
+docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant
+```
+
+Or disable it in `.env`:
+
+```
+QDRANT_ENABLED=false
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant HTTP API URL |
+| `QDRANT_ENABLED` | `false` | Set to `true` to enable vector database |
+| `QDRANT_API_KEY` | `slmlab` | API key for Qdrant authentication |
+| `QDRANT_COLLECTION_NAME` | `slmlab` | Default collection name |
+| `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port |
 
 ## Local development (without Docker)
 

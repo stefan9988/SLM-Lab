@@ -163,3 +163,45 @@ class TestCorsSettings:
         """Verify _parse_comma_separated returns [] for empty CORS_EXPOSE_HEADERS."""
         s = Settings(LOG_LEVEL="INFO")
         assert _parse_comma_separated(s.CORS_EXPOSE_HEADERS) == []
+
+
+class TestQdrantSettings:
+    def test_default_qdrant_url(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.QDRANT_URL == "http://localhost:6333"
+
+    def test_default_qdrant_api_key(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.QDRANT_API_KEY == "slmlab"
+
+    def test_default_qdrant_enabled_false(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.QDRANT_ENABLED is False
+
+    def test_default_qdrant_collection_name(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.QDRANT_COLLECTION_NAME == "slmlab"
+
+    def test_default_qdrant_grpc_port(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.QDRANT_GRPC_PORT == 6334
+
+    def test_custom_qdrant_url(self):
+        s = Settings(QDRANT_URL="http://qdrant:6333", LOG_LEVEL="INFO")
+        assert s.QDRANT_URL == "http://qdrant:6333"
+
+    def test_custom_qdrant_api_key(self):
+        s = Settings(QDRANT_API_KEY="secret-key", LOG_LEVEL="INFO")
+        assert s.QDRANT_API_KEY == "secret-key"
+
+    def test_custom_qdrant_enabled(self):
+        s = Settings(QDRANT_ENABLED=True, LOG_LEVEL="INFO")
+        assert s.QDRANT_ENABLED is True
+
+    def test_custom_qdrant_collection_name(self):
+        s = Settings(QDRANT_COLLECTION_NAME="my_vectors", LOG_LEVEL="INFO")
+        assert s.QDRANT_COLLECTION_NAME == "my_vectors"
+
+    def test_custom_qdrant_grpc_port(self):
+        s = Settings(QDRANT_GRPC_PORT=6335, LOG_LEVEL="INFO")
+        assert s.QDRANT_GRPC_PORT == 6335

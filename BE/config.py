@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     POSTGRES_POOL_RECYCLE: int = 3600
     POSTGRES_POOL_PRE_PING: bool = True
 
+    # Qdrant settings
+    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: str = "slmlab"
+    QDRANT_ENABLED: bool = False
+    QDRANT_COLLECTION_NAME: str = "slmlab"
+    QDRANT_GRPC_PORT: int = 6334
+
     # Archive retry settings
     ARCHIVE_MAX_RETRIES: int = 3
     ARCHIVE_RETRY_DELAY: float = 1.0
