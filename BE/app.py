@@ -12,11 +12,11 @@ from AI.agents import init_agent
 from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 from AI.tools import get_enabled_tools
 from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
-from BE.async_utils import init_loop, shutdown_tasks
+from BE.async_utils import init_loop, schedule_background_task, shutdown_tasks
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
 from BE.user_store import upsert_user
 from BE.config import _parse_comma_separated, init_config, settings
-from BE.file_store import sanitize_filename, save_file
+from BE.file_store import get_file_content, sanitize_filename, save_file
 from BE.logger import redact_url, setup_logger
 
 init_config()
@@ -30,6 +30,39 @@ SESSION_ID_PATTERN = r"^[a-zA-Z0-9_-]+$"
 
 class FileSizeLimitExceeded(Exception):
     """Raised when total uploaded file size exceeds the limit."""
+
+
+def _make_embed_task(file_id: str, user_id: str):
+    """Return an async callable that embeds a file's text content."""
+
+    async def _embed():
+        from AI.embeddings import generate_embeddings
+
+        try:
+            text_content = await get_file_content(file_id, user_id)
+        except (ValueError, FileNotFoundError) as exc:
+            logger.debug("Skipping embedding for file %s: %s", file_id, exc)
+            return
+        except Exception as exc:
+            logger.warning("Failed to read file %s for embedding: %s", file_id, exc)
+            return
+
+        try:
+            result = await generate_embeddings(text_content)
+            dims = len(result.chunks[0].embedding) if result.chunks else 0
+            logger.info(
+                "Embeddings generated for file %s: %d chunks, %d dimensions, model=%s",
+                file_id,
+                len(result.chunks),
+                dims,
+                result.model,
+            )
+        except ValueError as exc:
+            logger.debug("Skipping embedding for file %s: %s", file_id, exc)
+        except Exception as exc:
+            logger.warning("Embedding failed for file %s: %s", file_id, exc)
+
+    return _embed
 
 
 class FileAttachment(BaseModel):
@@ -92,6 +125,13 @@ async def build_prompt_with_files(
             if file_id:
                 text_parts.append(f"[Attached file: {safe_name} (file_id: {file_id})]")
                 file_meta.append({"name": safe_name, "type": f.type, "file_id": file_id})
+                if settings.EMBEDDING_ENABLED:
+                    schedule_background_task(
+                        _make_embed_task(file_id, user_id),
+                        max_retries=1,
+                        timeout=60.0,
+                        task_name=f"embed_file_{file_id}",
+                    )
             else:
                 text_parts.append(f"[Attached file: {safe_name} (content not stored)]")
                 file_meta.append({"name": safe_name, "type": f.type})

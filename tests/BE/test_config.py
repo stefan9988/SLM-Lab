@@ -205,3 +205,37 @@ class TestQdrantSettings:
     def test_custom_qdrant_grpc_port(self):
         s = Settings(QDRANT_GRPC_PORT=6335, LOG_LEVEL="INFO")
         assert s.QDRANT_GRPC_PORT == 6335
+
+
+class TestEmbeddingSettings:
+    def test_default_embedding_enabled_false(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.EMBEDDING_ENABLED is False
+
+    def test_default_embedding_model(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.EMBEDDING_MODEL == "nomic-embed-text"
+
+    def test_default_embedding_chunk_size(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.EMBEDDING_CHUNK_SIZE == 1000
+
+    def test_default_embedding_chunk_overlap(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.EMBEDDING_CHUNK_OVERLAP == 200
+
+    def test_custom_embedding_enabled(self):
+        s = Settings(EMBEDDING_ENABLED=True, LOG_LEVEL="INFO")
+        assert s.EMBEDDING_ENABLED is True
+
+    def test_custom_embedding_model(self):
+        s = Settings(EMBEDDING_MODEL="all-minilm", LOG_LEVEL="INFO")
+        assert s.EMBEDDING_MODEL == "all-minilm"
+
+    def test_custom_embedding_chunk_size(self):
+        s = Settings(EMBEDDING_CHUNK_SIZE=500, LOG_LEVEL="INFO")
+        assert s.EMBEDDING_CHUNK_SIZE == 500
+
+    def test_custom_embedding_chunk_overlap(self):
+        s = Settings(EMBEDDING_CHUNK_OVERLAP=50, LOG_LEVEL="INFO")
+        assert s.EMBEDDING_CHUNK_OVERLAP == 50

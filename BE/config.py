@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_NAME: str = "slmlab"
     QDRANT_GRPC_PORT: int = 6334
 
+    # Embedding settings
+    EMBEDDING_ENABLED: bool = False
+    EMBEDDING_MODEL: str = "nomic-embed-text"
+    EMBEDDING_CHUNK_SIZE: int = 1000
+    EMBEDDING_CHUNK_OVERLAP: int = 200
+
     # Archive retry settings
     ARCHIVE_MAX_RETRIES: int = 3
     ARCHIVE_RETRY_DELAY: float = 1.0
