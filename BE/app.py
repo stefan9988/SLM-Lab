@@ -32,7 +32,13 @@ class FileSizeLimitExceeded(Exception):
     """Raised when total uploaded file size exceeds the limit."""
 
 
-def _make_embed_task(file_id: str, user_id: str):
+def _make_embed_task(
+    file_id: str,
+    user_id: str,
+    session_id: str = "",
+    original_name: str = "",
+    mime_type: str = "",
+):
     """Return an async callable that embeds a file's text content."""
 
     async def _embed():
@@ -59,8 +65,27 @@ def _make_embed_task(file_id: str, user_id: str):
             )
         except ValueError as exc:
             logger.debug("Skipping embedding for file %s: %s", file_id, exc)
+            return
         except Exception as exc:
             logger.warning("Embedding failed for file %s: %s", file_id, exc)
+            return
+
+        # Store embeddings in Qdrant if enabled
+        if settings.QDRANT_ENABLED:
+            try:
+                from BE.vector_store import store_embeddings
+
+                count = await store_embeddings(
+                    file_id=file_id,
+                    user_id=user_id,
+                    session_id=session_id or "",
+                    original_name=original_name,
+                    mime_type=mime_type,
+                    embedding_result=result,
+                )
+                logger.info("Stored %d vectors in Qdrant for file %s", count, file_id)
+            except Exception as exc:
+                logger.warning("Qdrant storage failed for file %s: %s", file_id, exc)
 
     return _embed
 
@@ -127,7 +152,13 @@ async def build_prompt_with_files(
                 file_meta.append({"name": safe_name, "type": f.type, "file_id": file_id})
                 if settings.EMBEDDING_ENABLED:
                     schedule_background_task(
-                        _make_embed_task(file_id, user_id),
+                        _make_embed_task(
+                            file_id,
+                            user_id,
+                            session_id=session_id or "",
+                            original_name=safe_name,
+                            mime_type=mime,
+                        ),
                         max_retries=1,
                         timeout=60.0,
                         task_name=f"embed_file_{file_id}",
@@ -205,6 +236,15 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning("PostgreSQL init failed (archive disabled): %s", exc)
 
+    # Initialize Qdrant collection if enabled
+    if settings.QDRANT_ENABLED:
+        try:
+            from BE.vector_store import init_collection
+
+            await init_collection()
+        except Exception as exc:
+            logger.warning("Qdrant init failed (vector store disabled): %s", exc)
+
     app.state.general_agent = init_agent(
         system_prompt=GENERAL_AGENT_PROMPT,
         tools=tools,
@@ -222,12 +262,18 @@ async def lifespan(app: FastAPI):
         logger.info("  Redis:      %s", redact_url(settings.REDIS_URL))
     if settings.POSTGRES_ENABLED:
         logger.info("  PostgreSQL: %s", redact_url(settings.POSTGRES_URL))
+    if settings.QDRANT_ENABLED:
+        logger.info("  Qdrant:     %s", settings.QDRANT_URL)
     logger.info("=" * 60)
 
     yield
 
     logger.info("Application shutdown")
     await shutdown_tasks()
+    if settings.QDRANT_ENABLED:
+        from BE.vector_store import close_client
+
+        await close_client()
     if settings.POSTGRES_ENABLED:
         from BE.database import dispose_engine
 

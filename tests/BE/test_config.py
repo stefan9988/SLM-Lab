@@ -239,3 +239,11 @@ class TestEmbeddingSettings:
     def test_custom_embedding_chunk_overlap(self):
         s = Settings(EMBEDDING_CHUNK_OVERLAP=50, LOG_LEVEL="INFO")
         assert s.EMBEDDING_CHUNK_OVERLAP == 50
+
+    def test_default_embedding_dimensions(self):
+        s = Settings(LOG_LEVEL="INFO")
+        assert s.EMBEDDING_DIMENSIONS == 768
+
+    def test_custom_embedding_dimensions(self):
+        s = Settings(EMBEDDING_DIMENSIONS=1024, LOG_LEVEL="INFO")
+        assert s.EMBEDDING_DIMENSIONS == 1024

@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     # Embedding settings
     EMBEDDING_ENABLED: bool = False
     EMBEDDING_MODEL: str = "nomic-embed-text"
+    EMBEDDING_DIMENSIONS: int = 768
     EMBEDDING_CHUNK_SIZE: int = 1000
     EMBEDDING_CHUNK_OVERLAP: int = 200
 
