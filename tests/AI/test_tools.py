@@ -28,10 +28,11 @@ class TestGetEnabledTools:
             GENERAL_AGENT_PYTHON_REPL_TOOL=False,
             GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL=True,
             GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=True,
+            GENERAL_AGENT_READ_FILE_CONTENT_TOOL=True,
+            GENERAL_AGENT_SEARCH_CHUNKS_TOOL=True,
         )
         tools = get_enabled_tools(settings)
-        assert len(tools) == 4
-        tool_entries = dict(GENERAL_AGENT_TOOLS)
+        assert len(tools) == 6
         from AI.tools.python_repl import python_repl_tool
 
         assert python_repl_tool not in tools
@@ -43,6 +44,8 @@ class TestGetEnabledTools:
             GENERAL_AGENT_PYTHON_REPL_TOOL=False,
             GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL=False,
             GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=False,
+            GENERAL_AGENT_READ_FILE_CONTENT_TOOL=False,
+            GENERAL_AGENT_SEARCH_CHUNKS_TOOL=False,
         )
         tools = get_enabled_tools(settings)
         assert len(tools) == 0
@@ -379,10 +382,10 @@ class TestSearchChunksTool:
 
     @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.search_chunks.get_stream_writer")
-    @patch("AI.tools.search_chunks.run_async_from_sync")
-    def test_clamps_num_results(self, mock_run, mock_get_writer, mock_get_config):
+    @patch("AI.tools.search_chunks.run_async_from_sync", return_value=[])
+    @patch("AI.tools.search_chunks.search_chunks")
+    def test_clamps_num_results(self, mock_search, mock_run, mock_get_writer, mock_get_config):
         mock_get_writer.return_value = MagicMock()
-        mock_run.return_value = []
         from AI.tools.search_chunks import search_chunks_tool
 
         search_chunks_tool.invoke({
@@ -390,8 +393,10 @@ class TestSearchChunksTool:
             "queries": ["test"],
             "num_results": 50,
         })
-        # Verify the clamped limit was passed to search_chunks
-        call_args = mock_run.call_args
-        # The coroutine is passed as the first positional arg
-        # We can't inspect the coroutine args directly, but we verify
-        # it was called (no error from clamping)
+        # Verify search_chunks was called with limit clamped to 20
+        mock_search.assert_called_once_with(
+            queries=["test"],
+            file_id=_VALID_UUID,
+            user_id="user-1",
+            limit=20,
+        )

@@ -3,7 +3,7 @@
 import asyncio
 import base64
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -327,7 +327,7 @@ class TestGoogleAuthEndpoint:
         resp = client.post("/auth/google", json={})
         assert resp.status_code == 422
 
-    def test_protected_route_without_auth_returns_401(self, mock_agent):
+    def test_protected_route_without_auth_returns_422(self, mock_agent):
         """Without the dependency override, protected routes require auth."""
         from fastapi.testclient import TestClient
         from BE.app import app
@@ -353,9 +353,9 @@ class TestSessionsEndpoint:
 
         mock_archive = AsyncMock()
         app.state.general_agent = mock_agent
-        app.dependency_overrides[get_current_user] = lambda: MagicMock(
-            id="test-user-id", email="test@example.com"
-        )
+        from tests.conftest import MOCK_USER
+
+        app.dependency_overrides[get_current_user] = lambda: MOCK_USER
         app.dependency_overrides[get_archive_store] = lambda: mock_archive
         yield TestClient(app, raise_server_exceptions=False), mock_archive
         app.dependency_overrides.clear()
