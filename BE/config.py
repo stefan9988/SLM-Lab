@@ -70,6 +70,15 @@ class Settings(BaseSettings):
     GENERAL_AGENT_READ_FILE_CONTENT_TOOL: bool = False
     GENERAL_AGENT_SEARCH_CHUNKS_TOOL: bool = False
 
+    # Document Agent Tool Toggles
+    DOCUMENT_AGENT_DATE_TIME_TOOL: bool = False
+    DOCUMENT_AGENT_BRAVE_SEARCH_TOOL: bool = False
+    DOCUMENT_AGENT_PYTHON_REPL_TOOL: bool = False
+    DOCUMENT_AGENT_OLLAMA_WEB_SEARCH_TOOL: bool = False
+    DOCUMENT_AGENT_OLLAMA_WEB_FETCH_TOOL: bool = False
+    DOCUMENT_AGENT_READ_FILE_CONTENT_TOOL: bool = False
+    DOCUMENT_AGENT_SEARCH_CHUNKS_TOOL: bool = False
+
     # PostgreSQL settings
     POSTGRES_URL: str = "postgresql+asyncpg://slmlab:slmlab@localhost:5432/slmlab"
     POSTGRES_ENABLED: bool = True

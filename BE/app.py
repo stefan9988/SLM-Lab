@@ -9,8 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
 from AI.agents import init_agent
-from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
-from AI.tools import get_enabled_tools
+from AI.prompts import GENERAL_AGENT_PROMPT, DOCUMENT_AGENT_PROMPT
+from AI.tools import get_enabled_tools, get_document_agent_enabled_tools
 from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
 from BE.schema_store import SchemaStore, create_store as _create_schema_store
 from BE.async_utils import init_loop, schedule_background_task, shutdown_tasks
@@ -278,6 +278,16 @@ async def lifespan(app: FastAPI):
     app.state.general_agent = init_agent(
         system_prompt=GENERAL_AGENT_PROMPT,
         tools=tools,
+        maintain_history=True,
+    )
+
+    doc_tools = get_document_agent_enabled_tools(settings)
+    doc_tool_names = [t.name if hasattr(t, "name") else t.__name__ for t in doc_tools]
+    logger.info("Document agent tools enabled: %s", doc_tool_names)
+
+    app.state.document_agent = init_agent(
+        system_prompt=DOCUMENT_AGENT_PROMPT,
+        tools=doc_tools,
         maintain_history=True,
     )
 
