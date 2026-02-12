@@ -42,3 +42,15 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
 }
+
+export interface SchemaField {
+  id: string;
+  key: string;
+  description: string;
+}
+
+export interface ExtractionSchema {
+  id: string;
+  name: string;
+  fields: SchemaField[];
+}

@@ -7,11 +7,12 @@ interface Props {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
+  onOpenSchemas: () => void;
   user?: AuthUser | null;
   onLogout?: () => void;
 }
 
-export default function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, user, onLogout }: Props) {
+export default function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onOpenSchemas, user, onLogout }: Props) {
   return (
     <aside className="w-64 bg-[#16213e] border-r border-[#334155] flex flex-col h-full">
       <div className="p-4 border-b border-[#334155]">
@@ -21,6 +22,12 @@ export default function Sidebar({ conversations, activeId, onSelect, onNew, onDe
           onClick={onNew}
         >
           + New Chat
+        </button>
+        <button
+          className="w-full mt-2 rounded-lg border border-[#334155] text-[#64748b] py-2 text-sm font-medium hover:text-[#e2e8f0] hover:border-[#7c3aed] transition-all duration-200"
+          onClick={onOpenSchemas}
+        >
+          Extraction Schemas
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-1">

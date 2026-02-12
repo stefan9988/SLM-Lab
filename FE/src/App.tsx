@@ -8,6 +8,7 @@ import { useAuth } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import MessageInput from './components/MessageInput';
+import SchemasPanel from './components/SchemasPanel';
 import LoginPage from './components/LoginPage';
 
 function App() {
@@ -34,6 +35,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     const saved = loadConversations();
     return saved.length > 0 ? saved[0].id : uuidv4();
   });
+  const [view, setView] = useState<'chat' | 'schemas'>('chat');
 
   const { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, stopStreaming } = useChat(activeId);
 
@@ -76,10 +78,20 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
   const handleNew = useCallback(() => {
     const id = uuidv4();
     setActiveId(id);
+    setView('chat');
   }, []);
 
   const handleSelect = useCallback((id: string) => {
     setActiveId(id);
+    setView('chat');
+  }, []);
+
+  const handleOpenSchemas = useCallback(() => {
+    setView('schemas');
+  }, []);
+
+  const handleBackToChat = useCallback(() => {
+    setView('chat');
   }, []);
 
   const handleDelete = useCallback(
@@ -106,12 +118,19 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
         onSelect={handleSelect}
         onNew={handleNew}
         onDelete={handleDelete}
+        onOpenSchemas={handleOpenSchemas}
         user={user}
         onLogout={onLogout}
       />
       <main className="flex-1 flex flex-col">
-        <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} thinkingActive={thinkingActive} onSend={handleSend} />
-        <MessageInput onSend={handleSend} disabled={streaming} streaming={streaming} onStop={stopStreaming} />
+        {view === 'schemas' ? (
+          <SchemasPanel onBack={handleBackToChat} />
+        ) : (
+          <>
+            <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} thinkingActive={thinkingActive} onSend={handleSend} />
+            <MessageInput onSend={handleSend} disabled={streaming} streaming={streaming} onStop={stopStreaming} />
+          </>
+        )}
       </main>
     </div>
   );
