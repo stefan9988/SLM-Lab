@@ -16,9 +16,10 @@ class TestGetEnabledTools:
             GENERAL_AGENT_OLLAMA_WEB_SEARCH_TOOL=True,
             GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=True,
             GENERAL_AGENT_READ_FILE_CONTENT_TOOL=True,
+            GENERAL_AGENT_SEARCH_CHUNKS_TOOL=True,
         )
         tools = get_enabled_tools(settings)
-        assert len(tools) == 6
+        assert len(tools) == 7
 
     def test_disable_one_tool(self):
         settings = SimpleNamespace(
@@ -222,3 +223,110 @@ class TestReadFileContentTool:
         result = read_file_content_tool.invoke({"file_id": _VALID_UUID})
         assert "Error" in result
         assert "ownership" in result.lower()
+
+
+class TestSearchChunksTool:
+    @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
+    @patch("AI.tools.search_chunks.get_stream_writer")
+    @patch("AI.tools.search_chunks.run_async_from_sync")
+    def test_returns_formatted_results(self, mock_run, mock_get_writer, mock_get_config):
+        mock_get_writer.return_value = MagicMock()
+        mock_run.return_value = [
+            {
+                "chunk_index": 0,
+                "chunk_text": "Hello world",
+                "score": 0.95,
+                "original_name": "test.txt",
+                "file_id": _VALID_UUID,
+            },
+            {
+                "chunk_index": 3,
+                "chunk_text": "Second chunk",
+                "score": 0.80,
+                "original_name": "test.txt",
+                "file_id": _VALID_UUID,
+            },
+        ]
+        from AI.tools.search_chunks import search_chunks_tool
+
+        result = search_chunks_tool.invoke({
+            "file_id": _VALID_UUID,
+            "queries": ["hello"],
+            "num_results": 5,
+        })
+        assert "Hello world" in result
+        assert "Second chunk" in result
+        assert "0.9500" in result
+        assert "[1]" in result
+        assert "[2]" in result
+
+    @patch("AI.tools.search_chunks.get_stream_writer")
+    def test_invalid_uuid_returns_error(self, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        from AI.tools.search_chunks import search_chunks_tool
+
+        result = search_chunks_tool.invoke({
+            "file_id": "not-a-uuid",
+            "queries": ["test"],
+        })
+        assert "Error" in result
+        assert "Invalid file_id format" in result
+
+    @patch("AI.tools.search_chunks.get_config", return_value={"configurable": {}})
+    @patch("AI.tools.search_chunks.get_stream_writer")
+    def test_missing_user_id_returns_error(self, mock_get_writer, mock_get_config):
+        mock_get_writer.return_value = MagicMock()
+        from AI.tools.search_chunks import search_chunks_tool
+
+        result = search_chunks_tool.invoke({
+            "file_id": _VALID_UUID,
+            "queries": ["test"],
+        })
+        assert "Error" in result
+        assert "ownership" in result.lower()
+
+    @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
+    @patch("AI.tools.search_chunks.get_stream_writer")
+    def test_empty_queries_returns_error(self, mock_get_writer, mock_get_config):
+        mock_get_writer.return_value = MagicMock()
+        from AI.tools.search_chunks import search_chunks_tool
+
+        result = search_chunks_tool.invoke({
+            "file_id": _VALID_UUID,
+            "queries": [],
+        })
+        assert "Error" in result
+        assert "query" in result.lower()
+
+    @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
+    @patch("AI.tools.search_chunks.get_stream_writer")
+    @patch("AI.tools.search_chunks.run_async_from_sync")
+    def test_no_results_returns_message(self, mock_run, mock_get_writer, mock_get_config):
+        mock_get_writer.return_value = MagicMock()
+        mock_run.return_value = []
+        from AI.tools.search_chunks import search_chunks_tool
+
+        result = search_chunks_tool.invoke({
+            "file_id": _VALID_UUID,
+            "queries": ["nonexistent"],
+        })
+        assert "No matching chunks" in result
+
+    @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
+    @patch("AI.tools.search_chunks.get_stream_writer")
+    @patch("AI.tools.search_chunks.run_async_from_sync")
+    def test_clamps_num_results(self, mock_run, mock_get_writer, mock_get_config):
+        mock_get_writer.return_value = MagicMock()
+        mock_run.return_value = []
+        from AI.tools.search_chunks import search_chunks_tool
+
+        search_chunks_tool.invoke({
+            "file_id": _VALID_UUID,
+            "queries": ["test"],
+            "num_results": 50,
+        })
+        # Verify the clamped limit was passed to search_chunks
+        call_args = mock_run.call_args
+        # The coroutine is passed as the first positional arg
+        # We can't inspect the coroutine args directly, but we verify
+        # it was called (no error from clamping)

@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from BE.vector_store import (
+    _embed_queries,
     _make_point_id,
     _POINT_ID_NAMESPACE,
     _UPSERT_BATCH_SIZE,
@@ -15,6 +16,7 @@ from BE.vector_store import (
     delete_file_embeddings,
     get_client,
     init_collection,
+    search_chunks,
     store_embeddings,
 )
 
@@ -146,9 +148,10 @@ class TestInitCollection:
         with patch("BE.vector_store.get_client", return_value=None):
             assert run(init_collection()) is False
 
-    def test_skips_when_collection_exists(self, run):
+    def test_skips_create_when_collection_exists(self, run):
         mock_client = AsyncMock()
         mock_client.collection_exists = AsyncMock(return_value=True)
+        mock_client.create_payload_index = AsyncMock()
 
         with patch("BE.vector_store.get_client", return_value=mock_client), \
              patch("BE.vector_store.settings") as mock_settings:
@@ -159,6 +162,8 @@ class TestInitCollection:
 
         assert result is True
         mock_client.create_collection.assert_not_called()
+        # Indexes are still ensured even for existing collections
+        assert mock_client.create_payload_index.call_count == 3
 
     def test_creates_collection_and_indexes(self, run):
         mock_client = AsyncMock()
@@ -175,13 +180,17 @@ class TestInitCollection:
 
         assert result is True
         mock_client.create_collection.assert_called_once()
-        assert mock_client.create_payload_index.call_count == 2
+        assert mock_client.create_payload_index.call_count == 3
 
         # Verify user_id index has is_tenant=True
         calls = mock_client.create_payload_index.call_args_list
         user_id_call = [c for c in calls if c.kwargs.get("field_name") == "user_id"]
         assert len(user_id_call) == 1
         assert user_id_call[0].kwargs["is_tenant"] is True
+
+        # Verify chunk_text full-text index
+        text_call = [c for c in calls if c.kwargs.get("field_name") == "chunk_text"]
+        assert len(text_call) == 1
 
     def test_handles_error_gracefully(self, run):
         mock_client = AsyncMock()
@@ -409,6 +418,154 @@ class TestCloseClient:
 
         run(close_client())
         assert vs._client is None
+
+    def teardown_method(self):
+        import BE.vector_store as vs
+        vs._client = None
+
+
+# ===========================================================================
+# TestEmbedQueries
+# ===========================================================================
+
+
+class TestEmbedQueries:
+    def test_calls_ollama_with_correct_args(self, run):
+        fake_embeddings = [[0.1, 0.2], [0.3, 0.4]]
+        mock_response = MagicMock()
+        mock_response.embeddings = fake_embeddings
+
+        mock_embed = AsyncMock(return_value=mock_response)
+        mock_instance = MagicMock()
+        mock_instance.embed = mock_embed
+
+        with patch("ollama.AsyncClient", return_value=mock_instance), \
+             patch("BE.vector_store.settings") as mock_settings:
+            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
+            mock_settings.OLLAMA_API_KEY = ""
+            mock_settings.EMBEDDING_MODEL = "nomic-embed-text"
+
+            result = run(_embed_queries(["query 1", "query 2"]))
+
+        assert result == fake_embeddings
+        mock_embed.assert_called_once_with(
+            model="nomic-embed-text", input=["query 1", "query 2"]
+        )
+
+
+# ===========================================================================
+# TestSearchChunks
+# ===========================================================================
+
+
+class _FakePoint:
+    """Minimal stand-in for a Qdrant ScoredPoint."""
+    def __init__(self, payload: dict, score: float):
+        self.payload = payload
+        self.score = score
+
+
+class TestSearchChunks:
+    def setup_method(self):
+        import BE.vector_store as vs
+        vs._client = None
+
+    def test_returns_empty_when_disabled(self, run):
+        with patch("BE.vector_store.get_client", return_value=None):
+            result = run(search_chunks(["q"], "f1", "u1"))
+        assert result == []
+
+    def test_search_returns_results(self, run):
+        mock_client = AsyncMock()
+        fake_point = _FakePoint(
+            payload={
+                "chunk_index": 0,
+                "chunk_text": "hello world",
+                "original_name": "test.txt",
+                "file_id": "f1",
+            },
+            score=0.95,
+        )
+        mock_query_result = MagicMock()
+        mock_query_result.points = [fake_point]
+        mock_client.query_points = AsyncMock(return_value=mock_query_result)
+
+        with patch("BE.vector_store.get_client", return_value=mock_client), \
+             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=[[0.1, 0.2]]), \
+             patch("BE.vector_store.settings") as mock_settings:
+            mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
+
+            results = run(search_chunks(["hello"], "f1", "u1", limit=5))
+
+        assert len(results) == 1
+        assert results[0]["chunk_index"] == 0
+        assert results[0]["chunk_text"] == "hello world"
+        assert results[0]["score"] == 0.95
+        assert results[0]["original_name"] == "test.txt"
+        assert results[0]["file_id"] == "f1"
+
+    def test_builds_correct_prefetch_count(self, run):
+        """1 query → 2 prefetches, 3 queries → 6 prefetches."""
+        mock_client = AsyncMock()
+        mock_query_result = MagicMock()
+        mock_query_result.points = []
+        mock_client.query_points = AsyncMock(return_value=mock_query_result)
+
+        for n_queries, expected_prefetches in [(1, 2), (3, 6)]:
+            queries = [f"q{i}" for i in range(n_queries)]
+            embeddings = [[0.1] * 4] * n_queries
+
+            with patch("BE.vector_store.get_client", return_value=mock_client), \
+                 patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=embeddings), \
+                 patch("BE.vector_store.settings") as mock_settings:
+                mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
+
+                run(search_chunks(queries, "f1", "u1"))
+
+            call_kwargs = mock_client.query_points.call_args.kwargs
+            assert len(call_kwargs["prefetch"]) == expected_prefetches
+
+    def test_applies_user_and_file_filter(self, run):
+        mock_client = AsyncMock()
+        mock_query_result = MagicMock()
+        mock_query_result.points = []
+        mock_client.query_points = AsyncMock(return_value=mock_query_result)
+
+        with patch("BE.vector_store.get_client", return_value=mock_client), \
+             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=[[0.1]]), \
+             patch("BE.vector_store.settings") as mock_settings:
+            mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
+
+            run(search_chunks(["test"], "file-abc", "user-xyz"))
+
+        prefetches = mock_client.query_points.call_args.kwargs["prefetch"]
+        # Check the dense-only prefetch filter (first prefetch)
+        conditions = prefetches[0].filter.must
+        keys = [c.key for c in conditions]
+        assert "user_id" in keys
+        assert "file_id" in keys
+
+    def test_handles_embed_error(self, run):
+        mock_client = AsyncMock()
+
+        with patch("BE.vector_store.get_client", return_value=mock_client), \
+             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, side_effect=Exception("Ollama down")):
+            result = run(search_chunks(["q"], "f1", "u1"))
+
+        assert result == []
+
+    def test_handles_query_error(self, run):
+        mock_client = AsyncMock()
+        mock_client.query_points = AsyncMock(side_effect=Exception("Qdrant down"))
+
+        with patch("BE.vector_store.get_client", return_value=mock_client), \
+             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=[[0.1]]), \
+             patch("BE.vector_store.settings") as mock_settings:
+            mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
+
+            result = run(search_chunks(["q"], "f1", "u1"))
+
+        assert result == []
 
     def teardown_method(self):
         import BE.vector_store as vs
