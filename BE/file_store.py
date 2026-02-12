@@ -3,6 +3,7 @@
 import base64
 import os
 import re
+from dataclasses import dataclass
 from typing import Optional
 from uuid import uuid4
 
@@ -135,6 +136,14 @@ def _looks_like_text_extension(filename: str) -> bool:
     return ext.lower() in _TEXT_EXTENSIONS
 
 
+@dataclass
+class PageText:
+    """A single page of extracted text with its 1-based page number."""
+
+    page_number: int
+    text: str
+
+
 def _extract_pdf_text(raw: bytes) -> str:
     """Extract text from a PDF byte buffer using PyMuPDF (fitz)."""
     import fitz  # PyMuPDF
@@ -146,17 +155,28 @@ def _extract_pdf_text(raw: bytes) -> str:
     return "\n".join(pages)
 
 
-async def get_file_content(file_id: str, user_id: str) -> str:
-    """Retrieve and return the text content of an uploaded file.
+def _extract_pdf_pages(raw: bytes) -> list[PageText]:
+    """Extract per-page text from a PDF byte buffer using PyMuPDF (fitz).
 
-    Args:
-        file_id: UUID of the file to read.
-        user_id: ID of the requesting user (ownership check).
+    Returns a list of PageText with 1-based page numbers. Blank pages are skipped.
+    """
+    import fitz  # PyMuPDF
+
+    result: list[PageText] = []
+    with fitz.open(stream=raw, filetype="pdf") as doc:
+        for i, page in enumerate(doc):
+            text = page.get_text()
+            if text.strip():
+                result.append(PageText(page_number=i + 1, text=text))
+    return result
+
+
+async def _fetch_upload(file_id: str, user_id: str):
+    """Fetch a FileUpload row from the database, scoped to the owning user.
 
     Raises:
         RuntimeError: If PostgreSQL is disabled.
         FileNotFoundError: If the file_id does not exist or belongs to another user.
-        ValueError: If the file content is binary / unreadable.
     """
     from BE.config import settings
 
@@ -179,6 +199,58 @@ async def get_file_content(file_id: str, user_id: str) -> str:
 
     if upload is None:
         raise FileNotFoundError(f"No file found with id '{file_id}'")
+
+    return upload
+
+
+async def get_file_pages(file_id: str, user_id: str) -> list[PageText] | None:
+    """Retrieve per-page text for a PDF file, or None for non-PDFs.
+
+    Args:
+        file_id: UUID of the file to read.
+        user_id: ID of the requesting user (ownership check).
+
+    Returns:
+        list[PageText] for PDF files, None for non-PDF files.
+
+    Raises:
+        RuntimeError: If PostgreSQL is disabled.
+        FileNotFoundError: If the file_id does not exist or belongs to another user.
+        ValueError: If the PDF cannot be parsed.
+    """
+    upload = await _fetch_upload(file_id, user_id)
+
+    mime = (upload.mime_type or "").lower()
+    name = upload.original_name or ""
+
+    if mime != "application/pdf" and not name.lower().endswith(".pdf"):
+        return None
+
+    raw: bytes = upload.content
+    if len(raw) > MAX_READABLE_SIZE:
+        raise ValueError(
+            f"File is too large to read ({len(raw)} bytes, max {MAX_READABLE_SIZE})"
+        )
+
+    try:
+        return _extract_pdf_pages(raw)
+    except Exception as exc:
+        raise ValueError(f"Failed to extract text from PDF '{name}': {exc}") from exc
+
+
+async def get_file_content(file_id: str, user_id: str) -> str:
+    """Retrieve and return the text content of an uploaded file.
+
+    Args:
+        file_id: UUID of the file to read.
+        user_id: ID of the requesting user (ownership check).
+
+    Raises:
+        RuntimeError: If PostgreSQL is disabled.
+        FileNotFoundError: If the file_id does not exist or belongs to another user.
+        ValueError: If the file content is binary / unreadable.
+    """
+    upload = await _fetch_upload(file_id, user_id)
 
     raw: bytes = upload.content
     if len(raw) > MAX_READABLE_SIZE:

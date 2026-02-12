@@ -43,10 +43,11 @@ def run(event_loop):
 # ---------------------------------------------------------------------------
 
 class FakeChunk:
-    def __init__(self, index: int, text: str, embedding: list[float]):
+    def __init__(self, index: int, text: str, embedding: list[float], page_number=None):
         self.index = index
         self.text = text
         self.embedding = embedding
+        self.page_number = page_number
 
 
 class FakeEmbeddingResult:
@@ -279,6 +280,7 @@ class TestStoreEmbeddings:
         assert payload["total_chunks"] == 1
         assert payload["chunk_text"] == "chunk 0"
         assert payload["embedding_model"] == "nomic-embed-text"
+        assert payload["page_number"] is None  # FakeChunk defaults to None
         assert "created_at" in payload
         # Verify created_at is valid ISO 8601
         datetime.fromisoformat(payload["created_at"])
@@ -345,6 +347,30 @@ class TestStoreEmbeddings:
 
         points = mock_client.upsert.call_args.kwargs["points"]
         assert points[0].payload["session_id"] == ""
+
+    def test_includes_page_number_in_payload(self, run):
+        mock_client = AsyncMock()
+        mock_client.upsert = AsyncMock()
+
+        chunks = [
+            FakeChunk(index=0, text="chunk 0", embedding=[0.1], page_number=3),
+            FakeChunk(index=1, text="chunk 1", embedding=[0.2], page_number=5),
+        ]
+        fake_result = FakeEmbeddingResult(chunks=chunks)
+
+        with patch("BE.vector_store.get_client", return_value=mock_client), \
+             patch("BE.vector_store.settings") as mock_settings:
+            mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
+
+            run(store_embeddings(
+                file_id="f1", user_id="u1", session_id="s1",
+                original_name="doc.pdf", mime_type="application/pdf",
+                embedding_result=fake_result,
+            ))
+
+        points = mock_client.upsert.call_args.kwargs["points"]
+        assert points[0].payload["page_number"] == 3
+        assert points[1].payload["page_number"] == 5
 
 
 # ===========================================================================
@@ -483,6 +509,7 @@ class TestSearchChunks:
                 "chunk_text": "hello world",
                 "original_name": "test.txt",
                 "file_id": "f1",
+                "page_number": 7,
             },
             score=0.95,
         )
@@ -503,6 +530,32 @@ class TestSearchChunks:
         assert results[0]["score"] == 0.95
         assert results[0]["original_name"] == "test.txt"
         assert results[0]["file_id"] == "f1"
+        assert results[0]["page_number"] == 7
+
+    def test_search_returns_none_page_number_for_old_data(self, run):
+        """Old Qdrant points without page_number return None (backward compat)."""
+        mock_client = AsyncMock()
+        fake_point = _FakePoint(
+            payload={
+                "chunk_index": 0,
+                "chunk_text": "old chunk",
+                "original_name": "legacy.txt",
+                "file_id": "f1",
+            },
+            score=0.80,
+        )
+        mock_query_result = MagicMock()
+        mock_query_result.points = [fake_point]
+        mock_client.query_points = AsyncMock(return_value=mock_query_result)
+
+        with patch("BE.vector_store.get_client", return_value=mock_client), \
+             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=[[0.1]]), \
+             patch("BE.vector_store.settings") as mock_settings:
+            mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
+
+            results = run(search_chunks(["old"], "f1", "u1"))
+
+        assert results[0]["page_number"] is None
 
     def test_builds_correct_prefetch_count(self, run):
         """1 query → 2 prefetches, 3 queries → 6 prefetches."""

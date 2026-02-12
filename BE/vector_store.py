@@ -182,6 +182,7 @@ async def store_embeddings(
                     "chunk_text": chunk.text,
                     "embedding_model": embedding_result.model,
                     "created_at": now,
+                    "page_number": getattr(chunk, "page_number", None),
                 },
             )
         )
@@ -357,6 +358,7 @@ async def search_chunks(
             "score": point.score,
             "original_name": point.payload.get("original_name", ""),
             "file_id": point.payload.get("file_id", ""),
+            "page_number": point.payload.get("page_number"),
         }
         for point in results.points
     ]

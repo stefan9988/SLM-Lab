@@ -7,8 +7,12 @@ import pytest
 
 from BE.file_store import (
     MAX_UPLOAD_SIZE,
+    PageText,
     _decode_data_url,
+    _extract_pdf_pages,
+    _fetch_upload,
     get_file_content,
+    get_file_pages,
     sanitize_filename,
     save_file,
 )
@@ -401,3 +405,143 @@ class TestGetFileContent:
 
         with pytest.raises(ValueError, match="too large"):
             run(get_file_content("huge-file", user_id="user-1"))
+
+
+class TestExtractPdfPages:
+    def test_returns_page_text_with_1based_numbers(self):
+        """Each page gets a 1-based page number."""
+        import fitz
+
+        doc = fitz.open()
+        page1 = doc.new_page()
+        page1.insert_text((72, 72), "Page one content")
+        page2 = doc.new_page()
+        page2.insert_text((72, 72), "Page two content")
+        raw = doc.tobytes()
+        doc.close()
+
+        pages = _extract_pdf_pages(raw)
+        assert len(pages) == 2
+        assert pages[0].page_number == 1
+        assert "Page one content" in pages[0].text
+        assert pages[1].page_number == 2
+        assert "Page two content" in pages[1].text
+
+    def test_skips_blank_pages(self):
+        """Blank pages are not included in the output."""
+        import fitz
+
+        doc = fitz.open()
+        doc.new_page()  # blank page
+        page2 = doc.new_page()
+        page2.insert_text((72, 72), "Non-blank page")
+        doc.new_page()  # another blank page
+        raw = doc.tobytes()
+        doc.close()
+
+        pages = _extract_pdf_pages(raw)
+        assert len(pages) == 1
+        assert pages[0].page_number == 2
+        assert "Non-blank page" in pages[0].text
+
+    def test_returns_page_text_instances(self):
+        import fitz
+
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), "Hello")
+        raw = doc.tobytes()
+        doc.close()
+
+        pages = _extract_pdf_pages(raw)
+        assert len(pages) == 1
+        assert isinstance(pages[0], PageText)
+
+
+class TestFetchUpload:
+    @patch("BE.database.get_session_factory")
+    @patch("BE.config.settings")
+    def test_returns_upload_row(self, mock_settings, mock_factory, run):
+        mock_settings.POSTGRES_ENABLED = True
+        upload_obj = _make_upload(b"content", "text/plain", "test.txt")
+        mock_session = _make_db_session(upload_obj)
+        mock_factory.return_value = MagicMock(return_value=mock_session)
+
+        result = run(_fetch_upload("file-1", "user-1"))
+        assert result is upload_obj
+
+    @patch("BE.database.get_session_factory")
+    @patch("BE.config.settings")
+    def test_not_found_raises(self, mock_settings, mock_factory, run):
+        mock_settings.POSTGRES_ENABLED = True
+        mock_session = _make_db_session(None)
+        mock_factory.return_value = MagicMock(return_value=mock_session)
+
+        with pytest.raises(FileNotFoundError, match="No file found"):
+            run(_fetch_upload("nonexistent", "user-1"))
+
+    @patch("BE.config.settings")
+    def test_postgres_disabled_raises(self, mock_settings, run):
+        mock_settings.POSTGRES_ENABLED = False
+
+        with pytest.raises(RuntimeError, match="PostgreSQL is disabled"):
+            run(_fetch_upload("any-id", "user-1"))
+
+
+class TestGetFilePages:
+    @patch("BE.file_store._fetch_upload")
+    def test_returns_pages_for_pdf(self, mock_fetch, run):
+        import fitz
+
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), "PDF content here")
+        raw = doc.tobytes()
+        doc.close()
+
+        mock_fetch.return_value = _make_upload(raw, "application/pdf", "report.pdf")
+
+        pages = run(get_file_pages("file-1", "user-1"))
+        assert pages is not None
+        assert len(pages) >= 1
+        assert isinstance(pages[0], PageText)
+        assert pages[0].page_number == 1
+        assert "PDF content here" in pages[0].text
+
+    @patch("BE.file_store._fetch_upload")
+    def test_returns_none_for_text_file(self, mock_fetch, run):
+        mock_fetch.return_value = _make_upload(b"text", "text/plain", "readme.txt")
+
+        result = run(get_file_pages("file-1", "user-1"))
+        assert result is None
+
+    @patch("BE.file_store._fetch_upload")
+    def test_returns_none_for_non_pdf_mime(self, mock_fetch, run):
+        mock_fetch.return_value = _make_upload(b"data", "application/json", "data.json")
+
+        result = run(get_file_pages("file-1", "user-1"))
+        assert result is None
+
+    @patch("BE.file_store._fetch_upload")
+    def test_pdf_by_extension(self, mock_fetch, run):
+        """Files with .pdf extension but generic MIME type are treated as PDFs."""
+        import fitz
+
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), "Extension-detected PDF")
+        raw = doc.tobytes()
+        doc.close()
+
+        mock_fetch.return_value = _make_upload(raw, "application/octet-stream", "doc.pdf")
+
+        pages = run(get_file_pages("file-1", "user-1"))
+        assert pages is not None
+        assert len(pages) >= 1
+
+    @patch("BE.file_store._fetch_upload")
+    def test_malformed_pdf_raises_value_error(self, mock_fetch, run):
+        mock_fetch.return_value = _make_upload(b"not-a-pdf", "application/pdf", "bad.pdf")
+
+        with pytest.raises(ValueError, match="Failed to extract text from PDF"):
+            run(get_file_pages("file-1", "user-1"))

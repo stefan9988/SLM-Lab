@@ -16,7 +16,7 @@ from BE.async_utils import init_loop, schedule_background_task, shutdown_tasks
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
 from BE.user_store import upsert_user
 from BE.config import _parse_comma_separated, init_config, settings
-from BE.file_store import get_file_content, sanitize_filename, save_file
+from BE.file_store import get_file_content, get_file_pages, sanitize_filename, save_file
 from BE.logger import redact_url, setup_logger
 
 init_config()
@@ -42,10 +42,11 @@ def _make_embed_task(
     """Return an async callable that embeds a file's text content."""
 
     async def _embed():
-        from AI.embeddings import generate_embeddings
+        from AI.embeddings import generate_embeddings, generate_embeddings_with_pages
 
+        # Try page-aware extraction for PDFs first
         try:
-            text_content = await get_file_content(file_id, user_id)
+            pages = await get_file_pages(file_id, user_id)
         except (ValueError, FileNotFoundError) as exc:
             logger.debug("Skipping embedding for file %s: %s", file_id, exc)
             return
@@ -54,7 +55,11 @@ def _make_embed_task(
             return
 
         try:
-            result = await generate_embeddings(text_content)
+            if pages is not None:
+                result = await generate_embeddings_with_pages(pages)
+            else:
+                text_content = await get_file_content(file_id, user_id)
+                result = await generate_embeddings(text_content)
             dims = len(result.chunks[0].embedding) if result.chunks else 0
             logger.info(
                 "Embeddings generated for file %s: %d chunks, %d dimensions, model=%s",

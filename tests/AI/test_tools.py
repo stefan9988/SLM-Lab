@@ -238,6 +238,7 @@ class TestSearchChunksTool:
                 "score": 0.95,
                 "original_name": "test.txt",
                 "file_id": _VALID_UUID,
+                "page_number": None,
             },
             {
                 "chunk_index": 3,
@@ -245,6 +246,7 @@ class TestSearchChunksTool:
                 "score": 0.80,
                 "original_name": "test.txt",
                 "file_id": _VALID_UUID,
+                "page_number": None,
             },
         ]
         from AI.tools.search_chunks import search_chunks_tool
@@ -259,6 +261,69 @@ class TestSearchChunksTool:
         assert "0.9500" in result
         assert "[1]" in result
         assert "[2]" in result
+        # No page info when page_number is None
+        assert "[Page" not in result
+
+    @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
+    @patch("AI.tools.search_chunks.get_stream_writer")
+    @patch("AI.tools.search_chunks.run_async_from_sync")
+    def test_shows_page_number_when_present(self, mock_run, mock_get_writer, mock_get_config):
+        mock_get_writer.return_value = MagicMock()
+        mock_run.return_value = [
+            {
+                "chunk_index": 2,
+                "chunk_text": "PDF chunk text",
+                "score": 0.90,
+                "original_name": "report.pdf",
+                "file_id": _VALID_UUID,
+                "page_number": 5,
+            },
+        ]
+        from AI.tools.search_chunks import search_chunks_tool
+
+        result = search_chunks_tool.invoke({
+            "file_id": _VALID_UUID,
+            "queries": ["report"],
+            "num_results": 5,
+        })
+        assert "[Page 5]" in result
+        assert "PDF chunk text" in result
+
+    @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
+    @patch("AI.tools.search_chunks.get_stream_writer")
+    @patch("AI.tools.search_chunks.run_async_from_sync")
+    def test_mixed_page_numbers(self, mock_run, mock_get_writer, mock_get_config):
+        """Results with and without page numbers format correctly."""
+        mock_get_writer.return_value = MagicMock()
+        mock_run.return_value = [
+            {
+                "chunk_index": 0,
+                "chunk_text": "With page",
+                "score": 0.95,
+                "original_name": "doc.pdf",
+                "file_id": _VALID_UUID,
+                "page_number": 3,
+            },
+            {
+                "chunk_index": 1,
+                "chunk_text": "Without page",
+                "score": 0.85,
+                "original_name": "doc.txt",
+                "file_id": _VALID_UUID,
+                "page_number": None,
+            },
+        ]
+        from AI.tools.search_chunks import search_chunks_tool
+
+        result = search_chunks_tool.invoke({
+            "file_id": _VALID_UUID,
+            "queries": ["test"],
+            "num_results": 5,
+        })
+        assert "[Page 3]" in result
+        # The second chunk should NOT have [Page
+        lines = result.split("---")
+        assert "[Page" not in lines[1]
 
     @patch("AI.tools.search_chunks.get_stream_writer")
     def test_invalid_uuid_returns_error(self, mock_get_writer):
