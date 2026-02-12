@@ -6,9 +6,10 @@ interface Props {
   onUpdate: (schema: ExtractionSchema) => void;
   onDelete: () => void;
   onSave: () => void;
+  saving?: boolean;
 }
 
-export default function SchemaCard({ schema, onUpdate, onDelete, onSave }: Props) {
+export default function SchemaCard({ schema, onUpdate, onDelete, onSave, saving }: Props) {
   const handleNameChange = (name: string) => {
     onUpdate({ ...schema, name });
   };
@@ -71,9 +72,10 @@ export default function SchemaCard({ schema, onUpdate, onDelete, onSave }: Props
         <div className="flex gap-2">
           <button
             onClick={onSave}
-            className="px-4 py-1.5 rounded-lg bg-[#7c3aed] text-white text-sm font-medium hover:bg-[#6d28d9] transition-colors duration-200"
+            disabled={saving}
+            className="px-4 py-1.5 rounded-lg bg-[#7c3aed] text-white text-sm font-medium hover:bg-[#6d28d9] transition-colors duration-200 disabled:opacity-50"
           >
-            Save
+            {saving ? 'Saving...' : 'Save'}
           </button>
           <button
             onClick={onDelete}

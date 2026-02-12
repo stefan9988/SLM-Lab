@@ -12,6 +12,7 @@ from AI.agents import init_agent
 from AI.prompts.general_agent_prompt import GENERAL_AGENT_PROMPT
 from AI.tools import get_enabled_tools
 from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
+from BE.schema_store import SchemaStore, create_store as _create_schema_store
 from BE.async_utils import init_loop, schedule_background_task, shutdown_tasks
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
 from BE.user_store import upsert_user
@@ -116,6 +117,30 @@ def get_archive_store() -> PostgresArchiveStore:
     if store is None:
         raise HTTPException(status_code=503, detail="Archive store unavailable")
     return store
+
+
+def get_schema_store() -> SchemaStore:
+    """Dependency that returns the schema store or raises 503."""
+    store = _create_schema_store()
+    if store is None:
+        raise HTTPException(status_code=503, detail="Schema store unavailable")
+    return store
+
+
+class SchemaFieldPayload(BaseModel):
+    id: str
+    key: str
+    description: str = ""
+
+
+class CreateSchemaRequest(BaseModel):
+    name: str = Field(max_length=255)
+    fields: list[SchemaFieldPayload] = []
+
+
+class UpdateSchemaRequest(BaseModel):
+    name: str = Field(max_length=255)
+    fields: list[SchemaFieldPayload] = []
 
 
 async def build_prompt_with_files(
@@ -496,4 +521,64 @@ async def delete_archived_session(
     deleted = await store.delete_session(session_id, user_id=user.id)
     if not deleted:
         return JSONResponse(status_code=404, content={"detail": "Session not found"})
+    return {"status": "deleted"}
+
+
+# --- Extraction schema endpoints (PostgreSQL) ---
+
+
+@app.get("/schemas")
+async def list_schemas(
+    store: SchemaStore = Depends(get_schema_store),
+    user: UserInfo = Depends(get_current_user),
+):
+    """List all extraction schemas for the current user."""
+    schemas = await store.get_schemas(user_id=user.id)
+    return {"schemas": schemas}
+
+
+@app.post("/schemas")
+async def create_schema(
+    body: CreateSchemaRequest,
+    store: SchemaStore = Depends(get_schema_store),
+    user: UserInfo = Depends(get_current_user),
+):
+    """Create a new extraction schema."""
+    schema = await store.create_schema(
+        user_id=user.id,
+        name=body.name,
+        fields=[f.model_dump() for f in body.fields],
+    )
+    return schema
+
+
+@app.put("/schemas/{schema_id}")
+async def update_schema(
+    schema_id: str,
+    body: UpdateSchemaRequest,
+    store: SchemaStore = Depends(get_schema_store),
+    user: UserInfo = Depends(get_current_user),
+):
+    """Update an extraction schema."""
+    updated = await store.update_schema(
+        schema_id,
+        user_id=user.id,
+        name=body.name,
+        fields=[f.model_dump() for f in body.fields],
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Schema not found")
+    return updated
+
+
+@app.delete("/schemas/{schema_id}")
+async def delete_schema(
+    schema_id: str,
+    store: SchemaStore = Depends(get_schema_store),
+    user: UserInfo = Depends(get_current_user),
+):
+    """Delete an extraction schema."""
+    deleted = await store.delete_schema(schema_id, user_id=user.id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Schema not found")
     return {"status": "deleted"}

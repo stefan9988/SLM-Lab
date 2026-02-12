@@ -75,4 +75,20 @@ describe('SchemaCard', () => {
     expect(updatedSchema.fields).toHaveLength(1);
     expect(updatedSchema.fields[0].id).toBe('f2');
   });
+
+  it('shows "Saving..." text and disables button when saving is true', () => {
+    render(<SchemaCard schema={baseSchema} onUpdate={vi.fn()} onDelete={vi.fn()} onSave={vi.fn()} saving={true} />);
+
+    const saveButton = screen.getByText('Saving...');
+    expect(saveButton).toBeInTheDocument();
+    expect(saveButton).toBeDisabled();
+  });
+
+  it('shows "Save" text when saving is false', () => {
+    render(<SchemaCard schema={baseSchema} onUpdate={vi.fn()} onDelete={vi.fn()} onSave={vi.fn()} saving={false} />);
+
+    const saveButton = screen.getByText('Save');
+    expect(saveButton).toBeInTheDocument();
+    expect(saveButton).not.toBeDisabled();
+  });
 });

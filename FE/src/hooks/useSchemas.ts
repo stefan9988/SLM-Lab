@@ -1,31 +1,55 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { ExtractionSchema } from '../types';
-import {
-  loadSchemas,
-  addSchema as storageAdd,
-  removeSchema as storageRemove,
-  updateSchema as storageUpdate,
-} from '../utils/schemaStorage';
+import { fetchSchemas, createSchema as apiCreate, updateSchemaApi, deleteSchemaApi } from '../utils/api';
 
 export function useSchemas() {
-  const [schemas, setSchemas] = useState<ExtractionSchema[]>(loadSchemas);
+  const [schemas, setSchemas] = useState<ExtractionSchema[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const addSchema = useCallback(() => {
-    const schema: ExtractionSchema = {
-      id: crypto.randomUUID(),
-      name: 'New Schema',
-      fields: [{ id: crypto.randomUUID(), key: '', description: '' }],
-    };
-    setSchemas(storageAdd(schema));
+  const loadSchemas = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchSchemas();
+      setSchemas(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load schemas');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const deleteSchema = useCallback((id: string) => {
-    setSchemas(storageRemove(id));
+  useEffect(() => {
+    loadSchemas();
+  }, [loadSchemas]);
+
+  const addSchema = useCallback(async () => {
+    try {
+      const schema = await apiCreate('New Schema', [{ id: crypto.randomUUID(), key: '', description: '' }]);
+      setSchemas((prev) => [schema, ...prev]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create schema');
+    }
   }, []);
 
-  const updateSchema = useCallback((schema: ExtractionSchema) => {
-    setSchemas(storageUpdate(schema));
+  const deleteSchema = useCallback(async (id: string) => {
+    try {
+      await deleteSchemaApi(id);
+      setSchemas((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete schema');
+    }
   }, []);
 
-  return { schemas, addSchema, deleteSchema, updateSchema };
+  const saveSchema = useCallback(async (schema: ExtractionSchema) => {
+    try {
+      const updated = await updateSchemaApi(schema.id, schema.name, schema.fields);
+      setSchemas((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save schema');
+    }
+  }, []);
+
+  return { schemas, loading, error, addSchema, deleteSchema, saveSchema };
 }

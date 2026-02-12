@@ -1,4 +1,4 @@
-import type { Message, SSEEvent, FileAttachment } from '../types';
+import type { Message, SSEEvent, FileAttachment, ExtractionSchema, SchemaField } from '../types';
 import logger from './logger';
 
 const TOKEN_KEY = 'slm-auth-token';
@@ -117,5 +117,63 @@ export async function* streamChat(
         logger.warn('[API] Skipping malformed SSE event:', payload);
       }
     }
+  }
+}
+
+export async function fetchSchemas(): Promise<ExtractionSchema[]> {
+  logger.info('[API] Fetching schemas');
+  const res = await fetch('/schemas', {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to fetch schemas:', res.status, res.statusText);
+    throw new Error('Failed to fetch schemas');
+  }
+  const data = await res.json();
+  logger.info('[API] Fetched schemas:', data.schemas.length);
+  return data.schemas;
+}
+
+export async function createSchema(name: string, fields: SchemaField[]): Promise<ExtractionSchema> {
+  logger.info('[API] Creating schema:', name);
+  const res = await fetch('/schemas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ name, fields }),
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to create schema:', res.status, res.statusText);
+    throw new Error('Failed to create schema');
+  }
+  return res.json();
+}
+
+export async function updateSchemaApi(id: string, name: string, fields: SchemaField[]): Promise<ExtractionSchema> {
+  logger.info('[API] Updating schema:', id);
+  const res = await fetch(`/schemas/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ name, fields }),
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to update schema:', res.status, res.statusText);
+    throw new Error('Failed to update schema');
+  }
+  return res.json();
+}
+
+export async function deleteSchemaApi(id: string): Promise<void> {
+  logger.info('[API] Deleting schema:', id);
+  const res = await fetch(`/schemas/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to delete schema:', res.status, res.statusText);
+    throw new Error('Failed to delete schema');
   }
 }

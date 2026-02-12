@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
         '/auth': { target: env.VITE_API_URL || 'http://localhost:8000' },
         '/sessions': { target: env.VITE_API_URL || 'http://localhost:8000' },
         '/archive': { target: env.VITE_API_URL || 'http://localhost:8000' },
+        '/schemas': { target: env.VITE_API_URL || 'http://localhost:8000' },
       },
     },
   }

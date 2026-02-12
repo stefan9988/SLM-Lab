@@ -6,7 +6,7 @@ from uuid import uuid4
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-__all__ = ["Base", "User", "Session", "Message", "FileUpload"]
+__all__ = ["Base", "User", "Session", "Message", "FileUpload", "ExtractionSchema"]
 
 
 class Base(DeclarativeBase):
@@ -31,6 +31,9 @@ class User(Base):
     )
 
     sessions: Mapped[list["Session"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    extraction_schemas: Mapped[list["ExtractionSchema"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -98,3 +101,26 @@ class FileUpload(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+class ExtractionSchema(Base):
+    __tablename__ = "extraction_schemas"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    fields: Mapped[dict] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    user: Mapped["User"] = relationship(back_populates="extraction_schemas")

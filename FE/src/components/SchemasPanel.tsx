@@ -1,12 +1,34 @@
+import { useState } from 'react';
 import { useSchemas } from '../hooks/useSchemas';
 import SchemaCard from './SchemaCard';
+import type { ExtractionSchema } from '../types';
 
 interface Props {
   onBack: () => void;
 }
 
 export default function SchemasPanel({ onBack }: Props) {
-  const { schemas, addSchema, deleteSchema, updateSchema } = useSchemas();
+  const { schemas, loading, error, addSchema, deleteSchema, saveSchema } = useSchemas();
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [localEdits, setLocalEdits] = useState<Record<string, ExtractionSchema>>({});
+
+  const handleUpdate = (schema: ExtractionSchema) => {
+    setLocalEdits((prev) => ({ ...prev, [schema.id]: schema }));
+  };
+
+  const handleSave = async (schema: ExtractionSchema) => {
+    setSavingId(schema.id);
+    try {
+      await saveSchema(schema);
+      setLocalEdits((prev) => {
+        const next = { ...prev };
+        delete next[schema.id];
+        return next;
+      });
+    } finally {
+      setSavingId(null);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full">
@@ -29,7 +51,15 @@ export default function SchemasPanel({ onBack }: Props) {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-3xl mx-auto space-y-4">
-          {schemas.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-16">
+              <p className="text-[#64748b] text-sm">Loading schemas...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-16">
+              <p className="text-[#ef4444] text-sm">{error}</p>
+            </div>
+          ) : schemas.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-[#64748b] text-sm">No extraction schemas yet.</p>
               <p className="text-[#64748b] text-sm mt-1">
@@ -40,10 +70,11 @@ export default function SchemasPanel({ onBack }: Props) {
             schemas.map((schema) => (
               <SchemaCard
                 key={schema.id}
-                schema={schema}
-                onUpdate={updateSchema}
+                schema={localEdits[schema.id] ?? schema}
+                onUpdate={handleUpdate}
                 onDelete={() => deleteSchema(schema.id)}
-                onSave={() => {}}
+                onSave={() => handleSave(localEdits[schema.id] ?? schema)}
+                saving={savingId === schema.id}
               />
             ))
           )}
