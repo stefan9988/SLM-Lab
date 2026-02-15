@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.runnables.config import var_child_runnable_config
 
 from AI.agents import registry
 
@@ -151,6 +152,51 @@ class TestDelegateToAgentTool:
         assert "Error" in result
         assert "failed" in result.lower()
         assert "LLM timeout" in result
+
+    @patch("AI.tools.delegate_to_agent.get_config", return_value=_CONFIG_WITH_USER)
+    @patch("AI.tools.delegate_to_agent.get_stream_writer")
+    def test_stream_context_isolated_during_delegation(
+        self, mock_get_writer, mock_get_config
+    ):
+        """The parent's stream writer context must be reset to None while the
+        delegated agent runs, so the delegated agent's tools don't write
+        into the parent stream."""
+        mock_get_writer.return_value = MagicMock()
+
+        config_value_during_invoke = []
+
+        async def capturing_invoke(prompt, *, session_id, user_id):
+            """Record var_child_runnable_config value at invocation time."""
+            config_value_during_invoke.append(var_child_runnable_config.get(None))
+            return "ok"
+
+        agent = MagicMock()
+        agent.invoke = capturing_invoke
+        registry.register("doc_agent", agent)
+
+        # Pre-set a non-None value to simulate the parent's stream context.
+        sentinel = {"fake": "config"}
+        parent_token = var_child_runnable_config.set(sentinel)
+        try:
+            from AI.tools.delegate_to_agent import delegate_to_agent_tool
+
+            with patch(
+                "AI.tools.delegate_to_agent.run_async_from_sync",
+                side_effect=lambda coro: _run_sync(coro),
+            ):
+                result = delegate_to_agent_tool.invoke(
+                    {"agent_name": "doc_agent", "prompt": "hello"}
+                )
+
+            assert result == "ok"
+            # During agent.invoke, the config must have been None.
+            assert len(config_value_during_invoke) == 1
+            assert config_value_during_invoke[0] is None
+
+            # After delegation, the parent config must be restored.
+            assert var_child_runnable_config.get(None) is sentinel
+        finally:
+            var_child_runnable_config.reset(parent_token)
 
 
 # ---------------------------------------------------------------------------

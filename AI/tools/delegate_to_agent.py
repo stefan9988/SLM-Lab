@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from langchain_core.runnables.config import var_child_runnable_config
 from langchain_core.tools import tool
 from langgraph.config import get_config, get_stream_writer
 
@@ -33,6 +34,9 @@ async def _run_delegation(agent_name: str, prompt: str, user_id: str) -> str:
         )
 
     _active_delegations.add(key)
+    # Reset the parent's runnable config so the delegated agent's tools
+    # don't inherit the caller's stream writer.
+    token = var_child_runnable_config.set(None)
     try:
         session_id = f"delegate-{uuid4()}"
         response = await agent.invoke(
@@ -45,6 +49,7 @@ async def _run_delegation(agent_name: str, prompt: str, user_id: str) -> str:
         logger.error("Delegation to '%s' failed: %s", agent_name, exc, exc_info=True)
         return f"Error: Delegation to '{agent_name}' failed — {exc}"
     finally:
+        var_child_runnable_config.reset(token)
         _active_delegations.discard(key)
 
 
