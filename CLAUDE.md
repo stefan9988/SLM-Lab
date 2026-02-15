@@ -23,3 +23,7 @@ Write tests for all new features.
 ## Environment Variables
 
 When adding new environment variables, update `.env.example` accordingly.
+
+## Formatting
+
+When adding new code or making changes, run `uv run black .` to format the code.
