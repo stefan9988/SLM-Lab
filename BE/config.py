@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     GENERAL_AGENT_READ_FILE_CONTENT_TOOL: bool = False
     GENERAL_AGENT_SEARCH_CHUNKS_TOOL: bool = False
     GENERAL_AGENT_DELEGATE_TOOL: bool = False
+    GENERAL_AGENT_WEB_PAGE_CONTENT_TOOL: bool = False
 
     # Document Agent Tool Toggles
     DOCUMENT_AGENT_DATE_TIME_TOOL: bool = False
@@ -80,6 +81,7 @@ class Settings(BaseSettings):
     DOCUMENT_AGENT_READ_FILE_CONTENT_TOOL: bool = False
     DOCUMENT_AGENT_SEARCH_CHUNKS_TOOL: bool = False
     DOCUMENT_AGENT_DELEGATE_TOOL: bool = False
+    DOCUMENT_AGENT_WEB_PAGE_CONTENT_TOOL: bool = False
 
     # PostgreSQL settings
     POSTGRES_URL: str = "postgresql+asyncpg://slmlab:slmlab@localhost:5432/slmlab"

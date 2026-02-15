@@ -5,6 +5,7 @@ from AI.tools.ollama_web import ollama_web_search_tool, ollama_web_fetch_tool
 from AI.tools.read_file_content import read_file_content_tool
 from AI.tools.search_chunks import search_chunks_tool
 from AI.tools.delegate_to_agent import delegate_to_agent_tool
+from AI.tools.web_page_content import web_page_content_tool
 
 __all__ = [
     "get_current_date_and_time",
@@ -15,6 +16,7 @@ __all__ = [
     "read_file_content_tool",
     "search_chunks_tool",
     "delegate_to_agent_tool",
+    "web_page_content_tool",
     "get_enabled_tools",
     "get_document_agent_enabled_tools",
 ]
@@ -28,6 +30,7 @@ GENERAL_AGENT_TOOLS = [
     ("GENERAL_AGENT_READ_FILE_CONTENT_TOOL", read_file_content_tool),
     ("GENERAL_AGENT_SEARCH_CHUNKS_TOOL", search_chunks_tool),
     ("GENERAL_AGENT_DELEGATE_TOOL", delegate_to_agent_tool),
+    ("GENERAL_AGENT_WEB_PAGE_CONTENT_TOOL", web_page_content_tool),
 ]
 
 DOCUMENT_AGENT_TOOLS = [
@@ -39,6 +42,7 @@ DOCUMENT_AGENT_TOOLS = [
     ("DOCUMENT_AGENT_READ_FILE_CONTENT_TOOL", read_file_content_tool),
     ("DOCUMENT_AGENT_SEARCH_CHUNKS_TOOL", search_chunks_tool),
     ("DOCUMENT_AGENT_DELEGATE_TOOL", delegate_to_agent_tool),
+    ("DOCUMENT_AGENT_WEB_PAGE_CONTENT_TOOL", web_page_content_tool),
 ]
 
 

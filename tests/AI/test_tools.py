@@ -5,6 +5,9 @@ import re
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import pytest
+
 from AI.tools import get_enabled_tools, GENERAL_AGENT_TOOLS
 
 
@@ -435,3 +438,179 @@ class TestSearchChunksTool:
             user_id="user-1",
             limit=20,
         )
+
+
+def _html_response(
+    html: str,
+    content_type: str = "text/html",
+    url: str = "https://example.com",
+) -> httpx.Response:
+    """Build a fake httpx.Response with the given HTML body."""
+    return httpx.Response(
+        status_code=200,
+        headers={"content-type": content_type},
+        text=html,
+        request=httpx.Request("GET", url),
+    )
+
+
+class TestWebPageContentTool:
+    @patch("AI.tools.web_page_content.get_stream_writer")
+    def test_invalid_url_scheme(self, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        from AI.tools.web_page_content import web_page_content_tool
+
+        result = asyncio.run(web_page_content_tool.coroutine(url="ftp://example.com"))
+        assert "Error" in result
+        assert "http" in result.lower()
+
+    @patch("AI.tools.web_page_content.get_stream_writer")
+    @patch("AI.tools.web_page_content.httpx.AsyncClient")
+    def test_returns_extracted_text(self, mock_client_cls, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        html = "<html><body><h1>Title</h1><p>Hello world</p></body></html>"
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get.return_value = _html_response(html)
+        mock_client_cls.return_value = mock_client
+
+        from AI.tools.web_page_content import web_page_content_tool
+
+        result = asyncio.run(
+            web_page_content_tool.coroutine(url="https://example.com")
+        )
+        assert "Title" in result
+        assert "Hello world" in result
+
+    @patch("AI.tools.web_page_content.get_stream_writer")
+    @patch("AI.tools.web_page_content.httpx.AsyncClient")
+    def test_strips_script_and_style(self, mock_client_cls, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        html = (
+            "<html><body>"
+            "<script>var x=1;</script>"
+            "<style>.a{color:red}</style>"
+            "<p>Visible text</p>"
+            "</body></html>"
+        )
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get.return_value = _html_response(html)
+        mock_client_cls.return_value = mock_client
+
+        from AI.tools.web_page_content import web_page_content_tool
+
+        result = asyncio.run(
+            web_page_content_tool.coroutine(url="https://example.com")
+        )
+        assert "Visible text" in result
+        assert "var x=1" not in result
+        assert "color:red" not in result
+
+    @patch("AI.tools.web_page_content.get_stream_writer")
+    @patch("AI.tools.web_page_content.httpx.AsyncClient")
+    def test_timeout_returns_error(self, mock_client_cls, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get.side_effect = httpx.TimeoutException("timed out")
+        mock_client_cls.return_value = mock_client
+
+        from AI.tools.web_page_content import web_page_content_tool
+
+        result = asyncio.run(
+            web_page_content_tool.coroutine(url="https://slow.example.com")
+        )
+        assert "Error" in result
+        assert "timed out" in result.lower()
+
+    @patch("AI.tools.web_page_content.get_stream_writer")
+    @patch("AI.tools.web_page_content.httpx.AsyncClient")
+    def test_http_error_returns_status(self, mock_client_cls, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        response = httpx.Response(status_code=404, request=httpx.Request("GET", "https://example.com/missing"))
+        mock_client.get.return_value = response
+        mock_client_cls.return_value = mock_client
+
+        from AI.tools.web_page_content import web_page_content_tool
+
+        result = asyncio.run(
+            web_page_content_tool.coroutine(url="https://example.com/missing")
+        )
+        assert "Error" in result
+        assert "404" in result
+
+    @patch("AI.tools.web_page_content.get_stream_writer")
+    @patch("AI.tools.web_page_content.httpx.AsyncClient")
+    def test_unsupported_content_type(self, mock_client_cls, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get.return_value = _html_response(
+            "binary data", content_type="application/pdf"
+        )
+        mock_client_cls.return_value = mock_client
+
+        from AI.tools.web_page_content import web_page_content_tool
+
+        result = asyncio.run(
+            web_page_content_tool.coroutine(url="https://example.com/file.pdf")
+        )
+        assert "Error" in result
+        assert "Unsupported content type" in result
+
+    @patch("AI.tools.web_page_content.get_stream_writer")
+    @patch("AI.tools.web_page_content.httpx.AsyncClient")
+    def test_empty_page_returns_warning(self, mock_client_cls, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get.return_value = _html_response(
+            "<html><body></body></html>"
+        )
+        mock_client_cls.return_value = mock_client
+
+        from AI.tools.web_page_content import web_page_content_tool
+
+        result = asyncio.run(
+            web_page_content_tool.coroutine(url="https://example.com/empty")
+        )
+        assert "Warning" in result
+        assert "no readable text" in result.lower()
+
+    @patch("AI.tools.web_page_content.get_stream_writer")
+    @patch("AI.tools.web_page_content.httpx.AsyncClient")
+    def test_truncates_large_content(self, mock_client_cls, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        large_text = "word " * 200_000
+        html = f"<html><body><p>{large_text}</p></body></html>"
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get.return_value = _html_response(html)
+        mock_client_cls.return_value = mock_client
+
+        from AI.tools.web_page_content import web_page_content_tool
+
+        result = asyncio.run(
+            web_page_content_tool.coroutine(url="https://example.com/large")
+        )
+        assert "truncated" in result.lower()
+
+    @patch("AI.tools.web_page_content.get_stream_writer")
+    @patch("AI.tools.web_page_content.httpx.AsyncClient")
+    def test_too_many_redirects(self, mock_client_cls, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get.side_effect = httpx.TooManyRedirects("loop")
+        mock_client_cls.return_value = mock_client
+
+        from AI.tools.web_page_content import web_page_content_tool
+
+        result = asyncio.run(
+            web_page_content_tool.coroutine(url="https://loop.example.com")
+        )
+        assert "Error" in result
+        assert "redirect" in result.lower()
