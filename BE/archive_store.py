@@ -13,7 +13,7 @@ from BE.models import Message, Session
 
 logger = setup_logger(__name__)
 
-__all__ = ["PostgresArchiveStore", "create_store"]
+__all__ = ["PostgresArchiveStore", "create_store", "ensure_session_exists"]
 
 SESSION_TITLE_MAX_LENGTH = 50
 
@@ -190,6 +190,34 @@ class PostgresArchiveStore:
                     delete(Message).where(Message.session_id == session_id)
                 )
                 return True
+
+
+async def ensure_session_exists(session_id: str, user_id: str) -> None:
+    """Create a minimal session row if it doesn't already exist.
+
+    Used to satisfy FK constraints when file uploads happen before
+    the full session is created in save_messages().
+    """
+    from BE.config import settings
+
+    if not settings.POSTGRES_ENABLED:
+        return
+
+    now = datetime.now(timezone.utc)
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            async with session.begin():
+                stmt = pg_insert(Session).values(
+                    id=session_id,
+                    user_id=user_id,
+                    created_at=now,
+                    updated_at=now,
+                )
+                stmt = stmt.on_conflict_do_nothing(index_elements=["id"])
+                await session.execute(stmt)
+    except SQLAlchemyError as exc:
+        logger.warning("Failed to ensure session exists: %s", exc)
 
 
 _archive_store: PostgresArchiveStore | None = None

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, ValidationError
 from AI.agents import init_agent
 from AI.prompts import GENERAL_AGENT_PROMPT, DOCUMENT_AGENT_PROMPT
 from AI.tools import get_enabled_tools, get_document_agent_enabled_tools
-from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store
+from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store, ensure_session_exists
 from BE.schema_store import SchemaStore, create_store as _create_schema_store
 from BE.async_utils import init_loop, schedule_background_task, shutdown_tasks
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
@@ -391,6 +391,9 @@ async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get
         body.message,
     )
 
+    if body.files:
+        await ensure_session_exists(body.session_id, user.id)
+
     try:
         prompt, images, file_attachments = await process_files(
             body.message, body.files, user_id=user.id, session_id=body.session_id
@@ -428,6 +431,9 @@ async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depe
     )
 
     logger.info("Files received: %d", len(body.files) if body.files else 0)
+
+    if body.files:
+        await ensure_session_exists(body.session_id, user.id)
 
     try:
         prompt, images, file_attachments = await process_files(

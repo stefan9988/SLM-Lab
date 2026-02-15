@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from BE.archive_store import PostgresArchiveStore
 from BE.models import Base, User
 
 TEST_USER_ID = "test-user-id"
@@ -265,6 +267,70 @@ class TestGetAllSessionsWithTitles:
         # s2 was saved last, so should appear first
         assert sessions[0]["id"] == "s2"
         assert sessions[1]["id"] == "s1"
+
+
+class TestEnsureSessionExists:
+    def test_creates_new_session(self, run, async_engine, session_factory):
+        """ensure_session_exists creates a session row when none exists."""
+        from BE.archive_store import ensure_session_exists
+
+        run(create_tables(async_engine))
+        run(insert_test_users(session_factory))
+
+        with patch("BE.archive_store.get_session_factory", return_value=session_factory):
+            run(ensure_session_exists("new-session", TEST_USER_ID))
+
+        # Verify the session was created
+        store = PostgresArchiveStore.__new__(PostgresArchiveStore)
+        store._factory = session_factory
+        sessions = run(store.get_all_sessions(user_id=TEST_USER_ID))
+        assert len(sessions) == 1
+        assert sessions[0]["id"] == "new-session"
+
+    def test_idempotent_existing_session_not_modified(self, run, async_engine, session_factory):
+        """Calling ensure_session_exists on an existing session does not overwrite it."""
+        from BE.archive_store import ensure_session_exists
+
+        run(create_tables(async_engine))
+        run(insert_test_users(session_factory))
+
+        store = PostgresArchiveStore.__new__(PostgresArchiveStore)
+        store._factory = session_factory
+
+        # Create session with metadata via save_messages
+        run(store.save_messages(
+            "s1", _make_messages(2),
+            {"model": "original-model", "provider": "original-provider"},
+            user_id=TEST_USER_ID,
+        ))
+
+        # Call ensure_session_exists on the same session
+        with patch("BE.archive_store.get_session_factory", return_value=session_factory):
+            run(ensure_session_exists("s1", TEST_USER_ID))
+
+        # Verify the original session metadata is preserved
+        sessions = run(store.get_all_sessions(user_id=TEST_USER_ID))
+        assert len(sessions) == 1
+        assert sessions[0]["model_name"] == "original-model"
+        assert sessions[0]["provider"] == "original-provider"
+
+    def test_skipped_when_postgres_disabled(self, run):
+        """ensure_session_exists returns immediately when POSTGRES_ENABLED is False."""
+        from BE.archive_store import ensure_session_exists
+
+        with patch("BE.config.settings") as mock_settings, \
+             patch("BE.archive_store.get_session_factory") as mock_factory:
+            mock_settings.POSTGRES_ENABLED = False
+            run(ensure_session_exists("s1", TEST_USER_ID))
+            mock_factory.assert_not_called()
+
+    def test_graceful_error_handling(self, run):
+        """ensure_session_exists logs a warning instead of raising on DB errors."""
+        from BE.archive_store import ensure_session_exists
+
+        with patch("BE.archive_store.get_session_factory", side_effect=SQLAlchemyError("connection refused")):
+            # Should not raise
+            run(ensure_session_exists("s1", TEST_USER_ID))
 
 
 class TestCreateStoreFactory:
