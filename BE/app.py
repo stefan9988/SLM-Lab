@@ -291,6 +291,12 @@ async def lifespan(app: FastAPI):
         maintain_history=True,
     )
 
+    # Register agents for cross-agent delegation
+    from AI.agents import registry
+
+    registry.register("general_agent", app.state.general_agent)
+    registry.register("document_agent", app.state.document_agent)
+
     # Log service URLs for easy reference
     logger.info("=" * 60)
     logger.info("SLM-Lab services running:")
