@@ -55,7 +55,9 @@ def _msg_to_dict(msg, model: str = "", provider: str = "") -> dict:
         additional = {k: v for k, v in msg.additional_kwargs.items() if k != "thinking"}
     return {
         "type": msg.type,
-        "content": json.dumps(msg.content) if isinstance(msg.content, list) else msg.content,
+        "content": (
+            json.dumps(msg.content) if isinstance(msg.content, list) else msg.content
+        ),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "model": model,
         "provider": provider,
@@ -94,6 +96,7 @@ def _get_attached_file_re():
     global _ATTACHED_FILE_RE
     if _ATTACHED_FILE_RE is None:
         import re
+
         _ATTACHED_FILE_RE = re.compile(r"\[Attached (?:image|file): [^\]]+\]\n*")
     return _ATTACHED_FILE_RE
 
@@ -361,7 +364,9 @@ async def warm_session_from_archive(
             messages.append(msg)
 
     if messages:
-        await store.save_messages(session_id, messages, user_id=user_id, _skip_archive=True)
+        await store.save_messages(
+            session_id, messages, user_id=user_id, _skip_archive=True
+        )
         logger.info(
             "Warmed session %s from archive (%d messages)", session_id, len(messages)
         )
@@ -381,7 +386,11 @@ def create_store() -> SessionStore:
             ttl_days=settings.REDIS_SESSION_TTL_DAYS,
         )
         return store
-    except (redis_exceptions.ConnectionError, redis_exceptions.TimeoutError, OSError) as exc:
+    except (
+        redis_exceptions.ConnectionError,
+        redis_exceptions.TimeoutError,
+        OSError,
+    ) as exc:
         logger.warning(
             "Failed to connect to Redis (%s), falling back to InMemoryStore",
             exc,

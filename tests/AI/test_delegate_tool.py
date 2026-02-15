@@ -8,7 +8,6 @@ from langchain_core.runnables.config import var_child_runnable_config
 
 from AI.agents import registry
 
-
 # ---------------------------------------------------------------------------
 # Registry tests
 # ---------------------------------------------------------------------------
@@ -58,7 +57,9 @@ class TestDelegateToAgentTool:
     @patch("AI.tools.delegate_to_agent.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.delegate_to_agent.get_stream_writer")
     @patch("AI.tools.delegate_to_agent._run_delegation", new_callable=AsyncMock)
-    def test_successful_delegation(self, mock_delegation, mock_get_writer, mock_get_config):
+    def test_successful_delegation(
+        self, mock_delegation, mock_get_writer, mock_get_config
+    ):
         mock_get_writer.return_value = MagicMock()
         mock_delegation.return_value = "delegated response"
         agent = MagicMock()
@@ -66,9 +67,11 @@ class TestDelegateToAgentTool:
 
         from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-        result = asyncio.run(delegate_to_agent_tool.coroutine(
-            agent_name="doc_agent", prompt="Summarize the file"
-        ))
+        result = asyncio.run(
+            delegate_to_agent_tool.coroutine(
+                agent_name="doc_agent", prompt="Summarize the file"
+            )
+        )
         assert result == "delegated response"
         mock_delegation.assert_called_once()
 
@@ -79,9 +82,9 @@ class TestDelegateToAgentTool:
 
         from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-        result = asyncio.run(delegate_to_agent_tool.coroutine(
-            agent_name="nonexistent", prompt="hello"
-        ))
+        result = asyncio.run(
+            delegate_to_agent_tool.coroutine(agent_name="nonexistent", prompt="hello")
+        )
         assert "Error" in result
         assert "Unknown agent" in result
         assert "general_agent" in result
@@ -97,9 +100,9 @@ class TestDelegateToAgentTool:
 
         from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-        result = asyncio.run(delegate_to_agent_tool.coroutine(
-            agent_name="doc_agent", prompt="hello"
-        ))
+        result = asyncio.run(
+            delegate_to_agent_tool.coroutine(agent_name="doc_agent", prompt="hello")
+        )
         assert "Error" in result
         assert "user identity" in result.lower()
 
@@ -118,9 +121,9 @@ class TestDelegateToAgentTool:
         # Simulate an active delegation for this user+agent
         _active_delegations.add(("user-1", "doc_agent"))
         try:
-            result = asyncio.run(delegate_to_agent_tool.coroutine(
-                agent_name="doc_agent", prompt="hello"
-            ))
+            result = asyncio.run(
+                delegate_to_agent_tool.coroutine(agent_name="doc_agent", prompt="hello")
+            )
             assert "Error" in result
             assert "Circular delegation" in result
         finally:
@@ -136,9 +139,9 @@ class TestDelegateToAgentTool:
 
         from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-        result = asyncio.run(delegate_to_agent_tool.coroutine(
-            agent_name="doc_agent", prompt="hello"
-        ))
+        result = asyncio.run(
+            delegate_to_agent_tool.coroutine(agent_name="doc_agent", prompt="hello")
+        )
         assert "Error" in result
         assert "failed" in result.lower()
         assert "LLM timeout" in result
@@ -170,9 +173,9 @@ class TestDelegateToAgentTool:
         try:
             from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-            result = asyncio.run(delegate_to_agent_tool.coroutine(
-                agent_name="doc_agent", prompt="hello"
-            ))
+            result = asyncio.run(
+                delegate_to_agent_tool.coroutine(agent_name="doc_agent", prompt="hello")
+            )
 
             assert result == "ok"
             # During agent.invoke, the config must have been None.
@@ -183,5 +186,3 @@ class TestDelegateToAgentTool:
             assert var_child_runnable_config.get(None) is sentinel
         finally:
             var_child_runnable_config.reset(parent_token)
-
-

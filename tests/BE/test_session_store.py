@@ -98,11 +98,15 @@ class TestMessageSerialization:
             "type": "human",
             "content": "describe",
             "thinking": None,
-            "additional_kwargs": {"file_attachments": [{"name": "img.jpg", "type": "image/jpeg"}]},
+            "additional_kwargs": {
+                "file_attachments": [{"name": "img.jpg", "type": "image/jpeg"}]
+            },
         }
         restored = _dict_to_message(d)
         assert isinstance(restored, HumanMessage)
-        assert restored.additional_kwargs["file_attachments"] == [{"name": "img.jpg", "type": "image/jpeg"}]
+        assert restored.additional_kwargs["file_attachments"] == [
+            {"name": "img.jpg", "type": "image/jpeg"}
+        ]
 
     def test_msg_to_dict_serializes_multimodal_content(self):
         """List content (multimodal) is JSON-serialized for PostgreSQL compatibility."""
@@ -257,7 +261,9 @@ class TestHistoryEntryFromDict:
 
     def test_human_entry_with_attached_file_text_stripped(self):
         """[Attached file: ...] prefix is stripped from content on reload."""
-        file_meta = [{"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-123"}]
+        file_meta = [
+            {"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-123"}
+        ]
         d = {
             "type": "human",
             "content": "[Attached file: doc.pdf (file_id: uuid-123)]\n\nsummarize",
@@ -271,7 +277,9 @@ class TestHistoryEntryFromDict:
 
     def test_human_entry_with_file_id_preserved(self):
         """file_id from file_attachments is preserved in the files list."""
-        file_meta = [{"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-456"}]
+        file_meta = [
+            {"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-456"}
+        ]
         d = {
             "type": "human",
             "content": "summarize",
@@ -279,7 +287,9 @@ class TestHistoryEntryFromDict:
             "additional_kwargs": {"file_attachments": file_meta},
         }
         entry = _history_entry_from_dict(d)
-        assert entry["files"] == [{"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-456"}]
+        assert entry["files"] == [
+            {"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-456"}
+        ]
 
     def test_human_entry_mixed_image_and_file_stripped(self):
         """Both [Attached image: ...] and [Attached file: ...] prefixes are stripped."""
@@ -358,16 +368,26 @@ class TestInMemoryStore:
         assert run(in_memory_store.get_history_dicts("none", user_id="u1")) == []
 
     def test_save_and_retrieve(self, run, in_memory_store, sample_messages):
-        run(in_memory_store.save_messages("s1", sample_messages, "model", "provider", user_id="u1"))
+        run(
+            in_memory_store.save_messages(
+                "s1", sample_messages, "model", "provider", user_id="u1"
+            )
+        )
         msgs = run(in_memory_store.get_messages("s1", user_id="u1"))
         assert len(msgs) == 2
         assert isinstance(msgs[0], HumanMessage)
         assert isinstance(msgs[1], AIMessage)
 
-    def test_save_triggers_archive_to_postgres(self, run, in_memory_store, sample_messages):
+    def test_save_triggers_archive_to_postgres(
+        self, run, in_memory_store, sample_messages
+    ):
         """save_messages calls _archive_to_postgres for PostgreSQL persistence."""
         with patch("BE.session_store._archive_to_postgres") as mock_archive:
-            run(in_memory_store.save_messages("s1", sample_messages, "model", "prov", user_id="u1"))
+            run(
+                in_memory_store.save_messages(
+                    "s1", sample_messages, "model", "prov", user_id="u1"
+                )
+            )
             mock_archive.assert_called_once()
             args = mock_archive.call_args
             assert args[0][0] == "s1"  # session_id
@@ -398,12 +418,21 @@ class TestInMemoryStore:
         assert run(in_memory_store.get_messages("s1", user_id="user-b")) == []
         assert run(in_memory_store.get_history_dicts("s1", user_id="user-b")) == []
 
-    def test_save_skip_archive_does_not_call_postgres(self, run, in_memory_store, sample_messages):
+    def test_save_skip_archive_does_not_call_postgres(
+        self, run, in_memory_store, sample_messages
+    ):
         """save_messages with _skip_archive=True does not call _archive_to_postgres."""
         with patch("BE.session_store._archive_to_postgres") as mock_archive:
-            run(in_memory_store.save_messages(
-                "s1", sample_messages, "model", "prov", user_id="u1", _skip_archive=True,
-            ))
+            run(
+                in_memory_store.save_messages(
+                    "s1",
+                    sample_messages,
+                    "model",
+                    "prov",
+                    user_id="u1",
+                    _skip_archive=True,
+                )
+            )
             mock_archive.assert_not_called()
         # Messages should still be stored in memory
         assert len(run(in_memory_store.get_messages("s1", user_id="u1"))) == 2
@@ -602,8 +631,10 @@ class TestWarmSessionFromArchive:
                 "additional_kwargs": {},
             },
         ]
-        with patch("BE.archive_store.create_store", return_value=mock_archive), \
-             patch("BE.session_store._archive_to_postgres") as mock_pg:
+        with (
+            patch("BE.archive_store.create_store", return_value=mock_archive),
+            patch("BE.session_store._archive_to_postgres") as mock_pg,
+        ):
             run(warm_session_from_archive(store, "s1", user_id="u1"))
             mock_pg.assert_not_called()
 

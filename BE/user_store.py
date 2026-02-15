@@ -11,9 +11,7 @@ from BE.models import User
 logger = setup_logger(__name__)
 
 
-async def upsert_user(
-    email: str, name: str, picture: str, google_sub: str
-) -> str:
+async def upsert_user(email: str, name: str, picture: str, google_sub: str) -> str:
     """Create or update a user by google_sub, returning the user's UUID id."""
     factory = get_session_factory()
     now = datetime.now(timezone.utc)

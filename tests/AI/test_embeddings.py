@@ -80,9 +80,7 @@ class TestChunkText:
 
 class TestGenerateEmbeddings:
     def test_result_structure(self, run):
-        mock_response = _MockEmbedResponse(
-            embeddings=[[0.1, 0.2, 0.3]]
-        )
+        mock_response = _MockEmbedResponse(embeddings=[[0.1, 0.2, 0.3]])
         mock_client = AsyncMock()
         mock_client.embed = AsyncMock(return_value=mock_response)
 
@@ -105,15 +103,15 @@ class TestGenerateEmbeddings:
 
     def test_multi_chunk_batching(self, run):
         text = "word " * 500
-        mock_response = _MockEmbedResponse(
-            embeddings=[[0.1, 0.2]] * 3
-        )
+        mock_response = _MockEmbedResponse(embeddings=[[0.1, 0.2]] * 3)
         mock_client = AsyncMock()
         mock_client.embed = AsyncMock(return_value=mock_response)
 
         with (
             patch("AI.embeddings._get_async_client", return_value=mock_client),
-            patch("AI.embeddings.chunk_text", return_value=["chunk1", "chunk2", "chunk3"]),
+            patch(
+                "AI.embeddings.chunk_text", return_value=["chunk1", "chunk2", "chunk3"]
+            ),
             patch("AI.embeddings.settings") as mock_settings,
         ):
             mock_settings.EMBEDDING_MODEL = "nomic-embed-text"
@@ -147,9 +145,7 @@ class TestGenerateEmbeddings:
             result = run(generate_embeddings("Hello", model="custom-model"))
 
         assert result.model == "custom-model"
-        mock_client.embed.assert_called_once_with(
-            model="custom-model", input=["Hello"]
-        )
+        mock_client.embed.assert_called_once_with(model="custom-model", input=["Hello"])
 
     def test_connection_error_propagates(self, run):
         mock_client = AsyncMock()
@@ -267,9 +263,7 @@ class TestGenerateEmbeddingsWithPages:
             _FakePageText(1, "Page one text."),
             _FakePageText(2, "Page two text."),
         ]
-        mock_response = _MockEmbedResponse(
-            embeddings=[[0.1, 0.2], [0.3, 0.4]]
-        )
+        mock_response = _MockEmbedResponse(embeddings=[[0.1, 0.2], [0.3, 0.4]])
         mock_client = AsyncMock()
         mock_client.embed = AsyncMock(return_value=mock_response)
 

@@ -50,9 +50,7 @@ class TestVerifyGoogleToken:
 
 class TestCreateAccessToken:
     def test_jwt_contains_user_info(self):
-        user = UserInfo(
-            id="uid-123", email="a@b.com", name="Alice", picture="pic.jpg"
-        )
+        user = UserInfo(id="uid-123", email="a@b.com", name="Alice", picture="pic.jpg")
         token = create_access_token(user)
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=["HS256"])
         assert payload["sub"] == "a@b.com"

@@ -234,14 +234,10 @@ async def delete_file_embeddings(file_id: str, user_id: str) -> bool:
                 ]
             ),
         )
-        logger.info(
-            "Deleted embeddings for file %s (user=%s)", file_id, user_id
-        )
+        logger.info("Deleted embeddings for file %s (user=%s)", file_id, user_id)
         return True
     except Exception as exc:
-        logger.error(
-            "Failed to delete embeddings for file %s: %s", file_id, exc
-        )
+        logger.error("Failed to delete embeddings for file %s: %s", file_id, exc)
         return False
 
 
@@ -254,9 +250,11 @@ async def _embed_queries(queries: list[str]) -> list[list[float]]:
 
     client = AsyncClient(
         host=settings.OLLAMA_BASE_URL,
-        headers={"authorization": f"Bearer {settings.OLLAMA_API_KEY}"}
-        if settings.OLLAMA_API_KEY
-        else {},
+        headers=(
+            {"authorization": f"Bearer {settings.OLLAMA_API_KEY}"}
+            if settings.OLLAMA_API_KEY
+            else {}
+        ),
     )
     response = await client.embed(model=settings.EMBEDDING_MODEL, input=queries)
     return response.embeddings

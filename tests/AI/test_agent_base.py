@@ -66,17 +66,21 @@ class TestGetInputMessages:
 
 class TestInvoke:
     def test_returns_content(self, run, agent_no_history, mock_graph):
-        mock_graph.ainvoke = AsyncMock(return_value={"messages": [AIMessage(content="response")]})
+        mock_graph.ainvoke = AsyncMock(
+            return_value={"messages": [AIMessage(content="response")]}
+        )
         result = run(agent_no_history.invoke("hi", "s1", user_id="u1"))
         assert result == "response"
 
     def test_history_maintained_across_calls(self, run, agent_with_history, mock_graph):
-        mock_graph.ainvoke = AsyncMock(return_value={
-            "messages": [
-                HumanMessage(content="hi"),
-                AIMessage(content="hello"),
-            ]
-        })
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "messages": [
+                    HumanMessage(content="hi"),
+                    AIMessage(content="hello"),
+                ]
+            }
+        )
         run(agent_with_history.invoke("hi", "s1", user_id="u1"))
 
         # Second call should include history
@@ -86,7 +90,9 @@ class TestInvoke:
 
 
 class TestStream:
-    def test_ai_chunk_with_content_yields_token(self, run, agent_no_history, mock_graph):
+    def test_ai_chunk_with_content_yields_token(
+        self, run, agent_no_history, mock_graph
+    ):
         chunk = AIMessageChunk(content="hi")
         mock_graph.astream.return_value = _async_iter(
             [
@@ -95,12 +101,17 @@ class TestStream:
         )
 
         async def collect():
-            return [event async for event in agent_no_history.stream("hi", "s1", user_id="u1")]
+            return [
+                event
+                async for event in agent_no_history.stream("hi", "s1", user_id="u1")
+            ]
 
         events = run(collect())
         assert events == [{"type": "token", "content": "hi"}]
 
-    def test_ai_chunk_with_tool_call_yields_status(self, run, agent_no_history, mock_graph):
+    def test_ai_chunk_with_tool_call_yields_status(
+        self, run, agent_no_history, mock_graph
+    ):
         chunk = AIMessageChunk(
             content="",
             tool_call_chunks=[{"name": "mytool", "args": "", "id": "1", "index": 0}],
@@ -112,7 +123,10 @@ class TestStream:
         )
 
         async def collect():
-            return [event async for event in agent_no_history.stream("hi", "s1", user_id="u1")]
+            return [
+                event
+                async for event in agent_no_history.stream("hi", "s1", user_id="u1")
+            ]
 
         events = run(collect())
         assert len(events) == 1
@@ -128,7 +142,10 @@ class TestStream:
         )
 
         async def collect():
-            return [event async for event in agent_no_history.stream("hi", "s1", user_id="u1")]
+            return [
+                event
+                async for event in agent_no_history.stream("hi", "s1", user_id="u1")
+            ]
 
         events = run(collect())
         assert events == [{"type": "status", "content": "Tool returned result"}]
@@ -141,7 +158,10 @@ class TestStream:
         )
 
         async def collect():
-            return [event async for event in agent_no_history.stream("hi", "s1", user_id="u1")]
+            return [
+                event
+                async for event in agent_no_history.stream("hi", "s1", user_id="u1")
+            ]
 
         events = run(collect())
         assert events == [{"type": "status", "content": "Processing..."}]
@@ -152,24 +172,33 @@ class TestStream:
         """Tool call name+args chunks are accumulated, then emitted as tool_use on ToolMessage."""
         name_chunk = AIMessageChunk(
             content="",
-            tool_call_chunks=[{"name": "brave_search", "args": "", "id": "1", "index": 0}],
+            tool_call_chunks=[
+                {"name": "brave_search", "args": "", "id": "1", "index": 0}
+            ],
         )
         args_chunk = AIMessageChunk(
             content="",
-            tool_call_chunks=[{"name": None, "args": '{"query": "test"}', "id": None, "index": 0}],
+            tool_call_chunks=[
+                {"name": None, "args": '{"query": "test"}', "id": None, "index": 0}
+            ],
         )
         tool_result = ToolMessage(content="search result", tool_call_id="1")
         ai_response = AIMessageChunk(content="Here are the results")
 
-        mock_graph.astream.return_value = _async_iter([
-            ("messages", (name_chunk, {})),
-            ("messages", (args_chunk, {})),
-            ("messages", (tool_result, {})),
-            ("messages", (ai_response, {})),
-        ])
+        mock_graph.astream.return_value = _async_iter(
+            [
+                ("messages", (name_chunk, {})),
+                ("messages", (args_chunk, {})),
+                ("messages", (tool_result, {})),
+                ("messages", (ai_response, {})),
+            ]
+        )
 
         async def collect():
-            return [event async for event in agent_no_history.stream("search", "s1", user_id="u1")]
+            return [
+                event
+                async for event in agent_no_history.stream("search", "s1", user_id="u1")
+            ]
 
         events = run(collect())
 
@@ -183,24 +212,35 @@ class TestStream:
         """completed_tools are saved in ai_msg.additional_kwargs['tools_used']."""
         name_chunk = AIMessageChunk(
             content="",
-            tool_call_chunks=[{"name": "python_repl", "args": "", "id": "1", "index": 0}],
+            tool_call_chunks=[
+                {"name": "python_repl", "args": "", "id": "1", "index": 0}
+            ],
         )
         args_chunk = AIMessageChunk(
             content="",
-            tool_call_chunks=[{"name": None, "args": '{"code": "print(1)"}', "id": None, "index": 0}],
+            tool_call_chunks=[
+                {"name": None, "args": '{"code": "print(1)"}', "id": None, "index": 0}
+            ],
         )
         tool_result = ToolMessage(content="1", tool_call_id="1")
         ai_response = AIMessageChunk(content="Done")
 
-        mock_graph.astream.return_value = _async_iter([
-            ("messages", (name_chunk, {})),
-            ("messages", (args_chunk, {})),
-            ("messages", (tool_result, {})),
-            ("messages", (ai_response, {})),
-        ])
+        mock_graph.astream.return_value = _async_iter(
+            [
+                ("messages", (name_chunk, {})),
+                ("messages", (args_chunk, {})),
+                ("messages", (tool_result, {})),
+                ("messages", (ai_response, {})),
+            ]
+        )
 
         async def collect():
-            return [event async for event in agent_with_history.stream("run code", "s1", user_id="u1")]
+            return [
+                event
+                async for event in agent_with_history.stream(
+                    "run code", "s1", user_id="u1"
+                )
+            ]
 
         run(collect())
 
@@ -220,18 +260,25 @@ class TestStream:
         )
         args_chunk = AIMessageChunk(
             content="",
-            tool_call_chunks=[{"name": None, "args": "{invalid json", "id": None, "index": 0}],
+            tool_call_chunks=[
+                {"name": None, "args": "{invalid json", "id": None, "index": 0}
+            ],
         )
         tool_result = ToolMessage(content="err", tool_call_id="1")
 
-        mock_graph.astream.return_value = _async_iter([
-            ("messages", (name_chunk, {})),
-            ("messages", (args_chunk, {})),
-            ("messages", (tool_result, {})),
-        ])
+        mock_graph.astream.return_value = _async_iter(
+            [
+                ("messages", (name_chunk, {})),
+                ("messages", (args_chunk, {})),
+                ("messages", (tool_result, {})),
+            ]
+        )
 
         async def collect():
-            return [event async for event in agent_no_history.stream("hi", "s1", user_id="u1")]
+            return [
+                event
+                async for event in agent_no_history.stream("hi", "s1", user_id="u1")
+            ]
 
         events = run(collect())
         tool_use_events = [e for e in events if e["type"] == "tool_use"]
@@ -245,12 +292,14 @@ class TestHistory:
         assert run(agent_no_history.get_history("unknown", user_id="u1")) == []
 
     def test_after_invoke_returns_messages(self, run, agent_with_history, mock_graph):
-        mock_graph.ainvoke = AsyncMock(return_value={
-            "messages": [
-                HumanMessage(content="hi"),
-                AIMessage(content="hello"),
-            ]
-        })
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "messages": [
+                    HumanMessage(content="hi"),
+                    AIMessage(content="hello"),
+                ]
+            }
+        )
         run(agent_with_history.invoke("hi", "s1", user_id="u1"))
         history = run(agent_with_history.get_history("s1", user_id="u1"))
         assert len(history) == 2
@@ -258,9 +307,11 @@ class TestHistory:
         assert history[1]["role"] == "ai"
 
     def test_clear_then_empty(self, run, agent_with_history, mock_graph):
-        mock_graph.ainvoke = AsyncMock(return_value={
-            "messages": [HumanMessage(content="hi"), AIMessage(content="hello")]
-        })
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "messages": [HumanMessage(content="hi"), AIMessage(content="hello")]
+            }
+        )
         run(agent_with_history.invoke("hi", "s1", user_id="u1"))
         run(agent_with_history.clear_history("s1", user_id="u1"))
         assert run(agent_with_history.get_history("s1", user_id="u1")) == []

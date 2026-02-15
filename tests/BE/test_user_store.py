@@ -101,9 +101,7 @@ class TestUpsertUser:
 
         async def _check():
             async with factory() as session:
-                result = await session.execute(
-                    select(User).where(User.id == uid1)
-                )
+                result = await session.execute(select(User).where(User.id == uid1))
                 u = result.scalar_one()
                 assert u.email == "bob_new@example.com"
                 assert u.name == "Robert"

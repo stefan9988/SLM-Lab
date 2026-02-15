@@ -60,24 +60,28 @@ async def insert_test_users(factory):
     now = datetime.now(timezone.utc)
     async with factory() as session:
         async with session.begin():
-            session.add(User(
-                id=TEST_USER_ID,
-                email="test@example.com",
-                google_sub="google-sub-123",
-                name="Test User",
-                picture="",
-                created_at=now,
-                last_login_at=now,
-            ))
-            session.add(User(
-                id=TEST_USER_ID_2,
-                email="other@example.com",
-                google_sub="google-sub-456",
-                name="Other User",
-                picture="",
-                created_at=now,
-                last_login_at=now,
-            ))
+            session.add(
+                User(
+                    id=TEST_USER_ID,
+                    email="test@example.com",
+                    google_sub="google-sub-123",
+                    name="Test User",
+                    picture="",
+                    created_at=now,
+                    last_login_at=now,
+                )
+            )
+            session.add(
+                User(
+                    id=TEST_USER_ID_2,
+                    email="other@example.com",
+                    google_sub="google-sub-456",
+                    name="Other User",
+                    picture="",
+                    created_at=now,
+                    last_login_at=now,
+                )
+            )
 
 
 class TestSchemaStore:
@@ -87,9 +91,11 @@ class TestSchemaStore:
 
     def test_create_schema(self, run, schema_store):
         fields = [{"id": "f1", "key": "title", "description": "The title"}]
-        result = run(schema_store.create_schema(
-            user_id=TEST_USER_ID, name="Invoice", fields=fields
-        ))
+        result = run(
+            schema_store.create_schema(
+                user_id=TEST_USER_ID, name="Invoice", fields=fields
+            )
+        )
         assert result["name"] == "Invoice"
         assert result["fields"] == fields
         assert result["id"] is not None
@@ -97,12 +103,12 @@ class TestSchemaStore:
         assert result["updated_at"] is not None
 
     def test_get_schemas(self, run, schema_store):
-        run(schema_store.create_schema(
-            user_id=TEST_USER_ID, name="Schema A", fields=[]
-        ))
-        run(schema_store.create_schema(
-            user_id=TEST_USER_ID, name="Schema B", fields=[]
-        ))
+        run(
+            schema_store.create_schema(user_id=TEST_USER_ID, name="Schema A", fields=[])
+        )
+        run(
+            schema_store.create_schema(user_id=TEST_USER_ID, name="Schema B", fields=[])
+        )
         result = run(schema_store.get_schemas(user_id=TEST_USER_ID))
         assert len(result) == 2
         # Ordered by created_at DESC, so B first
@@ -110,36 +116,44 @@ class TestSchemaStore:
         assert result[1]["name"] == "Schema A"
 
     def test_update_schema(self, run, schema_store):
-        created = run(schema_store.create_schema(
-            user_id=TEST_USER_ID, name="Original", fields=[]
-        ))
+        created = run(
+            schema_store.create_schema(user_id=TEST_USER_ID, name="Original", fields=[])
+        )
         new_fields = [{"id": "f1", "key": "amount", "description": "Total"}]
-        updated = run(schema_store.update_schema(
-            created["id"], user_id=TEST_USER_ID, name="Updated", fields=new_fields
-        ))
+        updated = run(
+            schema_store.update_schema(
+                created["id"], user_id=TEST_USER_ID, name="Updated", fields=new_fields
+            )
+        )
         assert updated is not None
         assert updated["name"] == "Updated"
         assert updated["fields"] == new_fields
 
     def test_update_schema_not_found(self, run, schema_store):
-        result = run(schema_store.update_schema(
-            "nonexistent", user_id=TEST_USER_ID, name="X", fields=[]
-        ))
+        result = run(
+            schema_store.update_schema(
+                "nonexistent", user_id=TEST_USER_ID, name="X", fields=[]
+            )
+        )
         assert result is None
 
     def test_update_schema_wrong_user(self, run, schema_store):
-        created = run(schema_store.create_schema(
-            user_id=TEST_USER_ID, name="Mine", fields=[]
-        ))
-        result = run(schema_store.update_schema(
-            created["id"], user_id=TEST_USER_ID_2, name="Stolen", fields=[]
-        ))
+        created = run(
+            schema_store.create_schema(user_id=TEST_USER_ID, name="Mine", fields=[])
+        )
+        result = run(
+            schema_store.update_schema(
+                created["id"], user_id=TEST_USER_ID_2, name="Stolen", fields=[]
+            )
+        )
         assert result is None
 
     def test_delete_schema(self, run, schema_store):
-        created = run(schema_store.create_schema(
-            user_id=TEST_USER_ID, name="To Delete", fields=[]
-        ))
+        created = run(
+            schema_store.create_schema(
+                user_id=TEST_USER_ID, name="To Delete", fields=[]
+            )
+        )
         deleted = run(schema_store.delete_schema(created["id"], user_id=TEST_USER_ID))
         assert deleted is True
         result = run(schema_store.get_schemas(user_id=TEST_USER_ID))
@@ -150,9 +164,9 @@ class TestSchemaStore:
         assert deleted is False
 
     def test_delete_schema_wrong_user(self, run, schema_store):
-        created = run(schema_store.create_schema(
-            user_id=TEST_USER_ID, name="Mine", fields=[]
-        ))
+        created = run(
+            schema_store.create_schema(user_id=TEST_USER_ID, name="Mine", fields=[])
+        )
         deleted = run(schema_store.delete_schema(created["id"], user_id=TEST_USER_ID_2))
         assert deleted is False
         # Original user still has it
@@ -160,12 +174,16 @@ class TestSchemaStore:
         assert len(result) == 1
 
     def test_cross_user_isolation(self, run, schema_store):
-        run(schema_store.create_schema(
-            user_id=TEST_USER_ID, name="User A Schema", fields=[]
-        ))
-        run(schema_store.create_schema(
-            user_id=TEST_USER_ID_2, name="User B Schema", fields=[]
-        ))
+        run(
+            schema_store.create_schema(
+                user_id=TEST_USER_ID, name="User A Schema", fields=[]
+            )
+        )
+        run(
+            schema_store.create_schema(
+                user_id=TEST_USER_ID_2, name="User B Schema", fields=[]
+            )
+        )
         a_schemas = run(schema_store.get_schemas(user_id=TEST_USER_ID))
         b_schemas = run(schema_store.get_schemas(user_id=TEST_USER_ID_2))
         assert len(a_schemas) == 1

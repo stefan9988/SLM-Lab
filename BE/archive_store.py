@@ -73,9 +73,11 @@ class PostgresArchiveStore:
                             thinking=msg.get("thinking"),
                             model=msg.get("model"),
                             provider=msg.get("provider"),
-                            timestamp=datetime.fromisoformat(msg["timestamp"])
-                            if msg.get("timestamp")
-                            else now,
+                            timestamp=(
+                                datetime.fromisoformat(msg["timestamp"])
+                                if msg.get("timestamp")
+                                else now
+                            ),
                             additional_kwargs=msg.get("additional_kwargs"),
                         )
                     )
@@ -119,7 +121,11 @@ class PostgresArchiveStore:
         if not user_id:
             raise ValueError("user_id is required for get_all_sessions")
         async with self._factory() as session:
-            query = select(Session).where(Session.user_id == user_id).order_by(Session.updated_at.desc())
+            query = (
+                select(Session)
+                .where(Session.user_id == user_id)
+                .order_by(Session.updated_at.desc())
+            )
             result = await session.execute(query)
             rows = result.scalars().all()
             return [
@@ -164,10 +170,12 @@ class PostgresArchiveStore:
             return [
                 {
                     "id": row.id,
-                    "title": (row.first_content or "New Chat")[:SESSION_TITLE_MAX_LENGTH],
-                    "updated_at": row.updated_at.isoformat()
-                    if row.updated_at
-                    else None,
+                    "title": (row.first_content or "New Chat")[
+                        :SESSION_TITLE_MAX_LENGTH
+                    ],
+                    "updated_at": (
+                        row.updated_at.isoformat() if row.updated_at else None
+                    ),
                 }
                 for row in rows
             ]

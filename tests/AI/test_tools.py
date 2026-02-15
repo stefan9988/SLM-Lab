@@ -162,7 +162,9 @@ class TestReadFileContentTool:
     @patch("AI.tools.read_file_content.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.read_file_content.get_stream_writer")
     @patch("AI.tools.read_file_content.get_file_content", new_callable=AsyncMock)
-    def test_returns_file_content(self, mock_get_content, mock_get_writer, mock_get_config):
+    def test_returns_file_content(
+        self, mock_get_content, mock_get_writer, mock_get_config
+    ):
         mock_get_writer.return_value = MagicMock()
         mock_get_content.return_value = "file text here"
         from AI.tools.read_file_content import read_file_content_tool
@@ -173,9 +175,13 @@ class TestReadFileContentTool:
     @patch("AI.tools.read_file_content.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.read_file_content.get_stream_writer")
     @patch("AI.tools.read_file_content.get_file_content", new_callable=AsyncMock)
-    def test_file_not_found_returns_error_message(self, mock_get_content, mock_get_writer, mock_get_config):
+    def test_file_not_found_returns_error_message(
+        self, mock_get_content, mock_get_writer, mock_get_config
+    ):
         mock_get_writer.return_value = MagicMock()
-        mock_get_content.side_effect = FileNotFoundError("No file found with id 'bad-id'")
+        mock_get_content.side_effect = FileNotFoundError(
+            "No file found with id 'bad-id'"
+        )
         from AI.tools.read_file_content import read_file_content_tool
 
         result = asyncio.run(read_file_content_tool.coroutine(file_id=_VALID_UUID))
@@ -185,7 +191,9 @@ class TestReadFileContentTool:
     @patch("AI.tools.read_file_content.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.read_file_content.get_stream_writer")
     @patch("AI.tools.read_file_content.get_file_content", new_callable=AsyncMock)
-    def test_unsupported_file_returns_error_message(self, mock_get_content, mock_get_writer, mock_get_config):
+    def test_unsupported_file_returns_error_message(
+        self, mock_get_content, mock_get_writer, mock_get_config
+    ):
         mock_get_writer.return_value = MagicMock()
         mock_get_content.side_effect = ValueError("appears to be binary")
         from AI.tools.read_file_content import read_file_content_tool
@@ -197,7 +205,9 @@ class TestReadFileContentTool:
     @patch("AI.tools.read_file_content.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.read_file_content.get_stream_writer")
     @patch("AI.tools.read_file_content.get_file_content", new_callable=AsyncMock)
-    def test_truncates_large_content(self, mock_get_content, mock_get_writer, mock_get_config):
+    def test_truncates_large_content(
+        self, mock_get_content, mock_get_writer, mock_get_config
+    ):
         mock_get_writer.return_value = MagicMock()
         large = "x" * 600_000
         mock_get_content.return_value = large
@@ -233,7 +243,9 @@ class TestSearchChunksTool:
     @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.search_chunks.get_stream_writer")
     @patch("AI.tools.search_chunks.search_chunks", new_callable=AsyncMock)
-    def test_returns_formatted_results(self, mock_search, mock_get_writer, mock_get_config):
+    def test_returns_formatted_results(
+        self, mock_search, mock_get_writer, mock_get_config
+    ):
         mock_get_writer.return_value = MagicMock()
         mock_search.return_value = [
             {
@@ -255,11 +267,13 @@ class TestSearchChunksTool:
         ]
         from AI.tools.search_chunks import search_chunks_tool
 
-        result = asyncio.run(search_chunks_tool.coroutine(
-            file_id=_VALID_UUID,
-            queries=["hello"],
-            num_results=5,
-        ))
+        result = asyncio.run(
+            search_chunks_tool.coroutine(
+                file_id=_VALID_UUID,
+                queries=["hello"],
+                num_results=5,
+            )
+        )
         assert "Hello world" in result
         assert "Second chunk" in result
         assert "0.9500" in result
@@ -271,7 +285,9 @@ class TestSearchChunksTool:
     @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.search_chunks.get_stream_writer")
     @patch("AI.tools.search_chunks.search_chunks", new_callable=AsyncMock)
-    def test_shows_page_number_when_present(self, mock_search, mock_get_writer, mock_get_config):
+    def test_shows_page_number_when_present(
+        self, mock_search, mock_get_writer, mock_get_config
+    ):
         mock_get_writer.return_value = MagicMock()
         mock_search.return_value = [
             {
@@ -285,11 +301,13 @@ class TestSearchChunksTool:
         ]
         from AI.tools.search_chunks import search_chunks_tool
 
-        result = asyncio.run(search_chunks_tool.coroutine(
-            file_id=_VALID_UUID,
-            queries=["report"],
-            num_results=5,
-        ))
+        result = asyncio.run(
+            search_chunks_tool.coroutine(
+                file_id=_VALID_UUID,
+                queries=["report"],
+                num_results=5,
+            )
+        )
         assert "[Page 5]" in result
         assert "PDF chunk text" in result
 
@@ -319,11 +337,13 @@ class TestSearchChunksTool:
         ]
         from AI.tools.search_chunks import search_chunks_tool
 
-        result = asyncio.run(search_chunks_tool.coroutine(
-            file_id=_VALID_UUID,
-            queries=["test"],
-            num_results=5,
-        ))
+        result = asyncio.run(
+            search_chunks_tool.coroutine(
+                file_id=_VALID_UUID,
+                queries=["test"],
+                num_results=5,
+            )
+        )
         assert "[Page 3]" in result
         # The second chunk should NOT have [Page
         lines = result.split("---")
@@ -334,10 +354,12 @@ class TestSearchChunksTool:
         mock_get_writer.return_value = MagicMock()
         from AI.tools.search_chunks import search_chunks_tool
 
-        result = asyncio.run(search_chunks_tool.coroutine(
-            file_id="not-a-uuid",
-            queries=["test"],
-        ))
+        result = asyncio.run(
+            search_chunks_tool.coroutine(
+                file_id="not-a-uuid",
+                queries=["test"],
+            )
+        )
         assert "Error" in result
         assert "Invalid file_id format" in result
 
@@ -347,10 +369,12 @@ class TestSearchChunksTool:
         mock_get_writer.return_value = MagicMock()
         from AI.tools.search_chunks import search_chunks_tool
 
-        result = asyncio.run(search_chunks_tool.coroutine(
-            file_id=_VALID_UUID,
-            queries=["test"],
-        ))
+        result = asyncio.run(
+            search_chunks_tool.coroutine(
+                file_id=_VALID_UUID,
+                queries=["test"],
+            )
+        )
         assert "Error" in result
         assert "ownership" in result.lower()
 
@@ -360,38 +384,50 @@ class TestSearchChunksTool:
         mock_get_writer.return_value = MagicMock()
         from AI.tools.search_chunks import search_chunks_tool
 
-        result = asyncio.run(search_chunks_tool.coroutine(
-            file_id=_VALID_UUID,
-            queries=[],
-        ))
+        result = asyncio.run(
+            search_chunks_tool.coroutine(
+                file_id=_VALID_UUID,
+                queries=[],
+            )
+        )
         assert "Error" in result
         assert "query" in result.lower()
 
     @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.search_chunks.get_stream_writer")
-    @patch("AI.tools.search_chunks.search_chunks", new_callable=AsyncMock, return_value=[])
-    def test_no_results_returns_message(self, mock_search, mock_get_writer, mock_get_config):
+    @patch(
+        "AI.tools.search_chunks.search_chunks", new_callable=AsyncMock, return_value=[]
+    )
+    def test_no_results_returns_message(
+        self, mock_search, mock_get_writer, mock_get_config
+    ):
         mock_get_writer.return_value = MagicMock()
         from AI.tools.search_chunks import search_chunks_tool
 
-        result = asyncio.run(search_chunks_tool.coroutine(
-            file_id=_VALID_UUID,
-            queries=["nonexistent"],
-        ))
+        result = asyncio.run(
+            search_chunks_tool.coroutine(
+                file_id=_VALID_UUID,
+                queries=["nonexistent"],
+            )
+        )
         assert "No matching chunks" in result
 
     @patch("AI.tools.search_chunks.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.search_chunks.get_stream_writer")
-    @patch("AI.tools.search_chunks.search_chunks", new_callable=AsyncMock, return_value=[])
+    @patch(
+        "AI.tools.search_chunks.search_chunks", new_callable=AsyncMock, return_value=[]
+    )
     def test_clamps_num_results(self, mock_search, mock_get_writer, mock_get_config):
         mock_get_writer.return_value = MagicMock()
         from AI.tools.search_chunks import search_chunks_tool
 
-        asyncio.run(search_chunks_tool.coroutine(
-            file_id=_VALID_UUID,
-            queries=["test"],
-            num_results=50,
-        ))
+        asyncio.run(
+            search_chunks_tool.coroutine(
+                file_id=_VALID_UUID,
+                queries=["test"],
+                num_results=50,
+            )
+        )
         # Verify search_chunks was called with limit clamped to 20
         mock_search.assert_called_once_with(
             queries=["test"],

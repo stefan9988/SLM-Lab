@@ -45,8 +45,13 @@ class TestGetDocumentAgentEnabledTools:
         tools = get_document_agent_enabled_tools(settings)
         assert len(tools) == 2
         expected = [
-            tool for name, tool in DOCUMENT_AGENT_TOOLS
-            if name in ("DOCUMENT_AGENT_DATE_TIME_TOOL", "DOCUMENT_AGENT_READ_FILE_CONTENT_TOOL")
+            tool
+            for name, tool in DOCUMENT_AGENT_TOOLS
+            if name
+            in (
+                "DOCUMENT_AGENT_DATE_TIME_TOOL",
+                "DOCUMENT_AGENT_READ_FILE_CONTENT_TOOL",
+            )
         ]
         assert tools == expected
 

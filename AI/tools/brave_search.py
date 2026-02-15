@@ -11,6 +11,7 @@ _brave: BraveSearch | None = None
 
 def _get_brave(count: int) -> BraveSearch:
     from BE.config import settings
+
     return BraveSearch.from_api_key(
         api_key=settings.BRAVE_SEARCH_API_KEY,
         search_kwargs={"count": count},

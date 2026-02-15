@@ -251,6 +251,7 @@ class TestInitLoop:
 
     def test_schedule_fails_without_init_loop_and_no_event_loop(self):
         """Without init_loop, scheduling from a plain thread returns False."""
+
         async def dummy():
             pass
 

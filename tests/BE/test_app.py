@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from BE.app import FileAttachment, build_prompt_with_files, process_files, get_archive_store
+from BE.app import (
+    FileAttachment,
+    build_prompt_with_files,
+    process_files,
+    get_archive_store,
+)
 from BE.auth import get_current_user
 
 
@@ -80,8 +85,16 @@ class TestBuildPromptWithFiles:
         assert "[Attached file: data.csv" in prompt
         assert "[Attached file: doc.pdf" in prompt
         assert len(file_meta) == 2
-        assert file_meta[0] == {"name": "data.csv", "type": "text/csv", "file_id": "uuid-123"}
-        assert file_meta[1] == {"name": "doc.pdf", "type": "application/pdf", "file_id": "uuid-123"}
+        assert file_meta[0] == {
+            "name": "data.csv",
+            "type": "text/csv",
+            "file_id": "uuid-123",
+        }
+        assert file_meta[1] == {
+            "name": "doc.pdf",
+            "type": "application/pdf",
+            "file_id": "uuid-123",
+        }
         assert mock_save.call_count == 2
 
     @patch("BE.app.save_file", new_callable=AsyncMock, return_value=None)
@@ -101,8 +114,12 @@ class TestBuildPromptWithFiles:
 
     @patch("BE.app.save_file", new_callable=AsyncMock, return_value=None)
     def test_multiple_images_returns_metadata(self, _mock_save, run):
-        f1 = FileAttachment(name="a.png", type="image/png", content="data:image/png;base64,x", size=10)
-        f2 = FileAttachment(name="b.jpg", type="image/jpeg", content="data:image/jpeg;base64,y", size=20)
+        f1 = FileAttachment(
+            name="a.png", type="image/png", content="data:image/png;base64,x", size=10
+        )
+        f2 = FileAttachment(
+            name="b.jpg", type="image/jpeg", content="data:image/jpeg;base64,y", size=20
+        )
         prompt, images, file_meta = run(
             build_prompt_with_files("describe", [f1, f2], user_id="u1")
         )
@@ -114,7 +131,9 @@ class TestBuildPromptWithFiles:
     @patch("BE.app.save_file", new_callable=AsyncMock, return_value="uuid-abc")
     def test_mixed_image_and_text_files(self, mock_save, run):
         """Images go to multimodal, text files get saved to DB."""
-        img = FileAttachment(name="pic.png", type="image/png", content="data:image/png;base64,x", size=10)
+        img = FileAttachment(
+            name="pic.png", type="image/png", content="data:image/png;base64,x", size=10
+        )
         txt = FileAttachment(
             name="notes.txt",
             type="text/plain",
@@ -129,25 +148,27 @@ class TestBuildPromptWithFiles:
         assert "[Attached image: pic.png]" in prompt
         assert "[Attached file: notes.txt (file_id: uuid-abc)]" in prompt
         assert file_meta[0] == {"name": "pic.png", "type": "image/png"}
-        assert file_meta[1] == {"name": "notes.txt", "type": "text/plain", "file_id": "uuid-abc"}
+        assert file_meta[1] == {
+            "name": "notes.txt",
+            "type": "text/plain",
+            "file_id": "uuid-abc",
+        }
         mock_save.assert_called_once()
 
 
 class TestProcessFiles:
     def test_no_files_returns_empty_metadata(self, run):
-        prompt, images, file_meta = run(
-            process_files("hello", None, user_id="u1")
-        )
+        prompt, images, file_meta = run(process_files("hello", None, user_id="u1"))
         assert prompt == "hello"
         assert images == []
         assert file_meta == []
 
     @patch("BE.app.save_file", new_callable=AsyncMock, return_value=None)
     def test_image_files_return_metadata(self, _mock_save, run):
-        f = FileAttachment(name="pic.png", type="image/png", content="data:image/png;base64,x", size=10)
-        prompt, images, file_meta = run(
-            process_files("describe", [f], user_id="u1")
+        f = FileAttachment(
+            name="pic.png", type="image/png", content="data:image/png;base64,x", size=10
         )
+        prompt, images, file_meta = run(process_files("describe", [f], user_id="u1"))
         assert len(images) == 1
         assert file_meta == [{"name": "pic.png", "type": "image/png"}]
 
@@ -155,13 +176,17 @@ class TestProcessFiles:
     def test_text_file_saved_and_referenced(self, mock_save, run):
         raw = b"a,b,c\n1,2,3"
         data_url = f"data:text/csv;base64,{base64.b64encode(raw).decode()}"
-        f = FileAttachment(name="data.csv", type="text/csv", content=data_url, size=len(raw))
+        f = FileAttachment(
+            name="data.csv", type="text/csv", content=data_url, size=len(raw)
+        )
         prompt, images, file_meta = run(
             process_files("analyze", [f], user_id="u1", session_id="s1")
         )
         assert images == []
         assert "file_id: uuid-456" in prompt
-        assert file_meta == [{"name": "data.csv", "type": "text/csv", "file_id": "uuid-456"}]
+        assert file_meta == [
+            {"name": "data.csv", "type": "text/csv", "file_id": "uuid-456"}
+        ]
         mock_save.assert_called_once_with(
             original_name="data.csv",
             mime_type="text/csv",
@@ -227,7 +252,11 @@ class TestChatEndpoint:
         assert resp.status_code == 200
         assert resp.json() == {"response": "mock response"}
         mock_agent.invoke.assert_called_once_with(
-            "hi", session_id="s1", images=None, file_attachments=None, user_id="test-user-id"
+            "hi",
+            session_id="s1",
+            images=None,
+            file_attachments=None,
+            user_id="test-user-id",
         )
 
     def test_post_chat_422_missing_fields(self, client):
@@ -336,9 +365,7 @@ class TestGoogleAuthEndpoint:
         # Clear overrides so auth is actually enforced
         app.dependency_overrides.pop(get_current_user, None)
         unauthed_client = TestClient(app, raise_server_exceptions=False)
-        resp = unauthed_client.post(
-            "/chat", json={"message": "hi", "session_id": "s1"}
-        )
+        resp = unauthed_client.post("/chat", json={"message": "hi", "session_id": "s1"})
         assert resp.status_code == 422  # missing Authorization header
 
 

@@ -11,7 +11,11 @@ from pydantic import BaseModel, Field, ValidationError
 from AI.agents import init_agent
 from AI.prompts import GENERAL_AGENT_PROMPT, DOCUMENT_AGENT_PROMPT
 from AI.tools import get_enabled_tools, get_document_agent_enabled_tools
-from BE.archive_store import PostgresArchiveStore, create_store as _create_archive_store, ensure_session_exists
+from BE.archive_store import (
+    PostgresArchiveStore,
+    create_store as _create_archive_store,
+    ensure_session_exists,
+)
 from BE.schema_store import SchemaStore, create_store as _create_schema_store
 from BE.async_utils import init_loop, schedule_background_task, shutdown_tasks
 from BE.auth import UserInfo, create_access_token, get_current_user, verify_google_token
@@ -179,7 +183,9 @@ async def build_prompt_with_files(
             )
             if file_id:
                 text_parts.append(f"[Attached file: {safe_name} (file_id: {file_id})]")
-                file_meta.append({"name": safe_name, "type": f.type, "file_id": file_id})
+                file_meta.append(
+                    {"name": safe_name, "type": f.type, "file_id": file_id}
+                )
                 if settings.EMBEDDING_ENABLED:
                     schedule_background_task(
                         _make_embed_task(
@@ -248,9 +254,7 @@ async def lifespan(app: FastAPI):
             "Set a strong random secret via the JWT_SECRET_KEY environment variable."
         )
     if not settings.GOOGLE_CLIENT_ID:
-        logger.warning(
-            "GOOGLE_CLIENT_ID is empty — Google OAuth login will not work."
-        )
+        logger.warning("GOOGLE_CLIENT_ID is empty — Google OAuth login will not work.")
 
     init_loop()
     tools = get_enabled_tools(settings)
@@ -343,6 +347,7 @@ app.add_middleware(
     max_age=settings.CORS_MAX_AGE,
 )
 
+
 @app.exception_handler(ValidationError)
 async def validation_error_handler(request: Request, exc: ValidationError):
     logger.warning("Validation error: %s", exc)
@@ -383,7 +388,9 @@ async def google_auth(body: GoogleAuthRequest):
 
 
 @app.post("/chat")
-async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get_current_user)):
+async def chat(
+    body: ChatRequest, request: Request, user: UserInfo = Depends(get_current_user)
+):
     """Send a message and get a complete response."""
     logger.info(
         "POST /chat (session_id=%s, message_preview=%.50s)",
@@ -422,7 +429,9 @@ async def chat(body: ChatRequest, request: Request, user: UserInfo = Depends(get
 
 
 @app.post("/chat/stream")
-async def chat_stream(body: ChatRequest, request: Request, user: UserInfo = Depends(get_current_user)):
+async def chat_stream(
+    body: ChatRequest, request: Request, user: UserInfo = Depends(get_current_user)
+):
     """Send a message and get a streaming SSE response."""
     logger.info(
         "POST /chat/stream (session_id=%s, message_preview=%.50s)",

@@ -62,24 +62,28 @@ async def insert_test_users(factory):
     now = datetime.now(timezone.utc)
     async with factory() as session:
         async with session.begin():
-            session.add(User(
-                id=TEST_USER_ID,
-                email="test@example.com",
-                google_sub="google-sub-123",
-                name="Test User",
-                picture="",
-                created_at=now,
-                last_login_at=now,
-            ))
-            session.add(User(
-                id=TEST_USER_ID_2,
-                email="other@example.com",
-                google_sub="google-sub-456",
-                name="Other User",
-                picture="",
-                created_at=now,
-                last_login_at=now,
-            ))
+            session.add(
+                User(
+                    id=TEST_USER_ID,
+                    email="test@example.com",
+                    google_sub="google-sub-123",
+                    name="Test User",
+                    picture="",
+                    created_at=now,
+                    last_login_at=now,
+                )
+            )
+            session.add(
+                User(
+                    id=TEST_USER_ID_2,
+                    email="other@example.com",
+                    google_sub="google-sub-456",
+                    name="Other User",
+                    picture="",
+                    created_at=now,
+                    last_login_at=now,
+                )
+            )
 
 
 def _make_messages(n=2):
@@ -104,7 +108,11 @@ def _make_messages(n=2):
 class TestPostgresArchiveStore:
     def test_save_and_get_messages(self, run, archive_store):
         msgs = _make_messages(3)
-        run(archive_store.save_messages("s1", msgs, {"model": "m", "provider": "p"}, user_id=TEST_USER_ID))
+        run(
+            archive_store.save_messages(
+                "s1", msgs, {"model": "m", "provider": "p"}, user_id=TEST_USER_ID
+            )
+        )
         result = run(archive_store.get_messages("s1", user_id=TEST_USER_ID))
         assert len(result) == 3
         assert result[0]["type"] == "human"
@@ -123,8 +131,16 @@ class TestPostgresArchiveStore:
         assert len(result) == 4
 
     def test_get_all_sessions(self, run, archive_store):
-        run(archive_store.save_messages("s1", _make_messages(1), {"model": "m1"}, user_id=TEST_USER_ID))
-        run(archive_store.save_messages("s2", _make_messages(1), {"model": "m2"}, user_id=TEST_USER_ID))
+        run(
+            archive_store.save_messages(
+                "s1", _make_messages(1), {"model": "m1"}, user_id=TEST_USER_ID
+            )
+        )
+        run(
+            archive_store.save_messages(
+                "s2", _make_messages(1), {"model": "m2"}, user_id=TEST_USER_ID
+            )
+        )
         sessions = run(archive_store.get_all_sessions(user_id=TEST_USER_ID))
         assert len(sessions) == 2
         ids = {s["id"] for s in sessions}
@@ -147,8 +163,22 @@ class TestPostgresArchiveStore:
         assert deleted is False
 
     def test_upsert_session_metadata(self, run, archive_store):
-        run(archive_store.save_messages("s1", _make_messages(1), {"model": "m1", "provider": "p1"}, user_id=TEST_USER_ID))
-        run(archive_store.save_messages("s1", _make_messages(1), {"model": "m2", "provider": "p2"}, user_id=TEST_USER_ID))
+        run(
+            archive_store.save_messages(
+                "s1",
+                _make_messages(1),
+                {"model": "m1", "provider": "p1"},
+                user_id=TEST_USER_ID,
+            )
+        )
+        run(
+            archive_store.save_messages(
+                "s1",
+                _make_messages(1),
+                {"model": "m2", "provider": "p2"},
+                user_id=TEST_USER_ID,
+            )
+        )
         sessions = run(archive_store.get_all_sessions(user_id=TEST_USER_ID))
         assert len(sessions) == 1
         assert sessions[0]["model_name"] == "m2"
@@ -163,7 +193,9 @@ class TestPostgresArchiveStore:
     def test_cross_user_isolation_get_all_sessions(self, run, archive_store):
         """get_all_sessions only returns the requesting user's sessions."""
         run(archive_store.save_messages("s1", _make_messages(1), user_id=TEST_USER_ID))
-        run(archive_store.save_messages("s2", _make_messages(1), user_id=TEST_USER_ID_2))
+        run(
+            archive_store.save_messages("s2", _make_messages(1), user_id=TEST_USER_ID_2)
+        )
         sessions_a = run(archive_store.get_all_sessions(user_id=TEST_USER_ID))
         sessions_b = run(archive_store.get_all_sessions(user_id=TEST_USER_ID_2))
         assert len(sessions_a) == 1
@@ -251,8 +283,12 @@ class TestGetAllSessionsWithTitles:
         msgs = _make_messages(2)
         run(archive_store.save_messages("s1", msgs, user_id=TEST_USER_ID))
         run(archive_store.save_messages("s2", msgs, user_id=TEST_USER_ID_2))
-        sessions_a = run(archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID))
-        sessions_b = run(archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID_2))
+        sessions_a = run(
+            archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID)
+        )
+        sessions_b = run(
+            archive_store.get_all_sessions_with_titles(user_id=TEST_USER_ID_2)
+        )
         assert len(sessions_a) == 1
         assert sessions_a[0]["id"] == "s1"
         assert len(sessions_b) == 1
@@ -277,7 +313,9 @@ class TestEnsureSessionExists:
         run(create_tables(async_engine))
         run(insert_test_users(session_factory))
 
-        with patch("BE.archive_store.get_session_factory", return_value=session_factory):
+        with patch(
+            "BE.archive_store.get_session_factory", return_value=session_factory
+        ):
             run(ensure_session_exists("new-session", TEST_USER_ID))
 
         # Verify the session was created
@@ -287,7 +325,9 @@ class TestEnsureSessionExists:
         assert len(sessions) == 1
         assert sessions[0]["id"] == "new-session"
 
-    def test_idempotent_existing_session_not_modified(self, run, async_engine, session_factory):
+    def test_idempotent_existing_session_not_modified(
+        self, run, async_engine, session_factory
+    ):
         """Calling ensure_session_exists on an existing session does not overwrite it."""
         from BE.archive_store import ensure_session_exists
 
@@ -298,14 +338,19 @@ class TestEnsureSessionExists:
         store._factory = session_factory
 
         # Create session with metadata via save_messages
-        run(store.save_messages(
-            "s1", _make_messages(2),
-            {"model": "original-model", "provider": "original-provider"},
-            user_id=TEST_USER_ID,
-        ))
+        run(
+            store.save_messages(
+                "s1",
+                _make_messages(2),
+                {"model": "original-model", "provider": "original-provider"},
+                user_id=TEST_USER_ID,
+            )
+        )
 
         # Call ensure_session_exists on the same session
-        with patch("BE.archive_store.get_session_factory", return_value=session_factory):
+        with patch(
+            "BE.archive_store.get_session_factory", return_value=session_factory
+        ):
             run(ensure_session_exists("s1", TEST_USER_ID))
 
         # Verify the original session metadata is preserved
@@ -318,8 +363,10 @@ class TestEnsureSessionExists:
         """ensure_session_exists returns immediately when POSTGRES_ENABLED is False."""
         from BE.archive_store import ensure_session_exists
 
-        with patch("BE.config.settings") as mock_settings, \
-             patch("BE.archive_store.get_session_factory") as mock_factory:
+        with (
+            patch("BE.config.settings") as mock_settings,
+            patch("BE.archive_store.get_session_factory") as mock_factory,
+        ):
             mock_settings.POSTGRES_ENABLED = False
             run(ensure_session_exists("s1", TEST_USER_ID))
             mock_factory.assert_not_called()
@@ -328,7 +375,10 @@ class TestEnsureSessionExists:
         """ensure_session_exists logs a warning instead of raising on DB errors."""
         from BE.archive_store import ensure_session_exists
 
-        with patch("BE.archive_store.get_session_factory", side_effect=SQLAlchemyError("connection refused")):
+        with patch(
+            "BE.archive_store.get_session_factory",
+            side_effect=SQLAlchemyError("connection refused"),
+        ):
             # Should not raise
             run(ensure_session_exists("s1", TEST_USER_ID))
 

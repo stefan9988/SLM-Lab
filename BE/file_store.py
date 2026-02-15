@@ -26,10 +26,39 @@ _TEXT_MIME_PREFIXES = (
 )
 
 _TEXT_EXTENSIONS = {
-    ".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".toml",
-    ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss",
-    ".java", ".c", ".cpp", ".h", ".hpp", ".rs", ".go", ".rb", ".sh",
-    ".bat", ".ps1", ".sql", ".log", ".ini", ".cfg", ".conf", ".env",
+    ".txt",
+    ".md",
+    ".csv",
+    ".json",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".html",
+    ".css",
+    ".scss",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".rs",
+    ".go",
+    ".rb",
+    ".sh",
+    ".bat",
+    ".ps1",
+    ".sql",
+    ".log",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".env",
 }
 
 
@@ -93,7 +122,9 @@ async def save_file(
     if actual_size > MAX_UPLOAD_SIZE:
         logger.warning(
             "File %s exceeds per-file limit (%d > %d) — skipping",
-            original_name, actual_size, MAX_UPLOAD_SIZE,
+            original_name,
+            actual_size,
+            MAX_UPLOAD_SIZE,
         )
         return None
 
@@ -116,7 +147,10 @@ async def save_file(
             session.add(upload)
             await session.commit()
             logger.info(
-                "Saved file %s (id=%s, %d bytes)", original_name, file_id, len(raw_bytes)
+                "Saved file %s (id=%s, %d bytes)",
+                original_name,
+                file_id,
+                len(raw_bytes),
             )
             return file_id
     except Exception as exc:
@@ -266,7 +300,9 @@ async def get_file_content(file_id: str, user_id: str) -> str:
         try:
             return _extract_pdf_text(raw)
         except Exception as exc:
-            raise ValueError(f"Failed to extract text from PDF '{name}': {exc}") from exc
+            raise ValueError(
+                f"Failed to extract text from PDF '{name}': {exc}"
+            ) from exc
 
     # Known text MIME type
     if _is_text_mime(mime):

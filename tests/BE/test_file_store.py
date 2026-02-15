@@ -60,7 +60,9 @@ class TestDecodeDataUrl:
 
     def test_binary_content(self):
         raw = bytes(range(256))
-        data_url = f"data:application/octet-stream;base64,{base64.b64encode(raw).decode()}"
+        data_url = (
+            f"data:application/octet-stream;base64,{base64.b64encode(raw).decode()}"
+        )
         assert _decode_data_url(data_url) == raw
 
 
@@ -96,14 +98,16 @@ class TestSaveFile:
         raw = b"a,b,c\n1,2,3"
         data_url = f"data:text/csv;base64,{base64.b64encode(raw).decode()}"
 
-        result = run(save_file(
-            original_name="data.csv",
-            mime_type="text/csv",
-            data_url_content=data_url,
-            size_bytes=len(raw),
-            user_id="user-1",
-            session_id="sess-1",
-        ))
+        result = run(
+            save_file(
+                original_name="data.csv",
+                mime_type="text/csv",
+                data_url_content=data_url,
+                size_bytes=len(raw),
+                user_id="user-1",
+                session_id="sess-1",
+            )
+        )
 
         assert result is not None
         assert isinstance(result, str)
@@ -113,7 +117,9 @@ class TestSaveFile:
 
     @patch("BE.database.get_session_factory")
     @patch("BE.config.settings")
-    def test_save_file_stores_actual_size_not_declared(self, mock_settings, mock_factory, run):
+    def test_save_file_stores_actual_size_not_declared(
+        self, mock_settings, mock_factory, run
+    ):
         """Issue 2: size_bytes stored should be len(raw_bytes), not client-declared."""
         mock_settings.POSTGRES_ENABLED = True
 
@@ -125,13 +131,15 @@ class TestSaveFile:
         raw = b"file content here"
         data_url = f"data:text/plain;base64,{base64.b64encode(raw).decode()}"
 
-        run(save_file(
-            original_name="test.txt",
-            mime_type="text/plain",
-            data_url_content=data_url,
-            size_bytes=1,  # client lies about size
-            user_id="user-1",
-        ))
+        run(
+            save_file(
+                original_name="test.txt",
+                mime_type="text/plain",
+                data_url_content=data_url,
+                size_bytes=1,  # client lies about size
+                user_id="user-1",
+            )
+        )
 
         added_obj = mock_session.add.call_args[0][0]
         assert added_obj.content == raw
@@ -147,41 +155,49 @@ class TestSaveFile:
 
         # Create content just over the limit
         raw = b"x" * (MAX_UPLOAD_SIZE + 1)
-        data_url = f"data:application/octet-stream;base64,{base64.b64encode(raw).decode()}"
+        data_url = (
+            f"data:application/octet-stream;base64,{base64.b64encode(raw).decode()}"
+        )
 
-        result = run(save_file(
-            original_name="huge.bin",
-            mime_type="application/octet-stream",
-            data_url_content=data_url,
-            size_bytes=1,  # client declares small
-            user_id="user-1",
-        ))
+        result = run(
+            save_file(
+                original_name="huge.bin",
+                mime_type="application/octet-stream",
+                data_url_content=data_url,
+                size_bytes=1,  # client declares small
+                user_id="user-1",
+            )
+        )
         assert result is None
 
     @patch("BE.config.settings")
     def test_save_file_empty_content_returns_none(self, mock_settings, run):
         mock_settings.POSTGRES_ENABLED = True
 
-        result = run(save_file(
-            original_name="empty.txt",
-            mime_type="text/plain",
-            data_url_content="",
-            size_bytes=0,
-            user_id="user-1",
-        ))
+        result = run(
+            save_file(
+                original_name="empty.txt",
+                mime_type="text/plain",
+                data_url_content="",
+                size_bytes=0,
+                user_id="user-1",
+            )
+        )
         assert result is None
 
     @patch("BE.config.settings")
     def test_save_file_invalid_data_url_returns_none(self, mock_settings, run):
         mock_settings.POSTGRES_ENABLED = True
 
-        result = run(save_file(
-            original_name="bad.txt",
-            mime_type="text/plain",
-            data_url_content="data:text/plain;base64,!!!not-valid-b64!!!",
-            size_bytes=10,
-            user_id="user-1",
-        ))
+        result = run(
+            save_file(
+                original_name="bad.txt",
+                mime_type="text/plain",
+                data_url_content="data:text/plain;base64,!!!not-valid-b64!!!",
+                size_bytes=10,
+                user_id="user-1",
+            )
+        )
         assert result is None
 
     @patch("BE.config.settings")
@@ -191,13 +207,15 @@ class TestSaveFile:
         raw = b"content"
         data_url = f"data:text/plain;base64,{base64.b64encode(raw).decode()}"
 
-        result = run(save_file(
-            original_name="test.txt",
-            mime_type="text/plain",
-            data_url_content=data_url,
-            size_bytes=len(raw),
-            user_id="user-1",
-        ))
+        result = run(
+            save_file(
+                original_name="test.txt",
+                mime_type="text/plain",
+                data_url_content=data_url,
+                size_bytes=len(raw),
+                user_id="user-1",
+            )
+        )
         assert result is None
 
     @patch("BE.database.get_session_factory")
@@ -214,13 +232,15 @@ class TestSaveFile:
         raw = b"content"
         data_url = f"data:text/plain;base64,{base64.b64encode(raw).decode()}"
 
-        result = run(save_file(
-            original_name="test.txt",
-            mime_type="text/plain",
-            data_url_content=data_url,
-            size_bytes=len(raw),
-            user_id="user-1",
-        ))
+        result = run(
+            save_file(
+                original_name="test.txt",
+                mime_type="text/plain",
+                data_url_content=data_url,
+                size_bytes=len(raw),
+                user_id="user-1",
+            )
+        )
         assert result is None
 
     @patch("BE.database.get_session_factory")
@@ -237,13 +257,15 @@ class TestSaveFile:
         raw = b"content"
         data_url = f"data:text/plain;base64,{base64.b64encode(raw).decode()}"
 
-        run(save_file(
-            original_name="[malicious\x00].txt",
-            mime_type="text/plain",
-            data_url_content=data_url,
-            size_bytes=len(raw),
-            user_id="user-1",
-        ))
+        run(
+            save_file(
+                original_name="[malicious\x00].txt",
+                mime_type="text/plain",
+                data_url_content=data_url,
+                size_bytes=len(raw),
+                user_id="user-1",
+            )
+        )
 
         added_obj = mock_session.add.call_args[0][0]
         assert "[" not in added_obj.original_name
@@ -311,7 +333,9 @@ class TestGetFileContent:
 
     @patch("BE.database.get_session_factory")
     @patch("BE.config.settings")
-    def test_non_utf8_text_mime_raises_value_error(self, mock_settings, mock_factory, run):
+    def test_non_utf8_text_mime_raises_value_error(
+        self, mock_settings, mock_factory, run
+    ):
         """Issue 5: Non-UTF-8 content with a text MIME type raises ValueError."""
         mock_settings.POSTGRES_ENABLED = True
 
@@ -328,7 +352,9 @@ class TestGetFileContent:
 
     @patch("BE.database.get_session_factory")
     @patch("BE.config.settings")
-    def test_non_utf8_text_extension_raises_value_error(self, mock_settings, mock_factory, run):
+    def test_non_utf8_text_extension_raises_value_error(
+        self, mock_settings, mock_factory, run
+    ):
         """Issue 5: Non-UTF-8 content with a text extension raises ValueError."""
         mock_settings.POSTGRES_ENABLED = True
 
@@ -373,7 +399,9 @@ class TestGetFileContent:
 
     @patch("BE.database.get_session_factory")
     @patch("BE.config.settings")
-    def test_pdf_extraction_failure_raises_value_error(self, mock_settings, mock_factory, run):
+    def test_pdf_extraction_failure_raises_value_error(
+        self, mock_settings, mock_factory, run
+    ):
         """Issue 6: Malformed PDF raises ValueError instead of crashing."""
         mock_settings.POSTGRES_ENABLED = True
 
@@ -533,7 +561,9 @@ class TestGetFilePages:
         raw = doc.tobytes()
         doc.close()
 
-        mock_fetch.return_value = _make_upload(raw, "application/octet-stream", "doc.pdf")
+        mock_fetch.return_value = _make_upload(
+            raw, "application/octet-stream", "doc.pdf"
+        )
 
         pages = run(get_file_pages("file-1", "user-1"))
         assert pages is not None
@@ -541,7 +571,9 @@ class TestGetFilePages:
 
     @patch("BE.file_store._fetch_upload")
     def test_malformed_pdf_raises_value_error(self, mock_fetch, run):
-        mock_fetch.return_value = _make_upload(b"not-a-pdf", "application/pdf", "bad.pdf")
+        mock_fetch.return_value = _make_upload(
+            b"not-a-pdf", "application/pdf", "bad.pdf"
+        )
 
         with pytest.raises(ValueError, match="Failed to extract text from PDF"):
             run(get_file_pages("file-1", "user-1"))

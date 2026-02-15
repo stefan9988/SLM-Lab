@@ -66,7 +66,11 @@ class Agent:
         logger.debug("invoke prompt: %.200s", prompt)
         try:
             messages = await self._get_input_messages(
-                prompt, session_id, images=images, file_attachments=file_attachments, user_id=user_id
+                prompt,
+                session_id,
+                images=images,
+                file_attachments=file_attachments,
+                user_id=user_id,
             )
             config = {"configurable": {"user_id": user_id}} if user_id else None
             result = await self._agent.ainvoke({"messages": messages}, config=config)
@@ -93,7 +97,11 @@ class Agent:
         logger.debug("stream prompt: %.200s", prompt)
         try:
             messages = await self._get_input_messages(
-                prompt, session_id, images=images, file_attachments=file_attachments, user_id=user_id
+                prompt,
+                session_id,
+                images=images,
+                file_attachments=file_attachments,
+                user_id=user_id,
             )
 
             full_response = []
@@ -101,11 +109,13 @@ class Agent:
             chunk_count = 0
             thinking_started = False
             tool_messages = []
-            pending_tool_calls = {}   # {index: {"name": str, "args": str}}
-            completed_tools = []      # [{"name": str, "args": dict}, ...]
+            pending_tool_calls = {}  # {index: {"name": str, "args": str}}
+            completed_tools = []  # [{"name": str, "args": dict}, ...]
             config = {"configurable": {"user_id": user_id}} if user_id else None
             async for stream_mode, chunk in self._agent.astream(
-                {"messages": messages}, config=config, stream_mode=["messages", "custom"]
+                {"messages": messages},
+                config=config,
+                stream_mode=["messages", "custom"],
             ):
                 if stream_mode == "custom":
                     yield {"type": "status", "content": chunk}
@@ -126,7 +136,10 @@ class Agent:
                             for tc in msg_chunk.tool_call_chunks:
                                 idx = tc.get("index", 0)
                                 if tc.get("name"):
-                                    pending_tool_calls[idx] = {"name": tc["name"], "args": ""}
+                                    pending_tool_calls[idx] = {
+                                        "name": tc["name"],
+                                        "args": "",
+                                    }
                                     logger.info("Tool call: %s", tc["name"])
                                     yield {
                                         "type": "status",
@@ -149,7 +162,9 @@ class Agent:
                             completed_tools.append({"name": info["name"], "args": args})
                             yield {
                                 "type": "tool_use",
-                                "content": json.dumps({"name": info["name"], "args": args}),
+                                "content": json.dumps(
+                                    {"name": info["name"], "args": args}
+                                ),
                             }
                         pending_tool_calls.clear()
                         yield {"type": "status", "content": "Tool returned result"}
@@ -199,16 +214,22 @@ class Agent:
             content: list[dict] = [{"type": "text", "text": prompt}]
             for img in images:
                 content.append({"type": "image_url", "image_url": {"url": img["url"]}})
-            human_msg = HumanMessage(content=content, additional_kwargs=additional_kwargs)
+            human_msg = HumanMessage(
+                content=content, additional_kwargs=additional_kwargs
+            )
         else:
-            human_msg = HumanMessage(content=prompt, additional_kwargs=additional_kwargs)
+            human_msg = HumanMessage(
+                content=prompt, additional_kwargs=additional_kwargs
+            )
 
         if self.maintain_history:
             history = await self._store.get_messages(session_id, user_id=user_id)
             return list(history) + [human_msg]
         return [human_msg]
 
-    async def _save_history(self, messages: List, session_id: str, user_id: str = "") -> None:
+    async def _save_history(
+        self, messages: List, session_id: str, user_id: str = ""
+    ) -> None:
         if self.maintain_history:
             await self._store.save_messages(
                 session_id, messages, self._model_name, self._provider, user_id=user_id

@@ -34,9 +34,11 @@ def _get_async_client() -> AsyncClient:
     """Create an async Ollama client with configured base URL and auth."""
     return AsyncClient(
         host=settings.OLLAMA_BASE_URL,
-        headers={"authorization": f"Bearer {settings.OLLAMA_API_KEY}"}
-        if settings.OLLAMA_API_KEY
-        else {},
+        headers=(
+            {"authorization": f"Bearer {settings.OLLAMA_API_KEY}"}
+            if settings.OLLAMA_API_KEY
+            else {}
+        ),
     )
 
 
@@ -58,7 +60,9 @@ def chunk_text(
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
     size = chunk_size if chunk_size is not None else settings.EMBEDDING_CHUNK_SIZE
-    overlap = chunk_overlap if chunk_overlap is not None else settings.EMBEDDING_CHUNK_OVERLAP
+    overlap = (
+        chunk_overlap if chunk_overlap is not None else settings.EMBEDDING_CHUNK_OVERLAP
+    )
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=size,
@@ -123,7 +127,9 @@ def chunk_text_with_pages(
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
     size = chunk_size if chunk_size is not None else settings.EMBEDDING_CHUNK_SIZE
-    overlap = chunk_overlap if chunk_overlap is not None else settings.EMBEDDING_CHUNK_OVERLAP
+    overlap = (
+        chunk_overlap if chunk_overlap is not None else settings.EMBEDDING_CHUNK_OVERLAP
+    )
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=size,

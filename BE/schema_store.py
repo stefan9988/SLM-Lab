@@ -35,8 +35,12 @@ class SchemaStore:
                     "id": row.id,
                     "name": row.name,
                     "fields": row.fields,
-                    "created_at": row.created_at.isoformat() if row.created_at else None,
-                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                    "created_at": (
+                        row.created_at.isoformat() if row.created_at else None
+                    ),
+                    "updated_at": (
+                        row.updated_at.isoformat() if row.updated_at else None
+                    ),
                 }
                 for row in rows
             ]
@@ -59,8 +63,12 @@ class SchemaStore:
                 "id": schema.id,
                 "name": schema.name,
                 "fields": schema.fields,
-                "created_at": schema.created_at.isoformat() if schema.created_at else None,
-                "updated_at": schema.updated_at.isoformat() if schema.updated_at else None,
+                "created_at": (
+                    schema.created_at.isoformat() if schema.created_at else None
+                ),
+                "updated_at": (
+                    schema.updated_at.isoformat() if schema.updated_at else None
+                ),
             }
 
     async def update_schema(
@@ -86,8 +94,12 @@ class SchemaStore:
                 "id": schema.id,
                 "name": schema.name,
                 "fields": schema.fields,
-                "created_at": schema.created_at.isoformat() if schema.created_at else None,
-                "updated_at": schema.updated_at.isoformat() if schema.updated_at else None,
+                "created_at": (
+                    schema.created_at.isoformat() if schema.created_at else None
+                ),
+                "updated_at": (
+                    schema.updated_at.isoformat() if schema.updated_at else None
+                ),
             }
 
     async def delete_schema(self, schema_id: str, *, user_id: str) -> bool:

@@ -121,6 +121,7 @@ def schedule_background_task(
     Returns:
         True if the task was scheduled, False if no event loop is running.
     """
+
     async def _run_task() -> None:
         await run_with_retry(
             coro_func,

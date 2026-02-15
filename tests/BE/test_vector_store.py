@@ -20,10 +20,10 @@ from BE.vector_store import (
     store_embeddings,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def event_loop():
@@ -41,6 +41,7 @@ def run(event_loop):
 # ---------------------------------------------------------------------------
 # Helpers – lightweight fakes for EmbeddingResult / ChunkEmbedding
 # ---------------------------------------------------------------------------
+
 
 class FakeChunk:
     def __init__(self, index: int, text: str, embedding: list[float], page_number=None):
@@ -99,6 +100,7 @@ class TestMakePointId:
 class TestGetClient:
     def setup_method(self):
         import BE.vector_store as vs
+
         vs._client = None
 
     def test_returns_none_when_disabled(self):
@@ -121,6 +123,7 @@ class TestGetClient:
 
     def test_singleton_returns_same_client(self):
         import BE.vector_store as vs
+
         fake_client = MagicMock()
         vs._client = fake_client
 
@@ -132,6 +135,7 @@ class TestGetClient:
 
     def teardown_method(self):
         import BE.vector_store as vs
+
         vs._client = None
 
 
@@ -143,6 +147,7 @@ class TestGetClient:
 class TestInitCollection:
     def setup_method(self):
         import BE.vector_store as vs
+
         vs._client = None
 
     def test_returns_false_when_disabled(self, run):
@@ -154,8 +159,10 @@ class TestInitCollection:
         mock_client.collection_exists = AsyncMock(return_value=True)
         mock_client.create_payload_index = AsyncMock()
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
             mock_settings.EMBEDDING_DIMENSIONS = 768
 
@@ -172,8 +179,10 @@ class TestInitCollection:
         mock_client.create_collection = AsyncMock()
         mock_client.create_payload_index = AsyncMock()
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
             mock_settings.EMBEDDING_DIMENSIONS = 768
 
@@ -196,10 +205,14 @@ class TestInitCollection:
 
     def test_handles_error_gracefully(self, run):
         mock_client = AsyncMock()
-        mock_client.collection_exists = AsyncMock(side_effect=Exception("Connection refused"))
+        mock_client.collection_exists = AsyncMock(
+            side_effect=Exception("Connection refused")
+        )
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
             mock_settings.EMBEDDING_DIMENSIONS = 768
 
@@ -209,6 +222,7 @@ class TestInitCollection:
 
     def teardown_method(self):
         import BE.vector_store as vs
+
         vs._client = None
 
 
@@ -220,11 +234,16 @@ class TestInitCollection:
 class TestStoreEmbeddings:
     def test_returns_zero_when_disabled(self, run):
         with patch("BE.vector_store.get_client", return_value=None):
-            result = run(store_embeddings(
-                file_id="f1", user_id="u1", session_id="s1",
-                original_name="test.txt", mime_type="text/plain",
-                embedding_result=_make_fake_result(),
-            ))
+            result = run(
+                store_embeddings(
+                    file_id="f1",
+                    user_id="u1",
+                    session_id="s1",
+                    original_name="test.txt",
+                    mime_type="text/plain",
+                    embedding_result=_make_fake_result(),
+                )
+            )
         assert result == 0
 
     def test_stores_all_chunks(self, run):
@@ -233,18 +252,22 @@ class TestStoreEmbeddings:
 
         fake_result = _make_fake_result(n_chunks=3)
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
-            count = run(store_embeddings(
-                file_id="file-abc",
-                user_id="user-123",
-                session_id="sess-1",
-                original_name="readme.md",
-                mime_type="text/markdown",
-                embedding_result=fake_result,
-            ))
+            count = run(
+                store_embeddings(
+                    file_id="file-abc",
+                    user_id="user-123",
+                    session_id="sess-1",
+                    original_name="readme.md",
+                    mime_type="text/markdown",
+                    embedding_result=fake_result,
+                )
+            )
 
         assert count == 3
         mock_client.upsert.assert_called_once()
@@ -257,18 +280,22 @@ class TestStoreEmbeddings:
 
         fake_result = _make_fake_result(n_chunks=1)
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
-            run(store_embeddings(
-                file_id="f1",
-                user_id="u1",
-                session_id="s1",
-                original_name="data.csv",
-                mime_type="text/csv",
-                embedding_result=fake_result,
-            ))
+            run(
+                store_embeddings(
+                    file_id="f1",
+                    user_id="u1",
+                    session_id="s1",
+                    original_name="data.csv",
+                    mime_type="text/csv",
+                    embedding_result=fake_result,
+                )
+            )
 
         points = mock_client.upsert.call_args.kwargs["points"]
         payload = points[0].payload
@@ -292,15 +319,22 @@ class TestStoreEmbeddings:
 
         fake_result = _make_fake_result(n_chunks=2)
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
-            run(store_embeddings(
-                file_id="f1", user_id="u1", session_id="s1",
-                original_name="test.txt", mime_type="text/plain",
-                embedding_result=fake_result,
-            ))
+            run(
+                store_embeddings(
+                    file_id="f1",
+                    user_id="u1",
+                    session_id="s1",
+                    original_name="test.txt",
+                    mime_type="text/plain",
+                    embedding_result=fake_result,
+                )
+            )
 
         points = mock_client.upsert.call_args.kwargs["points"]
         assert points[0].id == _make_point_id("f1", 0)
@@ -313,15 +347,22 @@ class TestStoreEmbeddings:
         n = _UPSERT_BATCH_SIZE + 50
         fake_result = _make_fake_result(n_chunks=n)
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
-            count = run(store_embeddings(
-                file_id="f1", user_id="u1", session_id="s1",
-                original_name="big.txt", mime_type="text/plain",
-                embedding_result=fake_result,
-            ))
+            count = run(
+                store_embeddings(
+                    file_id="f1",
+                    user_id="u1",
+                    session_id="s1",
+                    original_name="big.txt",
+                    mime_type="text/plain",
+                    embedding_result=fake_result,
+                )
+            )
 
         assert count == n
         assert mock_client.upsert.call_count == 2
@@ -336,15 +377,22 @@ class TestStoreEmbeddings:
 
         fake_result = _make_fake_result(n_chunks=1)
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
-            run(store_embeddings(
-                file_id="f1", user_id="u1", session_id="",
-                original_name="test.txt", mime_type="text/plain",
-                embedding_result=fake_result,
-            ))
+            run(
+                store_embeddings(
+                    file_id="f1",
+                    user_id="u1",
+                    session_id="",
+                    original_name="test.txt",
+                    mime_type="text/plain",
+                    embedding_result=fake_result,
+                )
+            )
 
         points = mock_client.upsert.call_args.kwargs["points"]
         assert points[0].payload["session_id"] == ""
@@ -359,15 +407,22 @@ class TestStoreEmbeddings:
         ]
         fake_result = FakeEmbeddingResult(chunks=chunks)
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
-            run(store_embeddings(
-                file_id="f1", user_id="u1", session_id="s1",
-                original_name="doc.pdf", mime_type="application/pdf",
-                embedding_result=fake_result,
-            ))
+            run(
+                store_embeddings(
+                    file_id="f1",
+                    user_id="u1",
+                    session_id="s1",
+                    original_name="doc.pdf",
+                    mime_type="application/pdf",
+                    embedding_result=fake_result,
+                )
+            )
 
         points = mock_client.upsert.call_args.kwargs["points"]
         assert points[0].payload["page_number"] == 3
@@ -388,8 +443,10 @@ class TestDeleteFileEmbeddings:
         mock_client = AsyncMock()
         mock_client.delete = AsyncMock()
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
             result = run(delete_file_embeddings("file-1", "user-1"))
@@ -409,8 +466,10 @@ class TestDeleteFileEmbeddings:
         mock_client = AsyncMock()
         mock_client.delete = AsyncMock(side_effect=Exception("Qdrant down"))
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
             result = run(delete_file_embeddings("f1", "u1"))
@@ -426,6 +485,7 @@ class TestDeleteFileEmbeddings:
 class TestCloseClient:
     def setup_method(self):
         import BE.vector_store as vs
+
         vs._client = None
 
     def test_closes_and_resets(self, run):
@@ -441,6 +501,7 @@ class TestCloseClient:
 
     def test_noop_when_no_client(self, run):
         import BE.vector_store as vs
+
         vs._client = None
 
         run(close_client())
@@ -448,6 +509,7 @@ class TestCloseClient:
 
     def teardown_method(self):
         import BE.vector_store as vs
+
         vs._client = None
 
 
@@ -466,8 +528,10 @@ class TestEmbedQueries:
         mock_instance = MagicMock()
         mock_instance.embed = mock_embed
 
-        with patch("ollama.AsyncClient", return_value=mock_instance), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("ollama.AsyncClient", return_value=mock_instance),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
             mock_settings.OLLAMA_API_KEY = ""
             mock_settings.EMBEDDING_MODEL = "nomic-embed-text"
@@ -487,6 +551,7 @@ class TestEmbedQueries:
 
 class _FakePoint:
     """Minimal stand-in for a Qdrant ScoredPoint."""
+
     def __init__(self, payload: dict, score: float):
         self.payload = payload
         self.score = score
@@ -495,6 +560,7 @@ class _FakePoint:
 class TestSearchChunks:
     def setup_method(self):
         import BE.vector_store as vs
+
         vs._client = None
 
     def test_returns_empty_when_disabled(self, run):
@@ -518,9 +584,15 @@ class TestSearchChunks:
         mock_query_result.points = [fake_point]
         mock_client.query_points = AsyncMock(return_value=mock_query_result)
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=[[0.1, 0.2]]), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch(
+                "BE.vector_store._embed_queries",
+                new_callable=AsyncMock,
+                return_value=[[0.1, 0.2]],
+            ),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
             results = run(search_chunks(["hello"], "f1", "u1", limit=5))
@@ -549,9 +621,15 @@ class TestSearchChunks:
         mock_query_result.points = [fake_point]
         mock_client.query_points = AsyncMock(return_value=mock_query_result)
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=[[0.1]]), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch(
+                "BE.vector_store._embed_queries",
+                new_callable=AsyncMock,
+                return_value=[[0.1]],
+            ),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
             results = run(search_chunks(["old"], "f1", "u1"))
@@ -569,9 +647,15 @@ class TestSearchChunks:
             queries = [f"q{i}" for i in range(n_queries)]
             embeddings = [[0.1] * 4] * n_queries
 
-            with patch("BE.vector_store.get_client", return_value=mock_client), \
-                 patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=embeddings), \
-                 patch("BE.vector_store.settings") as mock_settings:
+            with (
+                patch("BE.vector_store.get_client", return_value=mock_client),
+                patch(
+                    "BE.vector_store._embed_queries",
+                    new_callable=AsyncMock,
+                    return_value=embeddings,
+                ),
+                patch("BE.vector_store.settings") as mock_settings,
+            ):
                 mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
                 run(search_chunks(queries, "f1", "u1"))
@@ -585,9 +669,15 @@ class TestSearchChunks:
         mock_query_result.points = []
         mock_client.query_points = AsyncMock(return_value=mock_query_result)
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=[[0.1]]), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch(
+                "BE.vector_store._embed_queries",
+                new_callable=AsyncMock,
+                return_value=[[0.1]],
+            ),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
             run(search_chunks(["test"], "file-abc", "user-xyz"))
@@ -602,8 +692,14 @@ class TestSearchChunks:
     def test_handles_embed_error(self, run):
         mock_client = AsyncMock()
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, side_effect=Exception("Ollama down")):
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch(
+                "BE.vector_store._embed_queries",
+                new_callable=AsyncMock,
+                side_effect=Exception("Ollama down"),
+            ),
+        ):
             result = run(search_chunks(["q"], "f1", "u1"))
 
         assert result == []
@@ -612,9 +708,15 @@ class TestSearchChunks:
         mock_client = AsyncMock()
         mock_client.query_points = AsyncMock(side_effect=Exception("Qdrant down"))
 
-        with patch("BE.vector_store.get_client", return_value=mock_client), \
-             patch("BE.vector_store._embed_queries", new_callable=AsyncMock, return_value=[[0.1]]), \
-             patch("BE.vector_store.settings") as mock_settings:
+        with (
+            patch("BE.vector_store.get_client", return_value=mock_client),
+            patch(
+                "BE.vector_store._embed_queries",
+                new_callable=AsyncMock,
+                return_value=[[0.1]],
+            ),
+            patch("BE.vector_store.settings") as mock_settings,
+        ):
             mock_settings.QDRANT_COLLECTION_NAME = "slmlab"
 
             result = run(search_chunks(["q"], "f1", "u1"))
@@ -623,4 +725,5 @@ class TestSearchChunks:
 
     def teardown_method(self):
         import BE.vector_store as vs
+
         vs._client = None

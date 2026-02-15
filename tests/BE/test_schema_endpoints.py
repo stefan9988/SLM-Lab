@@ -13,7 +13,13 @@ class TestSchemaEndpoints:
     def test_list_schemas(self, mock_cs, client):
         mock_store = AsyncMock()
         mock_store.get_schemas.return_value = [
-            {"id": "s1", "name": "Invoice", "fields": [], "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-01T00:00:00"}
+            {
+                "id": "s1",
+                "name": "Invoice",
+                "fields": [],
+                "created_at": "2025-01-01T00:00:00",
+                "updated_at": "2025-01-01T00:00:00",
+            }
         ]
         mock_cs.return_value = mock_store
         resp = client.get("/schemas")
@@ -32,7 +38,11 @@ class TestSchemaEndpoints:
     def test_create_schema(self, mock_cs, client):
         mock_store = AsyncMock()
         mock_store.create_schema.return_value = {
-            "id": "new-id", "name": "Test", "fields": [], "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-01T00:00:00"
+            "id": "new-id",
+            "name": "Test",
+            "fields": [],
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-01-01T00:00:00",
         }
         mock_cs.return_value = mock_store
         resp = client.post("/schemas", json={"name": "Test", "fields": []})
@@ -47,8 +57,11 @@ class TestSchemaEndpoints:
         mock_store = AsyncMock()
         fields = [{"id": "f1", "key": "title", "description": "The title"}]
         mock_store.create_schema.return_value = {
-            "id": "new-id", "name": "Doc", "fields": fields,
-            "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-01T00:00:00"
+            "id": "new-id",
+            "name": "Doc",
+            "fields": fields,
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-01-01T00:00:00",
         }
         mock_cs.return_value = mock_store
         resp = client.post("/schemas", json={"name": "Doc", "fields": fields})
@@ -66,8 +79,11 @@ class TestSchemaEndpoints:
     def test_update_schema(self, mock_cs, client):
         mock_store = AsyncMock()
         mock_store.update_schema.return_value = {
-            "id": "s1", "name": "Updated", "fields": [],
-            "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-02T00:00:00"
+            "id": "s1",
+            "name": "Updated",
+            "fields": [],
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-01-02T00:00:00",
         }
         mock_cs.return_value = mock_store
         resp = client.put("/schemas/s1", json={"name": "Updated", "fields": []})

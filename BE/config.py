@@ -149,6 +149,8 @@ def init_config() -> None:
         os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGSMITH_ENDPOINT
         os.environ["LANGCHAIN_API_KEY"] = settings.LANGSMITH_API_KEY
         os.environ["LANGCHAIN_PROJECT"] = settings.LANGSMITH_PROJECT
-        _logger.info("LangSmith tracing enabled (project=%s)", settings.LANGSMITH_PROJECT)
+        _logger.info(
+            "LangSmith tracing enabled (project=%s)", settings.LANGSMITH_PROJECT
+        )
     else:
         _logger.debug("LangSmith tracing disabled")

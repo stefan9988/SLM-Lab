@@ -75,7 +75,9 @@ async def search_chunks_tool(
 
     parts = []
     for i, r in enumerate(results, 1):
-        page_info = f" [Page {r['page_number']}]" if r.get("page_number") is not None else ""
+        page_info = (
+            f" [Page {r['page_number']}]" if r.get("page_number") is not None else ""
+        )
         parts.append(
             f"[{i}] Chunk {r['chunk_index']}{page_info} (score: {r['score']:.4f})\n"
             f"{r['chunk_text']}"

@@ -68,7 +68,7 @@ def get_current_user(authorization: str = Header(...)) -> UserInfo:
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
 
-    token = authorization[len("Bearer "):]
+    token = authorization[len("Bearer ") :]
     try:
         payload = jwt.decode(
             token,
