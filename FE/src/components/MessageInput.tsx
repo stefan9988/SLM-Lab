@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent, type DragEvent, type ClipboardEvent } from 'react';
 import type { FileAttachment } from '../types';
 import logger from '../utils/logger';
 
@@ -22,6 +22,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -39,16 +40,13 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
     }
   }, [disabled]);
 
-  const handleFiles = (e: ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const selected = Array.from(e.target.files);
+  const addFiles = (selected: File[]) => {
     setError(null);
 
     for (const f of selected) {
       if (f.size > MAX_FILE_SIZE) {
         logger.warn('[MessageInput] File too large:', f.name, f.size);
         setError(`File "${f.name}" exceeds 10MB limit.`);
-        e.target.value = '';
         return;
       }
     }
@@ -57,11 +55,15 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
     if (totalSize > MAX_TOTAL_SIZE) {
       logger.warn('[MessageInput] Total file size exceeds limit:', totalSize);
       setError('Total file size exceeds 20MB limit.');
-      e.target.value = '';
       return;
     }
 
     setFiles((prev) => [...prev, ...selected]);
+  };
+
+  const handleFiles = (e: ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    addFiles(Array.from(e.target.files));
     e.target.value = '';
   };
 
@@ -112,8 +114,56 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
     }
   };
 
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    setDragging(true);
+  };
+
+  const handleDragEnter = (e: DragEvent) => {
+    e.preventDefault();
+    setDragging(true);
+  };
+
+  const handleDragLeave = (e: DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragging(false);
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer.files.length > 0) {
+      addFiles(Array.from(e.dataTransfer.files));
+    }
+  };
+
+  const handlePaste = (e: ClipboardEvent) => {
+    const imageFiles: File[] = [];
+    for (const item of Array.from(e.clipboardData.items)) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      addFiles(imageFiles);
+    }
+  };
+
   return (
-    <div className="bg-[#0f172a] px-4 py-3">
+    <div
+      className={`bg-[#0f172a] px-4 py-3 max-w-[80%] relative${dragging ? ' ring-2 ring-[#7c3aed]' : ''}`}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dragging && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-[#7c3aed] bg-[#7c3aed]/10">
+          <span className="text-sm text-[#c4b5fd] font-medium">Drop files here</span>
+        </div>
+      )}
       {error && (
         <p className="text-[#ef4444] text-xs mb-2">{error}</p>
       )}
@@ -164,6 +214,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKey}
+          onPaste={handlePaste}
           disabled={disabled}
         />
         {streaming ? (
