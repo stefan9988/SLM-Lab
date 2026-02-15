@@ -153,7 +153,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
 
   return (
     <div
-      className={`bg-[#0f172a] px-4 py-3 max-w-[80%] relative${dragging ? ' ring-2 ring-[#7c3aed]' : ''}`}
+      className={`bg-[#0f172a] px-4 py-3 w-full max-w-3xl mx-auto relative${dragging ? ' ring-2 ring-[#7c3aed]' : ''}`}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
