@@ -1,5 +1,6 @@
 """Tests for the agent registry and delegate_to_agent tool."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -56,20 +57,20 @@ class TestDelegateToAgentTool:
 
     @patch("AI.tools.delegate_to_agent.get_config", return_value=_CONFIG_WITH_USER)
     @patch("AI.tools.delegate_to_agent.get_stream_writer")
-    @patch("AI.tools.delegate_to_agent.run_async_from_sync")
-    def test_successful_delegation(self, mock_run, mock_get_writer, mock_get_config):
+    @patch("AI.tools.delegate_to_agent._run_delegation", new_callable=AsyncMock)
+    def test_successful_delegation(self, mock_delegation, mock_get_writer, mock_get_config):
         mock_get_writer.return_value = MagicMock()
-        mock_run.return_value = "delegated response"
+        mock_delegation.return_value = "delegated response"
         agent = MagicMock()
         registry.register("doc_agent", agent)
 
         from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-        result = delegate_to_agent_tool.invoke(
-            {"agent_name": "doc_agent", "prompt": "Summarize the file"}
-        )
+        result = asyncio.run(delegate_to_agent_tool.coroutine(
+            agent_name="doc_agent", prompt="Summarize the file"
+        ))
         assert result == "delegated response"
-        mock_run.assert_called_once()
+        mock_delegation.assert_called_once()
 
     @patch("AI.tools.delegate_to_agent.get_stream_writer")
     def test_unknown_agent_returns_error(self, mock_get_writer):
@@ -78,9 +79,9 @@ class TestDelegateToAgentTool:
 
         from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-        result = delegate_to_agent_tool.invoke(
-            {"agent_name": "nonexistent", "prompt": "hello"}
-        )
+        result = asyncio.run(delegate_to_agent_tool.coroutine(
+            agent_name="nonexistent", prompt="hello"
+        ))
         assert "Error" in result
         assert "Unknown agent" in result
         assert "general_agent" in result
@@ -96,9 +97,9 @@ class TestDelegateToAgentTool:
 
         from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-        result = delegate_to_agent_tool.invoke(
-            {"agent_name": "doc_agent", "prompt": "hello"}
-        )
+        result = asyncio.run(delegate_to_agent_tool.coroutine(
+            agent_name="doc_agent", prompt="hello"
+        ))
         assert "Error" in result
         assert "user identity" in result.lower()
 
@@ -112,21 +113,14 @@ class TestDelegateToAgentTool:
         from AI.tools.delegate_to_agent import (
             _active_delegations,
             delegate_to_agent_tool,
-            run_async_from_sync,
         )
 
         # Simulate an active delegation for this user+agent
         _active_delegations.add(("user-1", "doc_agent"))
         try:
-            # run_async_from_sync will execute _run_delegation which checks the set
-            # We need to let the real _run_delegation run to test the guard
-            with patch(
-                "AI.tools.delegate_to_agent.run_async_from_sync",
-                side_effect=lambda coro: _run_sync(coro),
-            ):
-                result = delegate_to_agent_tool.invoke(
-                    {"agent_name": "doc_agent", "prompt": "hello"}
-                )
+            result = asyncio.run(delegate_to_agent_tool.coroutine(
+                agent_name="doc_agent", prompt="hello"
+            ))
             assert "Error" in result
             assert "Circular delegation" in result
         finally:
@@ -142,13 +136,9 @@ class TestDelegateToAgentTool:
 
         from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-        with patch(
-            "AI.tools.delegate_to_agent.run_async_from_sync",
-            side_effect=lambda coro: _run_sync(coro),
-        ):
-            result = delegate_to_agent_tool.invoke(
-                {"agent_name": "doc_agent", "prompt": "hello"}
-            )
+        result = asyncio.run(delegate_to_agent_tool.coroutine(
+            agent_name="doc_agent", prompt="hello"
+        ))
         assert "Error" in result
         assert "failed" in result.lower()
         assert "LLM timeout" in result
@@ -180,13 +170,9 @@ class TestDelegateToAgentTool:
         try:
             from AI.tools.delegate_to_agent import delegate_to_agent_tool
 
-            with patch(
-                "AI.tools.delegate_to_agent.run_async_from_sync",
-                side_effect=lambda coro: _run_sync(coro),
-            ):
-                result = delegate_to_agent_tool.invoke(
-                    {"agent_name": "doc_agent", "prompt": "hello"}
-                )
+            result = asyncio.run(delegate_to_agent_tool.coroutine(
+                agent_name="doc_agent", prompt="hello"
+            ))
 
             assert result == "ok"
             # During agent.invoke, the config must have been None.
@@ -199,22 +185,3 @@ class TestDelegateToAgentTool:
             var_child_runnable_config.reset(parent_token)
 
 
-# ---------------------------------------------------------------------------
-# Helper to run a coroutine synchronously in tests
-# ---------------------------------------------------------------------------
-
-import asyncio
-
-
-def _run_sync(coro):
-    """Run a coroutine to completion, creating a loop if necessary."""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                return pool.submit(asyncio.run, coro).result()
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)

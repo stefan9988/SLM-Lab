@@ -183,11 +183,12 @@ class TestInitCollection:
         mock_client.create_collection.assert_called_once()
         assert mock_client.create_payload_index.call_count == 3
 
-        # Verify user_id index has is_tenant=True
+        # Verify user_id index has is_tenant=True inside KeywordIndexParams
         calls = mock_client.create_payload_index.call_args_list
         user_id_call = [c for c in calls if c.kwargs.get("field_name") == "user_id"]
         assert len(user_id_call) == 1
-        assert user_id_call[0].kwargs["is_tenant"] is True
+        field_schema = user_id_call[0].kwargs["field_schema"]
+        assert field_schema.is_tenant is True
 
         # Verify chunk_text full-text index
         text_call = [c for c in calls if c.kwargs.get("field_name") == "chunk_text"]

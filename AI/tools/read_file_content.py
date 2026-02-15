@@ -3,7 +3,6 @@ import re
 from langchain_core.tools import tool
 from langgraph.config import get_config, get_stream_writer
 
-from BE.async_utils import run_async_from_sync
 from BE.file_store import get_file_content
 from BE.logger import setup_logger
 
@@ -18,7 +17,7 @@ _UUID_RE = re.compile(
 
 
 @tool
-def read_file_content_tool(file_id: str) -> str:
+async def read_file_content_tool(file_id: str) -> str:
     """Read the text content of an uploaded file by its file_id.
 
     Use this tool when the user attaches a file and you need to read its
@@ -43,7 +42,7 @@ def read_file_content_tool(file_id: str) -> str:
         return "Error: Unable to verify file ownership."
 
     try:
-        content = run_async_from_sync(get_file_content(file_id, user_id=user_id))
+        content = await get_file_content(file_id, user_id=user_id)
     except FileNotFoundError as exc:
         logger.warning("File not found: %s", exc)
         return f"Error: {exc}"

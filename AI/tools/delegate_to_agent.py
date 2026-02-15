@@ -9,7 +9,6 @@ from langchain_core.tools import tool
 from langgraph.config import get_config, get_stream_writer
 
 from AI.agents import registry
-from BE.async_utils import run_async_from_sync
 from BE.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -54,7 +53,7 @@ async def _run_delegation(agent_name: str, prompt: str, user_id: str) -> str:
 
 
 @tool
-def delegate_to_agent_tool(agent_name: str, prompt: str) -> str:
+async def delegate_to_agent_tool(agent_name: str, prompt: str) -> str:
     """Delegate a task to another agent by name.
 
     Use this tool when the current task would be better handled by a
@@ -90,7 +89,7 @@ def delegate_to_agent_tool(agent_name: str, prompt: str) -> str:
         return "Error: Unable to determine user identity for delegation."
 
     writer(f"Running delegation to {agent_name}…")
-    result = run_async_from_sync(_run_delegation(agent_name, prompt, user_id))
+    result = await _run_delegation(agent_name, prompt, user_id)
 
     logger.info(
         "delegate_to_agent_tool complete (target=%s, response_length=%d)",

@@ -3,7 +3,6 @@ import re
 from langchain_core.tools import tool
 from langgraph.config import get_config, get_stream_writer
 
-from BE.async_utils import run_async_from_sync
 from BE.logger import setup_logger
 from BE.vector_store import search_chunks
 
@@ -18,7 +17,7 @@ _UUID_RE = re.compile(
 
 
 @tool
-def search_chunks_tool(
+async def search_chunks_tool(
     file_id: str, queries: list[str], num_results: int = 5
 ) -> str:
     """Search within an uploaded document for relevant text chunks.
@@ -60,16 +59,14 @@ def search_chunks_tool(
     num_results = max(1, min(num_results, 20))
 
     try:
-        results = run_async_from_sync(
-            search_chunks(
-                queries=queries,
-                file_id=file_id,
-                user_id=user_id,
-                limit=num_results,
-            )
+        results = await search_chunks(
+            queries=queries,
+            file_id=file_id,
+            user_id=user_id,
+            limit=num_results,
         )
     except Exception as exc:
-        logger.error("search_chunks_tool error: %s", exc)
+        logger.error("search_chunks_tool error: %s: %s", type(exc).__name__, exc)
         return f"Error: Failed to search document — {exc}"
 
     if not results:

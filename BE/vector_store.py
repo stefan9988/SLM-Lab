@@ -59,6 +59,8 @@ def get_client():
 async def _ensure_payload_indexes(client, collection_name: str) -> None:
     """Create payload indexes idempotently (Qdrant silently ignores duplicates)."""
     from qdrant_client.models import (
+        KeywordIndexParams,
+        KeywordIndexType,
         PayloadSchemaType,
         TextIndexParams,
         TokenizerType,
@@ -67,8 +69,10 @@ async def _ensure_payload_indexes(client, collection_name: str) -> None:
     await client.create_payload_index(
         collection_name=collection_name,
         field_name="user_id",
-        field_schema=PayloadSchemaType.KEYWORD,
-        is_tenant=True,
+        field_schema=KeywordIndexParams(
+            type=KeywordIndexType.KEYWORD,
+            is_tenant=True,
+        ),
     )
     await client.create_payload_index(
         collection_name=collection_name,
