@@ -27,7 +27,7 @@ export default function Sidebar({ conversations, activeId, onSelect, onNew, onDe
           className="w-full mt-2 rounded-lg border border-[#334155] text-[#64748b] py-2 text-sm font-medium hover:text-[#e2e8f0] hover:border-[#7c3aed] transition-all duration-200"
           onClick={onOpenSchemas}
         >
-          Extraction Templates
+          Extraction Schemas
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
