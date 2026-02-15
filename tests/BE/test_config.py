@@ -14,7 +14,7 @@ class TestSettingsDefaults:
         assert s.LLM_PROVIDER == "ollama"
 
     def test_default_langsmith_tracing_false(self):
-        s = Settings(LOG_LEVEL="INFO")
+        s = Settings(_env_file=None, LOG_LEVEL="INFO")
         assert s.LANGSMITH_TRACING is False
 
     def test_explicit_kwargs_override(self):
@@ -175,7 +175,7 @@ class TestQdrantSettings:
         assert s.QDRANT_API_KEY == "slmlab"
 
     def test_default_qdrant_enabled_false(self):
-        s = Settings(LOG_LEVEL="INFO")
+        s = Settings(_env_file=None, LOG_LEVEL="INFO")
         assert s.QDRANT_ENABLED is False
 
     def test_default_qdrant_collection_name(self):
@@ -209,11 +209,11 @@ class TestQdrantSettings:
 
 class TestEmbeddingSettings:
     def test_default_embedding_enabled_false(self):
-        s = Settings(LOG_LEVEL="INFO")
+        s = Settings(_env_file=None, LOG_LEVEL="INFO")
         assert s.EMBEDDING_ENABLED is False
 
     def test_default_embedding_model(self):
-        s = Settings(LOG_LEVEL="INFO")
+        s = Settings(_env_file=None, LOG_LEVEL="INFO")
         assert s.EMBEDDING_MODEL == "nomic-embed-text"
 
     def test_default_embedding_chunk_size(self):
@@ -241,7 +241,7 @@ class TestEmbeddingSettings:
         assert s.EMBEDDING_CHUNK_OVERLAP == 50
 
     def test_default_embedding_dimensions(self):
-        s = Settings(LOG_LEVEL="INFO")
+        s = Settings(_env_file=None, LOG_LEVEL="INFO")
         assert s.EMBEDDING_DIMENSIONS == 768
 
     def test_custom_embedding_dimensions(self):
