@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import MessageInput from './components/MessageInput';
 import SchemasPanel from './components/SchemasPanel';
+import AnalyzeDrawer from './components/AnalyzeDrawer';
 import LoginPage from './components/LoginPage';
 
 function App() {
@@ -36,6 +37,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     return saved.length > 0 ? saved[0].id : uuidv4();
   });
   const [view, setView] = useState<'chat' | 'schemas'>('chat');
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
 
   const { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, stopStreaming } = useChat(activeId);
 
@@ -94,6 +96,14 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     setView('chat');
   }, []);
 
+  const handleOpenAnalyze = useCallback(() => {
+    setDrawerOpen(true);
+  }, []);
+
+  const handleCloseAnalyze = useCallback(() => {
+    setDrawerOpen(false);
+  }, []);
+
   const handleDelete = useCallback(
     async (id: string) => {
       try {
@@ -119,10 +129,11 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
         onNew={handleNew}
         onDelete={handleDelete}
         onOpenSchemas={handleOpenSchemas}
+        onOpenAnalyze={handleOpenAnalyze}
         user={user}
         onLogout={onLogout}
       />
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col relative">
         {view === 'schemas' ? (
           <SchemasPanel onBack={handleBackToChat} />
         ) : (
@@ -131,6 +142,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
             <MessageInput onSend={handleSend} disabled={streaming} streaming={streaming} onStop={stopStreaming} />
           </>
         )}
+        <AnalyzeDrawer open={drawerOpen} onClose={handleCloseAnalyze} />
       </main>
     </div>
   );

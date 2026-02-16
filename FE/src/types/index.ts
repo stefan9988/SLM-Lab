@@ -54,3 +54,9 @@ export interface ExtractionSchema {
   name: string;
   fields: SchemaField[];
 }
+
+export interface ExtractionRow {
+  fieldKey: string;
+  extraction: string;
+  location: string;
+}
