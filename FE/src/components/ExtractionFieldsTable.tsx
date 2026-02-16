@@ -117,9 +117,14 @@ export default function ExtractionFieldsTable({
                   : r,
               );
             }
-            // Append numbered variant
+            // Append numbered variant and remove empty base key row
+            const baseMatch = key.match(/^(.+)_\d+$/);
+            const baseKey = baseMatch?.[1];
+            const filtered = baseKey
+              ? prev.filter((r) => !(r.fieldKey === baseKey && !r.extraction))
+              : prev;
             return [
-              ...prev,
+              ...filtered,
               {
                 fieldKey: key,
                 extraction: extraction ?? "",
