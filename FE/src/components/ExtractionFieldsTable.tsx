@@ -312,12 +312,8 @@ export default function ExtractionFieldsTable({
         <p className="text-[#64748b] text-sm">This schema has no fields.</p>
       )}
 
-      {statusText && (
-        <p
-          className={`text-xs ${statusText.startsWith("Error") ? "text-red-400" : "text-[#94a3b8]"}`}
-        >
-          {statusText}
-        </p>
+      {!analyzing && statusText && statusText.startsWith("Error") && (
+        <p className="text-xs text-red-400">{statusText}</p>
       )}
 
       <button
@@ -325,7 +321,7 @@ export default function ExtractionFieldsTable({
         disabled={!canAnalyze}
         className="mt-auto w-full rounded-lg bg-[#7c3aed] text-white py-2.5 text-sm font-medium hover:bg-[#6d28d9] hover:shadow-[0_0_12px_rgba(124,58,237,0.4)] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
       >
-        {analyzing ? "Analyzing..." : "Analyze Document"}
+        {analyzing ? statusText || "Analyzing..." : "Analyze Document"}
       </button>
     </div>
   );
