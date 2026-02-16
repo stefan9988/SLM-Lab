@@ -86,9 +86,10 @@ export default function ExtractionFieldsTable({
   }, []);
 
   const handleSaveCSV = useCallback(() => {
-    const defaultName = "file_analysis.csv";
-    const fileName = window.prompt("Save as:", defaultName);
-    if (!fileName) return;
+    const baseName = documentName
+      ? documentName.replace(/\.[^.]+$/, "")
+      : "document";
+    const fileName = `${baseName}_analysis.csv`;
 
     const header = "key,extraction,location";
     const csvRows = rows.map((r) => {
@@ -101,10 +102,10 @@ export default function ExtractionFieldsTable({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = fileName.endsWith(".csv") ? fileName : `${fileName}.csv`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
-  }, [rows]);
+  }, [rows, documentName]);
 
   const handleAnalyze = useCallback(async () => {
     if (!file || !selectedSchemaId || analyzing) return;
