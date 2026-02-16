@@ -81,15 +81,18 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     const id = uuidv4();
     setActiveId(id);
     setView('chat');
+    setDrawerOpen(false);
   }, []);
 
   const handleSelect = useCallback((id: string) => {
     setActiveId(id);
     setView('chat');
+    setDrawerOpen(false);
   }, []);
 
   const handleOpenSchemas = useCallback(() => {
     setView('schemas');
+    setDrawerOpen(false);
   }, []);
 
   const handleBackToChat = useCallback(() => {
