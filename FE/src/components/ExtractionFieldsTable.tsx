@@ -78,6 +78,34 @@ export default function ExtractionFieldsTable({
     [],
   );
 
+  const handleClear = useCallback(() => {
+    setRows((prev) =>
+      prev.map((row) => ({ ...row, extraction: "", location: null })),
+    );
+    setStatusText("");
+  }, []);
+
+  const handleSaveCSV = useCallback(() => {
+    const defaultName = "file_analysis.csv";
+    const fileName = window.prompt("Save as:", defaultName);
+    if (!fileName) return;
+
+    const header = "key,extraction,location";
+    const csvRows = rows.map((r) => {
+      const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      return `${esc(r.fieldKey)},${esc(r.extraction)},${esc(formatLocation(r.location))}`;
+    });
+    const csv = [header, ...csvRows].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName.endsWith(".csv") ? fileName : `${fileName}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [rows]);
+
   const handleAnalyze = useCallback(async () => {
     if (!file || !selectedSchemaId || analyzing) return;
 
@@ -255,6 +283,27 @@ export default function ExtractionFieldsTable({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={analyzing}
+            className="flex-1 rounded-lg border border-[#334155] text-[#64748b] py-2 text-sm font-medium hover:text-[#e2e8f0] hover:border-[#e2e8f0] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveCSV}
+            disabled={analyzing || rows.every((r) => !r.extraction)}
+            className="flex-1 rounded-lg border border-[#334155] text-[#64748b] py-2 text-sm font-medium hover:text-[#7c3aed] hover:border-[#7c3aed] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
+          >
+            Save as CSV
+          </button>
         </div>
       )}
 
