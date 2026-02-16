@@ -52,39 +52,33 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('App - drawer closes on sidebar navigation', () => {
-  async function openDrawer(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByRole('button', { name: /analyze document/i }));
-    expect(screen.getByRole('dialog', { name: 'Analyze Document' })).toBeInTheDocument();
-  }
-
-  it('closes drawer when "New Chat" is clicked', async () => {
+describe('App - analyze view navigation', () => {
+  it('switches to analyze view when "Analyze Document" is clicked', async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await openDrawer(user);
+    await user.click(screen.getByRole('button', { name: /analyze document/i }));
+
+    expect(screen.getByRole('heading', { name: 'Analyze Document' })).toBeInTheDocument();
+  });
+
+  it('returns to chat when back button is clicked from analyze view', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /analyze document/i }));
+    await user.click(screen.getByLabelText('Back to chat'));
+
+    expect(screen.queryByRole('heading', { name: 'Analyze Document' })).not.toBeInTheDocument();
+  });
+
+  it('switches away from analyze view when "New Chat" is clicked', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /analyze document/i }));
     await user.click(screen.getByRole('button', { name: /\+ new chat/i }));
 
-    expect(screen.queryByRole('dialog', { name: 'Analyze Document' })).not.toBeInTheDocument();
-  });
-
-  it('closes drawer when "Extraction Schemas" is clicked', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-
-    await openDrawer(user);
-    await user.click(screen.getByRole('button', { name: /extraction schemas/i }));
-
-    expect(screen.queryByRole('dialog', { name: 'Analyze Document' })).not.toBeInTheDocument();
-  });
-
-  it('closes drawer when a conversation is selected', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-
-    await openDrawer(user);
-    await user.click(screen.getByText('Test Conversation'));
-
-    expect(screen.queryByRole('dialog', { name: 'Analyze Document' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Analyze Document' })).not.toBeInTheDocument();
   });
 });
