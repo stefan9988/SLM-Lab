@@ -39,6 +39,7 @@ export default function AnalyzePanel({ onBack }: Props) {
         <div className="w-2/5 border-r border-[#334155] p-5 overflow-auto">
           <ExtractionFieldsTable
             documentName={documentFile?.file.name}
+            file={documentFile?.file}
             onLoadDocument={handleLoadDocument}
           />
         </div>

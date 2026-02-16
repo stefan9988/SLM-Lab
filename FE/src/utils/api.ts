@@ -1,4 +1,4 @@
-import type { Message, SSEEvent, FileAttachment, ExtractionSchema, SchemaField } from '../types';
+import type { Message, SSEEvent, FileAttachment, ExtractionSchema, ExtractionLocation, SchemaField } from '../types';
 import logger from './logger';
 
 const TOKEN_KEY = 'slm-auth-token';
@@ -175,5 +175,91 @@ export async function deleteSchemaApi(id: string): Promise<void> {
     handleUnauthorized(res);
     logger.error('[API] Failed to delete schema:', res.status, res.statusText);
     throw new Error('Failed to delete schema');
+  }
+}
+
+export interface AnalyzeExtractionEvent {
+  type: 'extraction';
+  content: {
+    key: string;
+    extraction: string | null;
+    location: ExtractionLocation | null;
+  };
+}
+
+export interface AnalyzeStatusEvent {
+  type: 'status';
+  content: string;
+}
+
+export interface AnalyzeErrorEvent {
+  type: 'error';
+  content: string;
+}
+
+export type AnalyzeSSEEvent = AnalyzeExtractionEvent | AnalyzeStatusEvent | AnalyzeErrorEvent;
+
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function* streamAnalyzeDocument(
+  file: File,
+  schemaId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<AnalyzeSSEEvent | 'DONE'> {
+  logger.info('[API] Starting document analysis for schema:', schemaId, 'file:', file.name);
+
+  const content = await readFileAsDataURL(file);
+  const res = await fetch('/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({
+      file: { name: file.name, type: file.type, content, size: file.size },
+      schema_id: schemaId,
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Analyze request failed:', res.status, res.statusText);
+    throw new Error('Analyze request failed');
+  }
+  logger.info('[API] Analyze stream connection established');
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop()!;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data: ')) continue;
+      const payload = trimmed.slice(6);
+      if (payload === '[DONE]') {
+        yield 'DONE';
+        return;
+      }
+      try {
+        const event = JSON.parse(payload) as AnalyzeSSEEvent;
+        logger.debug('[API] Received analyze event:', event.type);
+        yield event;
+      } catch {
+        logger.warn('[API] Skipping malformed analyze SSE event:', payload);
+      }
+    }
   }
 }

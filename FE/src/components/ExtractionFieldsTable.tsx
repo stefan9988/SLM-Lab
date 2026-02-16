@@ -1,22 +1,36 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSchemas } from "../hooks/useSchemas";
-import type { ExtractionRow } from "../types";
+import { streamAnalyzeDocument } from "../utils/api";
+import type { ExtractionRow, ExtractionLocation } from "../types";
 
 const LAST_SCHEMA_KEY = "slm-last-schema-id";
 
+function formatLocation(location: ExtractionLocation | null): string {
+  if (!location) return "-";
+  const parts: string[] = [];
+  if (location.page_num != null) parts.push(`Page ${location.page_num}`);
+  if (location.chunk_num != null) parts.push(`Chunk ${location.chunk_num}`);
+  return parts.length > 0 ? parts.join(", ") : "-";
+}
+
 interface Props {
   documentName?: string;
+  file?: File;
   onLoadDocument: (file: File) => void;
 }
 
 export default function ExtractionFieldsTable({
   documentName,
+  file,
   onLoadDocument,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const { schemas, loading } = useSchemas();
   const [selectedSchemaId, setSelectedSchemaId] = useState<string>("");
   const [rows, setRows] = useState<ExtractionRow[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [statusText, setStatusText] = useState("");
 
   useEffect(() => {
     if (loading || schemas.length === 0) return;
@@ -28,7 +42,7 @@ export default function ExtractionFieldsTable({
       schema.fields.map((f) => ({
         fieldKey: f.key,
         extraction: "",
-        location: "",
+        location: null,
       })),
     );
   }, [loading, schemas]);
@@ -45,7 +59,7 @@ export default function ExtractionFieldsTable({
           schema.fields.map((f) => ({
             fieldKey: f.key,
             extraction: "",
-            location: "",
+            location: null,
           })),
         );
       } else {
@@ -56,7 +70,7 @@ export default function ExtractionFieldsTable({
   );
 
   const handleRowChange = useCallback(
-    (index: number, field: "extraction" | "location", value: string) => {
+    (index: number, field: "extraction", value: string) => {
       setRows((prev) =>
         prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
       );
@@ -64,9 +78,82 @@ export default function ExtractionFieldsTable({
     [],
   );
 
-  const handleAnalyze = useCallback(() => {
-    // No-op for now
+  const handleAnalyze = useCallback(async () => {
+    if (!file || !selectedSchemaId || analyzing) return;
+
+    // Reset rows to empty values before starting
+    setRows((prev) =>
+      prev.map((row) => ({ ...row, extraction: "", location: null })),
+    );
+    setAnalyzing(true);
+    setStatusText("Starting analysis...");
+
+    const abort = new AbortController();
+    abortRef.current = abort;
+
+    try {
+      for await (const event of streamAnalyzeDocument(
+        file,
+        selectedSchemaId,
+        abort.signal,
+      )) {
+        if (event === "DONE") break;
+
+        if (event.type === "status") {
+          setStatusText(event.content);
+        } else if (event.type === "extraction") {
+          const { key, extraction, location } = event.content;
+          setRows((prev) => {
+            const idx = prev.findIndex((r) => r.fieldKey === key);
+            if (idx !== -1) {
+              // Update existing row
+              return prev.map((r, i) =>
+                i === idx
+                  ? {
+                      ...r,
+                      extraction: extraction ?? "",
+                      location: location ?? null,
+                    }
+                  : r,
+              );
+            }
+            // Append numbered variant
+            return [
+              ...prev,
+              {
+                fieldKey: key,
+                extraction: extraction ?? "",
+                location: location ?? null,
+              },
+            ];
+          });
+        } else if (event.type === "error") {
+          setStatusText(`Error: ${event.content}`);
+        }
+      }
+    } catch (err) {
+      if (!abort.signal.aborted) {
+        setStatusText(
+          `Error: ${err instanceof Error ? err.message : "Analysis failed"}`,
+        );
+      }
+    } finally {
+      setAnalyzing(false);
+      abortRef.current = null;
+      if (!statusText.startsWith("Error")) {
+        setStatusText("");
+      }
+    }
+  }, [file, selectedSchemaId, analyzing]);
+
+  // Cleanup abort on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
   }, []);
+
+  const canAnalyze = !!file && !!selectedSchemaId && !analyzing;
 
   return (
     <div className="flex flex-col gap-4 h-full">
@@ -143,7 +230,7 @@ export default function ExtractionFieldsTable({
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr key={i} className="border-b border-[#1e293b]">
+                <tr key={row.fieldKey} className="border-b border-[#1e293b]">
                   <td className="py-2 px-2 text-[#e2e8f0] font-medium">
                     {row.fieldKey}
                   </td>
@@ -158,16 +245,8 @@ export default function ExtractionFieldsTable({
                       placeholder="Extracted value"
                     />
                   </td>
-                  <td className="py-1 px-2">
-                    <input
-                      type="text"
-                      value={row.location}
-                      onChange={(e) =>
-                        handleRowChange(i, "location", e.target.value)
-                      }
-                      className="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
-                      placeholder="Page / section"
-                    />
+                  <td className="py-2 px-2 text-sm text-[#94a3b8]">
+                    {formatLocation(row.location)}
                   </td>
                 </tr>
               ))}
@@ -180,12 +259,20 @@ export default function ExtractionFieldsTable({
         <p className="text-[#64748b] text-sm">This schema has no fields.</p>
       )}
 
+      {statusText && (
+        <p
+          className={`text-xs ${statusText.startsWith("Error") ? "text-red-400" : "text-[#94a3b8]"}`}
+        >
+          {statusText}
+        </p>
+      )}
+
       <button
         onClick={handleAnalyze}
-        disabled={!selectedSchemaId}
+        disabled={!canAnalyze}
         className="mt-auto w-full rounded-lg bg-[#7c3aed] text-white py-2.5 text-sm font-medium hover:bg-[#6d28d9] hover:shadow-[0_0_12px_rgba(124,58,237,0.4)] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
       >
-        Analyze Document
+        {analyzing ? "Analyzing..." : "Analyze Document"}
       </button>
     </div>
   );

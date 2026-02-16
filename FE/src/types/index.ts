@@ -55,8 +55,13 @@ export interface ExtractionSchema {
   fields: SchemaField[];
 }
 
+export interface ExtractionLocation {
+  page_num: number | null;
+  chunk_num: number | null;
+}
+
 export interface ExtractionRow {
   fieldKey: string;
   extraction: string;
-  location: string;
+  location: ExtractionLocation | null;
 }

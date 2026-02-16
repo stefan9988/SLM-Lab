@@ -1,7 +1,9 @@
 """FastAPI chat server exposing the chat Agent via HTTP endpoints."""
 
 import json
+import re
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -10,6 +12,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from AI.agents import init_agent
 from AI.prompts import GENERAL_AGENT_PROMPT, DOCUMENT_AGENT_PROMPT
+from AI.prompts.extraction_prompt import build_extraction_prompt
 from AI.tools import get_enabled_tools, get_document_agent_enabled_tools
 from BE.archive_store import (
     PostgresArchiveStore,
@@ -113,6 +116,13 @@ class ChatRequest(BaseModel):
     message: str = Field(max_length=100_000)
     session_id: str = Field(max_length=128, pattern=SESSION_ID_PATTERN)
     files: list[FileAttachment] | None = None
+
+
+class AnalyzeRequest(BaseModel):
+    """Request model for document analysis endpoint."""
+
+    file: FileAttachment
+    schema_id: str = Field(max_length=128)
 
 
 def get_archive_store() -> PostgresArchiveStore:
@@ -617,3 +627,162 @@ async def delete_schema(
     if not deleted:
         raise HTTPException(status_code=404, detail="Schema not found")
     return {"status": "deleted"}
+
+
+# --- Document analysis endpoint ---
+
+
+def validate_extraction_keys(
+    results: list[dict], schema_fields: list[dict]
+) -> list[dict]:
+    """Ensure all schema keys appear in results, adding nulls for missing ones.
+
+    Numbered variants like ``phone_number_1`` are accepted as matching
+    ``phone_number``.  Extra numbered variants the agent returned are kept.
+    """
+    schema_keys = {f["key"] for f in schema_fields}
+
+    # Build a set of schema keys that are already covered
+    covered: set[str] = set()
+    for item in results:
+        key = item.get("key", "")
+        if key in schema_keys:
+            covered.add(key)
+        else:
+            # Check numbered variant: key_<digits>
+            match = re.match(r"^(.+)_(\d+)$", key)
+            if match and match.group(1) in schema_keys:
+                covered.add(match.group(1))
+
+    # Normalise each result item
+    validated: list[dict] = []
+    for item in results:
+        validated.append(
+            {
+                "key": item.get("key", ""),
+                "extraction": item.get("extraction") or None,
+                "location": item.get("location") or None,
+            }
+        )
+
+    # Add missing schema keys with null values
+    for key in schema_keys:
+        if key not in covered:
+            validated.append({"key": key, "extraction": None, "location": None})
+
+    return validated
+
+
+def _parse_extraction_json(text: str) -> list[dict]:
+    """Extract a JSON array from the agent's response text.
+
+    The agent is instructed to return *only* a JSON array, but may wrap it in
+    markdown fences.  This helper strips fences and parses the first ``[...]``
+    block found.
+    """
+    # Strip markdown code fences if present
+    cleaned = re.sub(r"```(?:json)?\s*", "", text)
+    cleaned = cleaned.replace("```", "")
+
+    # Find the first JSON array
+    start = cleaned.find("[")
+    end = cleaned.rfind("]")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("No JSON array found in agent response")
+
+    return json.loads(cleaned[start : end + 1])
+
+
+@app.post("/analyze")
+async def analyze_document(
+    body: AnalyzeRequest,
+    request: Request,
+    schema_store: SchemaStore = Depends(get_schema_store),
+    user: UserInfo = Depends(get_current_user),
+):
+    """Analyze a document against a schema. Streams SSE events."""
+    logger.info(
+        "POST /analyze (schema_id=%s, file=%s)",
+        body.schema_id,
+        body.file.name,
+    )
+
+    # 1. Fetch schema
+    schemas = await schema_store.get_schemas(user_id=user.id)
+    schema = next((s for s in schemas if s["id"] == body.schema_id), None)
+    if schema is None:
+        raise HTTPException(status_code=404, detail="Schema not found")
+
+    schema_fields: list[dict] = schema["fields"]
+    if not schema_fields:
+        raise HTTPException(status_code=400, detail="Schema has no fields")
+
+    # 2. Save file
+    safe_name = sanitize_filename(body.file.name)
+    mime = body.file.type or ""
+    file_id = await save_file(
+        original_name=safe_name,
+        mime_type=mime,
+        data_url_content=body.file.content,
+        size_bytes=body.file.size,
+        user_id=user.id,
+    )
+    if not file_id:
+        raise HTTPException(status_code=500, detail="Failed to save file")
+
+    # 3. Create embeddings synchronously if enabled
+    if settings.EMBEDDING_ENABLED:
+        embed_fn = _make_embed_task(
+            file_id,
+            user_id=user.id,
+            original_name=safe_name,
+            mime_type=mime,
+        )
+        await embed_fn()
+
+    # 4. Build extraction prompt
+    prompt = build_extraction_prompt(schema_fields, file_id)
+
+    # 5. Stream agent response and parse results
+    document_agent = request.app.state.document_agent
+    session_id = str(uuid4())
+    file_attachments = [{"name": safe_name, "type": mime, "file_id": file_id}]
+
+    async def generate():
+        full_text = ""
+        try:
+            async for event in document_agent.stream(
+                prompt,
+                session_id=session_id,
+                file_attachments=file_attachments,
+                user_id=user.id,
+            ):
+                event_type = event.get("type", "")
+                if event_type == "token":
+                    full_text += event.get("content", "")
+                elif event_type in ("status", "tool_use"):
+                    yield f"data: {json.dumps({'type': 'status', 'content': event.get('content', '')})}\n\n"
+
+            # Parse and validate results
+            results = _parse_extraction_json(full_text)
+            validated = validate_extraction_keys(results, schema_fields)
+
+            for item in validated:
+                yield f"data: {json.dumps({'type': 'extraction', 'content': item})}\n\n"
+
+        except Exception as exc:
+            logger.error("Analysis failed: %s", exc, exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
+
+        yield "data: [DONE]\n\n"
+        logger.info("POST /analyze complete (schema_id=%s)", body.schema_id)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
