@@ -283,6 +283,8 @@ async def lifespan(app: FastAPI):
         system_prompt=GENERAL_AGENT_PROMPT,
         tools=tools,
         maintain_history=True,
+        provider=settings.GENERAL_AGENT_LLM_PROVIDER or None,
+        model_name=settings.GENERAL_AGENT_MODEL_NAME or None,
     )
 
     doc_tools = get_document_agent_enabled_tools(settings)
@@ -293,6 +295,8 @@ async def lifespan(app: FastAPI):
         system_prompt=DOCUMENT_AGENT_PROMPT,
         tools=doc_tools,
         maintain_history=True,
+        provider=settings.DOCUMENT_AGENT_LLM_PROVIDER or None,
+        model_name=settings.DOCUMENT_AGENT_MODEL_NAME or None,
     )
 
     # Register agents for cross-agent delegation

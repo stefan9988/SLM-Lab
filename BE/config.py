@@ -39,13 +39,20 @@ class Settings(BaseSettings):
     JWT_EXPIRATION_HOURS: int = 24
 
     # LLM provider settings
-    LLM_PROVIDER: str = "ollama"  # "ollama" | "openrouter"
+    LLM_PROVIDER: str = "ollama"  # "ollama" | "openrouter" | "anthropic"
     MODEL_NAME: str = "llama3.1:8b"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_THINKING: bool = False
     OLLAMA_API_KEY: str = ""
     OPEN_ROUTER_API_KEY: str = ""
     OPEN_ROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    ANTHROPIC_API_KEY: str = ""
+
+    # Per-agent LLM overrides (fall back to global LLM_PROVIDER / MODEL_NAME if empty)
+    GENERAL_AGENT_LLM_PROVIDER: str = ""
+    GENERAL_AGENT_MODEL_NAME: str = ""
+    DOCUMENT_AGENT_LLM_PROVIDER: str = ""
+    DOCUMENT_AGENT_MODEL_NAME: str = ""
 
     # API settings
     API_TITLE: str = "SLM-Lab Chat API"

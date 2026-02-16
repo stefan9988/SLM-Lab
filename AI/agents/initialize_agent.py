@@ -14,15 +14,14 @@ from .base import Agent
 logger = setup_logger(__name__)
 
 
-def _build_llm() -> BaseChatModel:
-    """Build an LLM instance based on the configured provider."""
-    provider = settings.LLM_PROVIDER.lower()
-    logger.info("Building LLM (provider=%s, model=%s)", provider, settings.MODEL_NAME)
+def _build_llm(provider: str, model_name: str) -> BaseChatModel:
+    """Build an LLM instance for the given provider and model."""
+    logger.info("Building LLM (provider=%s, model=%s)", provider, model_name)
 
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
-        kwargs = {"model": settings.MODEL_NAME, "base_url": settings.OLLAMA_BASE_URL}
+        kwargs = {"model": model_name, "base_url": settings.OLLAMA_BASE_URL}
         if settings.OLLAMA_THINKING:
             kwargs["reasoning"] = True
         return ChatOllama(**kwargs)
@@ -30,14 +29,22 @@ def _build_llm() -> BaseChatModel:
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=settings.MODEL_NAME,
+            model=model_name,
             openai_api_key=settings.OPEN_ROUTER_API_KEY,
             openai_api_base=settings.OPEN_ROUTER_BASE_URL,
             extra_body={"require": ["tools"]},
         )
+    elif provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+
+        return ChatAnthropic(
+            model=model_name,
+            api_key=settings.ANTHROPIC_API_KEY,
+        )
     else:
         raise ValueError(
-            f"Unsupported LLM_PROVIDER: {provider!r}. Use 'ollama' or 'openrouter'."
+            f"Unsupported LLM_PROVIDER: {provider!r}. "
+            "Use 'ollama', 'openrouter', or 'anthropic'."
         )
 
 
@@ -45,6 +52,8 @@ def init_agent(
     system_prompt: Optional[str],
     tools: Optional[List[BaseTool]] = None,
     maintain_history: bool = False,
+    provider: Optional[str] = None,
+    model_name: Optional[str] = None,
 ) -> Agent:
     """Initialize and return an Agent.
 
@@ -52,6 +61,8 @@ def init_agent(
         system_prompt: Optional system prompt. Defaults to GENERAL_AGENT_PROMPT.
         tools: Optional list of tools available to the agent.
         maintain_history: Whether to maintain conversation history across calls.
+        provider: LLM provider override. Falls back to global LLM_PROVIDER.
+        model_name: Model name override. Falls back to global MODEL_NAME.
 
     Returns:
         Configured Agent instance.
@@ -63,7 +74,9 @@ def init_agent(
         maintain_history,
     )
     try:
-        llm = _build_llm()
+        resolved_provider = (provider or settings.LLM_PROVIDER).lower()
+        resolved_model = model_name or settings.MODEL_NAME
+        llm = _build_llm(resolved_provider, resolved_model)
         store = create_store()
         agent = Agent(
             llm=llm,
@@ -71,8 +84,8 @@ def init_agent(
             tools=tools,
             maintain_history=maintain_history,
             session_store=store,
-            model_name=settings.MODEL_NAME,
-            provider=settings.LLM_PROVIDER,
+            model_name=resolved_model,
+            provider=resolved_provider,
         )
         logger.info("init_agent successful")
         return agent
