@@ -140,9 +140,7 @@ export default function ExtractionFieldsTable({
     } finally {
       setAnalyzing(false);
       abortRef.current = null;
-      if (!statusText.startsWith("Error")) {
-        setStatusText("");
-      }
+      setStatusText((prev) => (prev.startsWith("Error") ? prev : ""));
     }
   }, [file, selectedSchemaId, analyzing]);
 
