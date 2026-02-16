@@ -476,9 +476,7 @@ class TestWebPageContentTool:
 
         from AI.tools.web_page_content import web_page_content_tool
 
-        result = asyncio.run(
-            web_page_content_tool.coroutine(url="https://example.com")
-        )
+        result = asyncio.run(web_page_content_tool.coroutine(url="https://example.com"))
         assert "Title" in result
         assert "Hello world" in result
 
@@ -500,9 +498,7 @@ class TestWebPageContentTool:
 
         from AI.tools.web_page_content import web_page_content_tool
 
-        result = asyncio.run(
-            web_page_content_tool.coroutine(url="https://example.com")
-        )
+        result = asyncio.run(web_page_content_tool.coroutine(url="https://example.com"))
         assert "Visible text" in result
         assert "var x=1" not in result
         assert "color:red" not in result
@@ -530,7 +526,9 @@ class TestWebPageContentTool:
         mock_get_writer.return_value = MagicMock()
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
-        response = httpx.Response(status_code=404, request=httpx.Request("GET", "https://example.com/missing"))
+        response = httpx.Response(
+            status_code=404, request=httpx.Request("GET", "https://example.com/missing")
+        )
         mock_client.get.return_value = response
         mock_client_cls.return_value = mock_client
 
@@ -567,9 +565,7 @@ class TestWebPageContentTool:
         mock_get_writer.return_value = MagicMock()
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
-        mock_client.get.return_value = _html_response(
-            "<html><body></body></html>"
-        )
+        mock_client.get.return_value = _html_response("<html><body></body></html>")
         mock_client_cls.return_value = mock_client
 
         from AI.tools.web_page_content import web_page_content_tool

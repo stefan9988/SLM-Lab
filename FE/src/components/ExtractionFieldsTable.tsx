@@ -1,8 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useSchemas } from '../hooks/useSchemas';
 import type { ExtractionRow } from '../types';
 
-export default function ExtractionFieldsTable() {
+interface Props {
+  documentName?: string;
+  onLoadDocument: (file: File) => void;
+}
+
+export default function ExtractionFieldsTable({ documentName, onLoadDocument }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { schemas, loading } = useSchemas();
   const [selectedSchemaId, setSelectedSchemaId] = useState<string>('');
   const [rows, setRows] = useState<ExtractionRow[]>([]);
@@ -32,25 +38,49 @@ export default function ExtractionFieldsTable() {
 
   return (
     <div className="flex flex-col gap-4 h-full">
-      <div>
-        <label htmlFor="schema-select" className="block text-xs text-[#94a3b8] mb-1">
-          Extraction Schema
-        </label>
-        <select
-          id="schema-select"
-          value={selectedSchemaId}
-          onChange={handleSchemaChange}
-          className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
-        >
-          <option value="">
-            {loading ? 'Loading schemas...' : 'Select a schema'}
-          </option>
-          {schemas.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
+      <div className="flex gap-4">
+        <div className="w-1/2">
+          <label className="block text-xs text-[#94a3b8] mb-1">Load Document</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            className="hidden"
+            data-testid="file-input"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onLoadDocument(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-left truncate text-[#e2e8f0] hover:border-[#7c3aed] focus:outline-none focus:border-[#7c3aed] transition-colors"
+          >
+            {documentName || 'Choose File'}
+          </button>
+        </div>
+
+        <div className="w-1/2">
+          <label htmlFor="schema-select" className="block text-xs text-[#94a3b8] mb-1">
+            Extraction Schema
+          </label>
+          <select
+            id="schema-select"
+            value={selectedSchemaId}
+            onChange={handleSchemaChange}
+            className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
+          >
+            <option value="">
+              {loading ? 'Loading schemas...' : 'Select a schema'}
             </option>
-          ))}
-        </select>
+            {schemas.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {rows.length > 0 && (

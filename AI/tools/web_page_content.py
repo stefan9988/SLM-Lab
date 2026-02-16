@@ -12,9 +12,7 @@ REQUEST_TIMEOUT = 30.0
 MAX_CONTENT_BYTES = 5_000_000  # 5 MB
 
 _HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (compatible; SLM-Lab/1.0; +https://github.com/)"
-    ),
+    "User-Agent": ("Mozilla/5.0 (compatible; SLM-Lab/1.0; +https://github.com/)"),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
 }
@@ -83,7 +81,9 @@ async def web_page_content_tool(url: str) -> str:
     text = _extract_text(raw)
 
     if not text.strip():
-        return "Warning: Page fetched successfully but no readable text content was found."
+        return (
+            "Warning: Page fetched successfully but no readable text content was found."
+        )
 
     if len(text) > MAX_RETURN_CHARS:
         text = text[:MAX_RETURN_CHARS] + (
@@ -91,8 +91,6 @@ async def web_page_content_tool(url: str) -> str:
             f"{len(text):,} characters]"
         )
 
-    logger.info(
-        "web_page_content_tool complete (url=%s, length=%d)", url, len(text)
-    )
+    logger.info("web_page_content_tool complete (url=%s, length=%d)", url, len(text))
     writer("Page fetched successfully")
     return text

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import ExtractionFieldsTable from './ExtractionFieldsTable';
 import PdfViewer from './PdfViewer';
 
@@ -9,6 +9,20 @@ interface Props {
 
 export default function AnalyzeDrawer({ open, onClose }: Props) {
   const drawerRef = useRef<HTMLDivElement>(null);
+  const [documentFile, setDocumentFile] = useState<{ file: File; url: string } | null>(null);
+
+  const handleLoadDocument = useCallback((file: File) => {
+    setDocumentFile((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return { file, url: URL.createObjectURL(file) };
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (documentFile) URL.revokeObjectURL(documentFile.url);
+    };
+  }, []);// eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -52,12 +66,15 @@ export default function AnalyzeDrawer({ open, onClose }: Props) {
         <div className="flex-1 flex min-h-0">
           {/* Left panel: Schema + Extraction fields */}
           <div className="w-2/5 border-r border-[#334155] p-5 overflow-auto">
-            <ExtractionFieldsTable />
+            <ExtractionFieldsTable
+              documentName={documentFile?.file.name}
+              onLoadDocument={handleLoadDocument}
+            />
           </div>
 
           {/* Right panel: PDF Viewer */}
           <div className="flex-1 flex flex-col p-5">
-            <PdfViewer />
+            <PdfViewer fileUrl={documentFile?.url} />
           </div>
         </div>
       </div>

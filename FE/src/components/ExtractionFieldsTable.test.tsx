@@ -12,6 +12,10 @@ vi.mock('../utils/api', () => ({
   deleteSchemaApi: vi.fn(),
 }));
 
+const defaultProps = {
+  onLoadDocument: vi.fn(),
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockFetchSchemas.mockResolvedValue([
@@ -33,7 +37,7 @@ beforeEach(() => {
 
 describe('ExtractionFieldsTable', () => {
   it('renders schema dropdown', async () => {
-    render(<ExtractionFieldsTable />);
+    render(<ExtractionFieldsTable {...defaultProps} />);
 
     await waitFor(() => {
       expect(screen.getByLabelText('Extraction Schema')).toBeInTheDocument();
@@ -41,7 +45,7 @@ describe('ExtractionFieldsTable', () => {
   });
 
   it('populates dropdown with fetched schemas', async () => {
-    render(<ExtractionFieldsTable />);
+    render(<ExtractionFieldsTable {...defaultProps} />);
 
     await waitFor(() => {
       expect(screen.getByText('Invoice Schema')).toBeInTheDocument();
@@ -51,7 +55,7 @@ describe('ExtractionFieldsTable', () => {
 
   it('shows field rows when a schema is selected', async () => {
     const user = userEvent.setup();
-    render(<ExtractionFieldsTable />);
+    render(<ExtractionFieldsTable {...defaultProps} />);
 
     await waitFor(() => {
       expect(screen.getByText('Invoice Schema')).toBeInTheDocument();
@@ -66,7 +70,7 @@ describe('ExtractionFieldsTable', () => {
   });
 
   it('renders the Analyze Document button', async () => {
-    render(<ExtractionFieldsTable />);
+    render(<ExtractionFieldsTable {...defaultProps} />);
 
     await waitFor(() => {
       expect(screen.getByText('Analyze Document')).toBeInTheDocument();
@@ -74,7 +78,7 @@ describe('ExtractionFieldsTable', () => {
   });
 
   it('disables Analyze Document button when no schema selected', async () => {
-    render(<ExtractionFieldsTable />);
+    render(<ExtractionFieldsTable {...defaultProps} />);
 
     await waitFor(() => {
       expect(screen.getByText('Analyze Document')).toBeDisabled();
@@ -83,7 +87,7 @@ describe('ExtractionFieldsTable', () => {
 
   it('enables Analyze Document button when a schema is selected', async () => {
     const user = userEvent.setup();
-    render(<ExtractionFieldsTable />);
+    render(<ExtractionFieldsTable {...defaultProps} />);
 
     await waitFor(() => {
       expect(screen.getByText('Invoice Schema')).toBeInTheDocument();
@@ -92,5 +96,33 @@ describe('ExtractionFieldsTable', () => {
     await user.selectOptions(screen.getByLabelText('Extraction Schema'), 's1');
 
     expect(screen.getByText('Analyze Document')).toBeEnabled();
+  });
+
+  it('renders "Choose File" button when no document is loaded', async () => {
+    render(<ExtractionFieldsTable {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Choose File')).toBeInTheDocument();
+    });
+  });
+
+  it('shows document name when provided', async () => {
+    render(<ExtractionFieldsTable {...defaultProps} documentName="report.pdf" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('report.pdf')).toBeInTheDocument();
+    });
+  });
+
+  it('calls onLoadDocument when a file is selected', async () => {
+    const onLoadDocument = vi.fn();
+    render(<ExtractionFieldsTable onLoadDocument={onLoadDocument} />);
+
+    const file = new File(['dummy'], 'test.pdf', { type: 'application/pdf' });
+    const input = screen.getByTestId('file-input') as HTMLInputElement;
+
+    await userEvent.upload(input, file);
+
+    expect(onLoadDocument).toHaveBeenCalledWith(file);
   });
 });
