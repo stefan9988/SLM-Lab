@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSchemas } from "../hooks/useSchemas";
 import { streamAnalyzeDocument } from "../utils/api";
-import type { ExtractionRow, ExtractionLocation } from "../types";
+import type { ExtractionRow, ExtractionLocation, HighlightRequest } from "../types";
 
 const LAST_SCHEMA_KEY = "slm-last-schema-id";
 
@@ -17,12 +17,16 @@ interface Props {
   documentName?: string;
   file?: File;
   onLoadDocument: (file: File) => void;
+  onLocationClick?: (req: HighlightRequest) => void;
+  onHighlightClear?: () => void;
 }
 
 export default function ExtractionFieldsTable({
   documentName,
   file,
   onLoadDocument,
+  onLocationClick,
+  onHighlightClear,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -52,6 +56,7 @@ export default function ExtractionFieldsTable({
       const schemaId = e.target.value;
       setSelectedSchemaId(schemaId);
       localStorage.setItem(LAST_SCHEMA_KEY, schemaId);
+      onHighlightClear?.();
 
       const schema = schemas.find((s) => s.id === schemaId);
       if (schema) {
@@ -66,7 +71,7 @@ export default function ExtractionFieldsTable({
         setRows([]);
       }
     },
-    [schemas],
+    [schemas, onHighlightClear],
   );
 
   const handleRowChange = useCallback(
@@ -83,7 +88,8 @@ export default function ExtractionFieldsTable({
       prev.map((row) => ({ ...row, extraction: "", location: null })),
     );
     setStatusText("");
-  }, []);
+    onHighlightClear?.();
+  }, [onHighlightClear]);
 
   const handleSaveCSV = useCallback(() => {
     const baseName = documentName
@@ -110,6 +116,7 @@ export default function ExtractionFieldsTable({
   const handleAnalyze = useCallback(async () => {
     if (!file || !selectedSchemaId || analyzing) return;
 
+    onHighlightClear?.();
     // Reset rows to empty values before starting
     setRows((prev) =>
       prev.map((row) => ({ ...row, extraction: "", location: null })),
@@ -176,7 +183,7 @@ export default function ExtractionFieldsTable({
       abortRef.current = null;
       setStatusText((prev) => (prev.startsWith("Error") ? prev : ""));
     }
-  }, [file, selectedSchemaId, analyzing]);
+  }, [file, selectedSchemaId, analyzing, onHighlightClear]);
 
   // Cleanup abort on unmount
   useEffect(() => {
@@ -278,7 +285,22 @@ export default function ExtractionFieldsTable({
                     />
                   </td>
                   <td className="py-2 px-2 text-sm text-[#94a3b8]">
-                    {formatLocation(row.location)}
+                    {row.location?.page_num != null && row.extraction ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onLocationClick?.({
+                            pageNum: row.location!.page_num!,
+                            textToHighlight: row.extraction,
+                          })
+                        }
+                        className="text-[#7c3aed] hover:underline cursor-pointer bg-transparent border-none p-0 text-sm"
+                      >
+                        {formatLocation(row.location)}
+                      </button>
+                    ) : (
+                      formatLocation(row.location)
+                    )}
                   </td>
                 </tr>
               ))}

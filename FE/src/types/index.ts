@@ -65,3 +65,8 @@ export interface ExtractionRow {
   extraction: string;
   location: ExtractionLocation | null;
 }
+
+export interface HighlightRequest {
+  pageNum: number;
+  textToHighlight: string;
+}

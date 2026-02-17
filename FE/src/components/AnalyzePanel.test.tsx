@@ -12,15 +12,31 @@ vi.mock('../utils/api', () => ({
   deleteSchemaApi: vi.fn(),
 }));
 
-vi.mock('react-pdf', () => ({
-  Document: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Page: () => <div data-testid="pdf-page">PDF Page</div>,
-  pdfjs: { GlobalWorkerOptions: { workerSrc: '' } },
+let capturedPdfViewerProps: Record<string, unknown> = {};
+let capturedExtractionTableProps: Record<string, unknown> = {};
+
+vi.mock('./PdfViewer', () => ({
+  default: (props: Record<string, unknown>) => {
+    capturedPdfViewerProps = props;
+    if (!props.fileUrl) {
+      return <div>No PDF loaded</div>;
+    }
+    return <div data-testid="pdf-viewer">PDF Viewer</div>;
+  },
+}));
+
+vi.mock('./ExtractionFieldsTable', () => ({
+  default: (props: Record<string, unknown>) => {
+    capturedExtractionTableProps = props;
+    return <div data-testid="extraction-table">Extraction Table</div>;
+  },
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockFetchSchemas.mockResolvedValue([]);
+  capturedPdfViewerProps = {};
+  capturedExtractionTableProps = {};
 });
 
 describe('AnalyzePanel', () => {
@@ -49,5 +65,26 @@ describe('AnalyzePanel', () => {
     render(<AnalyzePanel onBack={vi.fn()} />);
 
     expect(screen.getByText('No PDF loaded')).toBeInTheDocument();
+  });
+
+  it('passes highlight prop to PdfViewer', () => {
+    render(<AnalyzePanel onBack={vi.fn()} />);
+
+    expect(capturedPdfViewerProps).toHaveProperty('highlight');
+    expect(capturedPdfViewerProps.highlight).toBeNull();
+  });
+
+  it('passes onLocationClick to ExtractionFieldsTable', () => {
+    render(<AnalyzePanel onBack={vi.fn()} />);
+
+    expect(capturedExtractionTableProps).toHaveProperty('onLocationClick');
+    expect(typeof capturedExtractionTableProps.onLocationClick).toBe('function');
+  });
+
+  it('passes onHighlightClear to ExtractionFieldsTable', () => {
+    render(<AnalyzePanel onBack={vi.fn()} />);
+
+    expect(capturedExtractionTableProps).toHaveProperty('onHighlightClear');
+    expect(typeof capturedExtractionTableProps.onHighlightClear).toBe('function');
   });
 });

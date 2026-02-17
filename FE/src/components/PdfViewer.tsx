@@ -1,18 +1,32 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+import type { HighlightRequest } from '../types';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url,
 ).toString();
 
-interface Props {
-  fileUrl?: string;
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-export default function PdfViewer({ fileUrl }: Props) {
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+interface Props {
+  fileUrl?: string;
+  highlight?: HighlightRequest | null;
+}
+
+export default function PdfViewer({ fileUrl, highlight }: Props) {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [pageInput, setPageInput] = useState<string>('1');
@@ -31,6 +45,27 @@ export default function PdfViewer({ fileUrl }: Props) {
     },
     [numPages],
   );
+
+  useEffect(() => {
+    if (highlight && numPages > 0) {
+      goToPage(highlight.pageNum);
+    }
+  }, [highlight, numPages, goToPage]);
+
+  const customTextRenderer = useMemo(() => {
+    if (!highlight) return undefined;
+
+    return (textItem: { str: string; itemIndex: number }) => {
+      if (pageNumber !== highlight.pageNum) return escapeHtml(textItem.str);
+
+      const escaped = escapeRegExp(highlight.textToHighlight);
+      const regex = new RegExp(`(${escaped})`, 'gi');
+      return escapeHtml(textItem.str).replace(
+        regex,
+        '<mark class="pdf-highlight">$1</mark>',
+      );
+    };
+  }, [highlight, pageNumber]);
 
   const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPageInput(e.target.value);
@@ -71,7 +106,7 @@ export default function PdfViewer({ fileUrl }: Props) {
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex-1 overflow-auto flex items-start justify-center p-4 bg-[#0a0f1e] rounded-lg">
         <Document file={fileUrl} onLoadSuccess={onDocumentLoadSuccess} loading={<p className="text-[#64748b] text-sm">Loading PDF...</p>}>
-          <Page pageNumber={pageNumber} width={500} />
+          <Page pageNumber={pageNumber} width={500} customTextRenderer={customTextRenderer} />
         </Document>
       </div>
 

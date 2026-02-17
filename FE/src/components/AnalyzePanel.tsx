@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import ExtractionFieldsTable from './ExtractionFieldsTable';
 import PdfViewer from './PdfViewer';
+import type { HighlightRequest } from '../types';
 
 interface Props {
   onBack: () => void;
@@ -8,12 +9,31 @@ interface Props {
 
 export default function AnalyzePanel({ onBack }: Props) {
   const [documentFile, setDocumentFile] = useState<{ file: File; url: string } | null>(null);
+  const [highlight, setHighlight] = useState<HighlightRequest | null>(null);
 
   const handleLoadDocument = useCallback((file: File) => {
     setDocumentFile((prev) => {
       if (prev) URL.revokeObjectURL(prev.url);
       return { file, url: URL.createObjectURL(file) };
     });
+    setHighlight(null);
+  }, []);
+
+  const handleLocationClick = useCallback(
+    (req: HighlightRequest) => {
+      setHighlight((prev) =>
+        prev &&
+        prev.pageNum === req.pageNum &&
+        prev.textToHighlight === req.textToHighlight
+          ? null
+          : req,
+      );
+    },
+    [],
+  );
+
+  const clearHighlight = useCallback(() => {
+    setHighlight(null);
   }, []);
 
   useEffect(() => {
@@ -41,10 +61,12 @@ export default function AnalyzePanel({ onBack }: Props) {
             documentName={documentFile?.file.name}
             file={documentFile?.file}
             onLoadDocument={handleLoadDocument}
+            onLocationClick={handleLocationClick}
+            onHighlightClear={clearHighlight}
           />
         </div>
         <div className="flex-1 flex flex-col p-5">
-          <PdfViewer fileUrl={documentFile?.url} />
+          <PdfViewer fileUrl={documentFile?.url} highlight={highlight} />
         </div>
       </div>
     </div>

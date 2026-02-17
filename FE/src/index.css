@@ -63,3 +63,10 @@ body {
 .animate-messageIn {
   animation: messageIn 0.3s ease-out both;
 }
+
+.pdf-highlight {
+  background-color: rgba(124, 58, 237, 0.35);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
