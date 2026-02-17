@@ -80,7 +80,8 @@ describe("ExtractionFieldsTable", () => {
   });
 
   it("enables Analyze Document button when schema is auto-selected", async () => {
-    render(<ExtractionFieldsTable {...defaultProps} />);
+    const file = new File(["x"], "test.pdf", { type: "application/pdf" });
+    render(<ExtractionFieldsTable {...defaultProps} file={file} />);
 
     await waitFor(() => {
       expect(screen.getByText("Analyze Document")).toBeEnabled();
@@ -89,7 +90,8 @@ describe("ExtractionFieldsTable", () => {
 
   it("enables Analyze Document button when a schema is selected", async () => {
     const user = userEvent.setup();
-    render(<ExtractionFieldsTable {...defaultProps} />);
+    const file = new File(["x"], "test.pdf", { type: "application/pdf" });
+    render(<ExtractionFieldsTable {...defaultProps} file={file} />);
 
     await waitFor(() => {
       expect(screen.getByText("Invoice Schema")).toBeInTheDocument();
@@ -141,8 +143,10 @@ describe("ExtractionFieldsTable", () => {
         expect(select.value).toBe("s1");
       });
 
-      expect(screen.getByText("vendor")).toBeInTheDocument();
-      expect(screen.getByText("amount")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("vendor")).toBeInTheDocument();
+        expect(screen.getByText("amount")).toBeInTheDocument();
+      });
     });
 
     it("auto-selects last-used schema from localStorage when it matches", async () => {
@@ -170,7 +174,9 @@ describe("ExtractionFieldsTable", () => {
         expect(select.value).toBe("s1");
       });
 
-      expect(screen.getByText("vendor")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("vendor")).toBeInTheDocument();
+      });
     });
 
     it("persists selected schema ID to localStorage on change", async () => {
