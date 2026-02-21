@@ -1,15 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ExtractionFieldsTable from "./ExtractionFieldsTable";
 
 const mockFetchSchemas = vi.fn();
+const mockStreamAnalyzeDocument = vi.fn();
 
 vi.mock("../utils/api", () => ({
   fetchSchemas: (...args: unknown[]) => mockFetchSchemas(...args),
   createSchema: vi.fn(),
   updateSchemaApi: vi.fn(),
   deleteSchemaApi: vi.fn(),
+  streamAnalyzeDocument: (...args: unknown[]) => mockStreamAnalyzeDocument(...args),
+}));
+
+const TEST_SESSION_ID = "test-uuid-1234-5678-abcd-ef0123456789";
+
+vi.mock("uuid", () => ({
+  v4: () => TEST_SESSION_ID,
 }));
 
 const defaultProps = {
@@ -31,6 +39,15 @@ const schemasFixture = [
     fields: [],
   },
 ];
+
+async function* makeAnalyzeGen(
+  events: Array<{ type: string; content: unknown }>,
+) {
+  for (const e of events) {
+    yield e;
+  }
+  yield "DONE" as const;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -435,6 +452,202 @@ describe("ExtractionFieldsTable", () => {
       );
 
       expect(onHighlightClear).toHaveBeenCalled();
+    });
+  });
+
+  describe("Continue chatting button", () => {
+    const file = new File(["x"], "test.pdf", { type: "application/pdf" });
+
+    it("is not shown before analysis runs", async () => {
+      render(<ExtractionFieldsTable {...defaultProps} file={file} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeInTheDocument();
+      });
+
+      expect(
+        screen.queryByText("Continue chatting about this document"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("appears after successful analysis", async () => {
+      const user = userEvent.setup();
+      mockStreamAnalyzeDocument.mockImplementation(() =>
+        makeAnalyzeGen([
+          { type: "extraction", content: { key: "vendor", extraction: "Acme", location: null } },
+        ]),
+      );
+
+      render(
+        <ExtractionFieldsTable
+          {...defaultProps}
+          file={file}
+          onContinueChat={vi.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeEnabled();
+      });
+
+      await act(async () => {
+        await user.click(screen.getByText("Analyze Document"));
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.getByText("Continue chatting about this document"),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it("is hidden while analyzing", async () => {
+      const user = userEvent.setup();
+      // Never resolves during the test
+      let resolve!: () => void;
+      const pending = new Promise<void>((r) => { resolve = r; });
+      mockStreamAnalyzeDocument.mockImplementation(async function* () {
+        await pending;
+        yield "DONE" as const;
+      });
+
+      render(<ExtractionFieldsTable {...defaultProps} file={file} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeEnabled();
+      });
+
+      await user.click(screen.getByText("Analyze Document"));
+
+      expect(
+        screen.queryByText("Continue chatting about this document"),
+      ).not.toBeInTheDocument();
+
+      resolve();
+    });
+
+    it("is not shown after analysis with a fatal error", async () => {
+      const user = userEvent.setup();
+      mockStreamAnalyzeDocument.mockImplementation(async function* () {
+        throw new Error("Network failure");
+        yield "DONE" as const; // eslint-disable-line no-unreachable
+      });
+
+      render(<ExtractionFieldsTable {...defaultProps} file={file} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeEnabled();
+      });
+
+      await act(async () => {
+        await user.click(screen.getByText("Analyze Document"));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Error:/)).toBeInTheDocument();
+      });
+
+      expect(
+        screen.queryByText("Continue chatting about this document"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("disappears when Clear is clicked", async () => {
+      const user = userEvent.setup();
+      mockStreamAnalyzeDocument.mockImplementation(() => makeAnalyzeGen([]));
+
+      render(
+        <ExtractionFieldsTable
+          {...defaultProps}
+          file={file}
+          onContinueChat={vi.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeEnabled();
+      });
+
+      await act(async () => {
+        await user.click(screen.getByText("Analyze Document"));
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.getByText("Continue chatting about this document"),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText("Clear"));
+
+      expect(
+        screen.queryByText("Continue chatting about this document"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("calls onContinueChat with the session ID when clicked", async () => {
+      const user = userEvent.setup();
+      const onContinueChat = vi.fn();
+      mockStreamAnalyzeDocument.mockImplementation(() => makeAnalyzeGen([]));
+
+      render(
+        <ExtractionFieldsTable
+          {...defaultProps}
+          file={file}
+          onContinueChat={onContinueChat}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeEnabled();
+      });
+
+      await act(async () => {
+        await user.click(screen.getByText("Analyze Document"));
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.getByText("Continue chatting about this document"),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText("Continue chatting about this document"));
+
+      expect(onContinueChat).toHaveBeenCalledWith(TEST_SESSION_ID, 'document');
+    });
+
+    it("passes the document name to onContinueChat", async () => {
+      const user = userEvent.setup();
+      const onContinueChat = vi.fn();
+      mockStreamAnalyzeDocument.mockImplementation(() => makeAnalyzeGen([]));
+
+      render(
+        <ExtractionFieldsTable
+          {...defaultProps}
+          file={file}
+          documentName="report.pdf"
+          onContinueChat={onContinueChat}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeEnabled();
+      });
+
+      await act(async () => {
+        await user.click(screen.getByText("Analyze Document"));
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.getByText("Continue chatting about this document"),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText("Continue chatting about this document"));
+
+      expect(onContinueChat).toHaveBeenCalledWith(TEST_SESSION_ID, 'report.pdf');
     });
   });
 });

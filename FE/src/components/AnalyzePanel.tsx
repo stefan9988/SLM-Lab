@@ -7,9 +7,10 @@ import type { HighlightRequest, ModelInfo } from '../types';
 
 interface Props {
   onBack: () => void;
+  onContinueChat?: (sessionId: string, documentName: string) => void;
 }
 
-export default function AnalyzePanel({ onBack }: Props) {
+export default function AnalyzePanel({ onBack, onContinueChat }: Props) {
   const [documentFile, setDocumentFile] = useState<{ file: File; url: string } | null>(null);
   const [highlight, setHighlight] = useState<HighlightRequest | null>(null);
   const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
@@ -82,6 +83,7 @@ export default function AnalyzePanel({ onBack }: Props) {
             onLoadDocument={handleLoadDocument}
             onLocationClick={handleLocationClick}
             onHighlightClear={clearHighlight}
+            onContinueChat={onContinueChat}
             belowControls={
               <ModelSelector
                 currentProvider={currentModel?.provider ?? ''}

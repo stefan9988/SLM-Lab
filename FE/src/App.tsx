@@ -111,6 +111,14 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     setView('analyze');
   }, []);
 
+  const handleContinueChat = useCallback((sessionId: string, documentName: string) => {
+    if (!conversations.find((c) => c.id === sessionId)) {
+      setConversations(addConversation({ id: sessionId, title: `${documentName} analysis` }));
+    }
+    setActiveId(sessionId);
+    setView('chat');
+  }, [conversations]);
+
   const handleModelChange = useCallback(async (provider: string, modelName: string) => {
     try {
       const updated = await updateGeneralAgentModel(provider, modelName);
@@ -153,7 +161,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
         {view === 'schemas' ? (
           <SchemasPanel onBack={handleBackToChat} />
         ) : view === 'analyze' ? (
-          <AnalyzePanel onBack={handleBackToChat} />
+          <AnalyzePanel onBack={handleBackToChat} onContinueChat={handleContinueChat} />
         ) : (
           <>
             <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} thinkingActive={thinkingActive} onSend={handleSend} />

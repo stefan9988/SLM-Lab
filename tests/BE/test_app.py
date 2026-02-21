@@ -12,6 +12,7 @@ from BE.app import (
     build_prompt_with_files,
     process_files,
     get_archive_store,
+    get_schema_store,
 )
 from BE.auth import get_current_user
 
@@ -598,3 +599,104 @@ class TestSessionsEndpoint:
         resp = client.get("/sessions")
         assert resp.status_code == 200
         assert resp.json() == {"sessions": []}
+
+
+# ── POST /analyze endpoint tests ─────────────────────────────────────────────
+
+_VALID_DATA_URL = "data:application/pdf;base64,SlZC"
+_VALID_FILE = {
+    "name": "doc.pdf",
+    "type": "application/pdf",
+    "content": _VALID_DATA_URL,
+    "size": 4,
+}
+_VALID_SCHEMA = {
+    "id": "schema-1",
+    "name": "Test Schema",
+    "fields": [{"id": "f1", "key": "vendor", "description": "Vendor name"}],
+}
+
+
+@pytest.fixture
+def analyze_client(mock_document_agent):
+    """Client with schema store and save_file mocked for /analyze tests."""
+    from fastapi.testclient import TestClient
+    from unittest.mock import AsyncMock, MagicMock
+    from BE.app import app
+
+    mock_schema_store = MagicMock()
+    mock_schema_store.get_schemas = AsyncMock(return_value=[_VALID_SCHEMA])
+
+    from tests.conftest import MOCK_USER
+
+    app.state.document_agent = mock_document_agent
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER
+    app.dependency_overrides[get_schema_store] = lambda: mock_schema_store
+
+    with (
+        patch("BE.app.save_file", new_callable=AsyncMock, return_value="file-id-1"),
+        patch("BE.app.build_extraction_prompt", return_value="extract this"),
+        patch("BE.app._parse_extraction_json", return_value=[{"vendor": "Acme"}]),
+        patch(
+            "BE.app.validate_extraction_keys",
+            return_value=[{"key": "vendor", "extraction": "Acme", "location": None}],
+        ),
+    ):
+        yield TestClient(app, raise_server_exceptions=False)
+
+    app.dependency_overrides.clear()
+
+
+class TestAnalyzeEndpoint:
+    def test_analyze_accepts_optional_session_id(
+        self, analyze_client, mock_document_agent
+    ):
+        """The /analyze endpoint accepts a session_id in the request body."""
+        mock_document_agent.stream.return_value = _async_gen([])
+
+        resp = analyze_client.post(
+            "/analyze",
+            json={
+                "file": _VALID_FILE,
+                "schema_id": "schema-1",
+                "session_id": "my-custom-session-id",
+            },
+        )
+        assert resp.status_code == 200
+
+    def test_analyze_uses_provided_session_id(
+        self, analyze_client, mock_document_agent
+    ):
+        """The document agent is called with the caller-supplied session_id."""
+        mock_document_agent.stream.return_value = _async_gen([])
+
+        analyze_client.post(
+            "/analyze",
+            json={
+                "file": _VALID_FILE,
+                "schema_id": "schema-1",
+                "session_id": "caller-session-abc",
+            },
+        )
+
+        mock_document_agent.stream.assert_called_once()
+        call_kwargs = mock_document_agent.stream.call_args.kwargs
+        assert call_kwargs["session_id"] == "caller-session-abc"
+
+    def test_analyze_generates_session_id_when_not_provided(
+        self, analyze_client, mock_document_agent
+    ):
+        """When no session_id is given, the backend generates one (UUID format)."""
+        import re
+
+        mock_document_agent.stream.return_value = _async_gen([])
+
+        analyze_client.post(
+            "/analyze",
+            json={"file": _VALID_FILE, "schema_id": "schema-1"},
+        )
+
+        mock_document_agent.stream.assert_called_once()
+        call_kwargs = mock_document_agent.stream.call_args.kwargs
+        generated = call_kwargs["session_id"]
+        assert re.match(r"^[a-f0-9-]{36}$", generated), f"Not a UUID: {generated}"

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useSchemas } from "../hooks/useSchemas";
 import { streamAnalyzeDocument } from "../utils/api";
 import type { ExtractionRow, ExtractionLocation, HighlightRequest } from "../types";
@@ -20,6 +21,7 @@ interface Props {
   onLocationClick?: (req: HighlightRequest) => void;
   onHighlightClear?: () => void;
   belowControls?: React.ReactNode;
+  onContinueChat?: (sessionId: string, documentName: string) => void;
 }
 
 export default function ExtractionFieldsTable({
@@ -29,6 +31,7 @@ export default function ExtractionFieldsTable({
   onLocationClick,
   onHighlightClear,
   belowControls,
+  onContinueChat,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -37,6 +40,7 @@ export default function ExtractionFieldsTable({
   const [rows, setRows] = useState<ExtractionRow[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [statusText, setStatusText] = useState("");
+  const [analysisSessionId, setAnalysisSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading || schemas.length === 0) return;
@@ -90,6 +94,7 @@ export default function ExtractionFieldsTable({
       prev.map((row) => ({ ...row, extraction: "", location: null })),
     );
     setStatusText("");
+    setAnalysisSessionId(null);
     onHighlightClear?.();
   }, [onHighlightClear]);
 
@@ -118,21 +123,25 @@ export default function ExtractionFieldsTable({
   const handleAnalyze = useCallback(async () => {
     if (!file || !selectedSchemaId || analyzing) return;
 
+    const sessionId = uuidv4();
     onHighlightClear?.();
     // Reset rows to empty values before starting
     setRows((prev) =>
       prev.map((row) => ({ ...row, extraction: "", location: null })),
     );
+    setAnalysisSessionId(null);
     setAnalyzing(true);
     setStatusText("Starting analysis...");
 
     const abort = new AbortController();
     abortRef.current = abort;
 
+    let hadFatalError = false;
     try {
       for await (const event of streamAnalyzeDocument(
         file,
         selectedSchemaId,
+        sessionId,
         abort.signal,
       )) {
         if (event === "DONE") break;
@@ -175,6 +184,7 @@ export default function ExtractionFieldsTable({
         }
       }
     } catch (err) {
+      hadFatalError = true;
       if (!abort.signal.aborted) {
         setStatusText(
           `Error: ${err instanceof Error ? err.message : "Analysis failed"}`,
@@ -184,6 +194,9 @@ export default function ExtractionFieldsTable({
       setAnalyzing(false);
       abortRef.current = null;
       setStatusText((prev) => (prev.startsWith("Error") ? prev : ""));
+      if (!hadFatalError && !abort.signal.aborted) {
+        setAnalysisSessionId(sessionId);
+      }
     }
   }, [file, selectedSchemaId, analyzing, onHighlightClear]);
 
@@ -351,6 +364,16 @@ export default function ExtractionFieldsTable({
       >
         {analyzing ? statusText || "Analyzing..." : "Analyze Document"}
       </button>
+
+      {analysisSessionId && !analyzing && (
+        <button
+          type="button"
+          onClick={() => onContinueChat?.(analysisSessionId, documentName ?? 'document')}
+          className="w-full rounded-lg border border-[#334155] text-[#64748b] py-2.5 text-sm font-medium hover:text-[#7c3aed] hover:border-[#7c3aed] transition-all duration-200"
+        >
+          Continue chatting about this document
+        </button>
+      )}
     </div>
   );
 }

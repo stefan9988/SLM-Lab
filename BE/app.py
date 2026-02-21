@@ -123,6 +123,9 @@ class AnalyzeRequest(BaseModel):
 
     file: FileAttachment
     schema_id: str = Field(max_length=128)
+    session_id: str | None = Field(
+        default=None, max_length=128, pattern=SESSION_ID_PATTERN
+    )
 
 
 def get_archive_store() -> PostgresArchiveStore:
@@ -820,7 +823,7 @@ async def analyze_document(
 
     # 5. Stream agent response and parse results
     document_agent = request.app.state.document_agent
-    session_id = str(uuid4())
+    session_id = body.session_id or str(uuid4())
     file_attachments = [{"name": safe_name, "type": mime, "file_id": file_id}]
 
     async def generate():

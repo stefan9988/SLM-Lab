@@ -271,6 +271,7 @@ function readFileAsDataURL(file: File): Promise<string> {
 export async function* streamAnalyzeDocument(
   file: File,
   schemaId: string,
+  sessionId: string,
   signal?: AbortSignal,
 ): AsyncGenerator<AnalyzeSSEEvent | 'DONE'> {
   logger.info('[API] Starting document analysis for schema:', schemaId, 'file:', file.name);
@@ -282,6 +283,7 @@ export async function* streamAnalyzeDocument(
     body: JSON.stringify({
       file: { name: file.name, type: file.type, content, size: file.size },
       schema_id: schemaId,
+      session_id: sessionId,
     }),
     signal,
   });
