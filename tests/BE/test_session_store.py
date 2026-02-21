@@ -148,6 +148,52 @@ class TestMessageSerialization:
         assert isinstance(restored, HumanMessage)
         assert restored.content == multimodal_content
 
+    def test_ai_json_array_content_stays_as_string(self):
+        """AI extraction result that is a JSON array must NOT be parsed to a list."""
+        extraction_result = json.dumps(
+            [{"key": "field1", "value": "data1"}, {"key": "field2", "value": "data2"}]
+        )
+        d = {
+            "type": "ai",
+            "content": extraction_result,
+            "thinking": None,
+            "additional_kwargs": {},
+        }
+        restored = _dict_to_message(d)
+        assert isinstance(restored, AIMessage)
+        assert isinstance(restored.content, str)
+        assert restored.content == extraction_result
+
+    def test_continue_chat_after_document_analysis(self):
+        """Session history from doc analysis must not produce invalid content blocks."""
+        extraction_result = json.dumps(
+            [{"key": "name", "value": "John"}, {"key": "age", "value": "30"}]
+        )
+        history = [
+            {
+                "type": "human",
+                "content": "[Attached file: doc.pdf]\n\nExtract fields",
+                "thinking": None,
+                "additional_kwargs": {},
+            },
+            {
+                "type": "ai",
+                "content": extraction_result,
+                "thinking": None,
+                "additional_kwargs": {},
+            },
+        ]
+        for d in history:
+            msg = _dict_to_message(d)
+            assert msg is not None
+            if isinstance(msg.content, list):
+                # Any list content must only contain valid LangChain content blocks
+                for block in msg.content:
+                    assert isinstance(block, dict)
+                    assert block.get("type") in ("text", "image_url")
+            else:
+                assert isinstance(msg.content, str)
+
     def test_unknown_type_returns_none(self):
         d = {"type": "tool", "content": "x", "thinking": None, "additional_kwargs": {}}
         assert _dict_to_message(d) is None
@@ -357,6 +403,34 @@ class TestHistoryEntryFromDict:
         # The fallback text should remain (only [Attached image: ...] stripped)
         assert "Please review and summarize" in entry["content"]
         assert "[Attached image:" not in entry["content"]
+
+    def test_ai_extraction_result_content_not_emptied(self):
+        """AI extraction JSON array must not produce empty string content."""
+        extraction_result = json.dumps(
+            [{"key": "name", "value": "John"}, {"key": "age", "value": "30"}]
+        )
+        d = {
+            "type": "ai",
+            "content": extraction_result,
+            "thinking": None,
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["content"] == extraction_result
+        assert entry["content"] != ""
+
+    def test_multimodal_json_string_still_flattened(self):
+        """JSON-encoded text/image_url blocks are still flattened to text."""
+        multimodal_content = [
+            {"type": "text", "text": "describe this"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+        ]
+        d = {
+            "type": "human",
+            "content": json.dumps(multimodal_content),
+            "thinking": None,
+        }
+        entry = _history_entry_from_dict(d)
+        assert entry["content"] == "describe this"
 
 
 # --- InMemoryStore ---

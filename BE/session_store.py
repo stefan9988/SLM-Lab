@@ -74,7 +74,10 @@ def _dict_to_message(d: dict):
     if isinstance(content, str) and content.startswith("["):
         try:
             parsed = json.loads(content)
-            if isinstance(parsed, list):
+            if isinstance(parsed, list) and all(
+                isinstance(block, dict) and block.get("type") in ("text", "image_url")
+                for block in parsed
+            ):
                 content = parsed
         except (json.JSONDecodeError, ValueError):
             pass
@@ -109,12 +112,16 @@ def _history_entry_from_dict(d: dict) -> dict | None:
     if isinstance(content, str) and content.startswith("["):
         try:
             parsed = json.loads(content)
-            if isinstance(parsed, list):
+            if isinstance(parsed, list) and all(
+                isinstance(block, dict) and block.get("type") in ("text", "image_url")
+                for block in parsed
+            ):
                 content = " ".join(
                     block.get("text", "")
                     for block in parsed
                     if isinstance(block, dict) and block.get("type") == "text"
                 )
+            # else: non-content-block arrays (e.g. extraction results) stay as string
         except (json.JSONDecodeError, ValueError):
             pass
     if isinstance(content, list):
