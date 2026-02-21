@@ -22,6 +22,13 @@ async def _async_gen(items):
         yield item
 
 
+async def _async_gen_raising(items, exc):
+    """Helper to create an async generator that raises after yielding items."""
+    for item in items:
+        yield item
+    raise exc
+
+
 @pytest.fixture
 def event_loop():
     loop = asyncio.new_event_loop()
@@ -278,6 +285,34 @@ class TestChatStreamEndpoint:
         assert lines[-1] == "data: [DONE]"
         payload = json.loads(lines[0].removeprefix("data: "))
         assert payload == {"type": "token", "content": "hi"}
+
+    def test_stream_agent_error_yields_error_event_then_done(self, client, mock_agent):
+        mock_agent.stream.return_value = _async_gen_raising(
+            [{"type": "token", "content": "partial"}],
+            RuntimeError("model 'llama3.1:8b' not found"),
+        )
+        resp = client.post("/chat/stream", json={"message": "hi", "session_id": "s1"})
+        assert resp.status_code == 200
+        lines = [l for l in resp.text.strip().split("\n\n") if l.startswith("data:")]
+        assert lines[-1] == "data: [DONE]"
+        error_lines = [l for l in lines if '"error"' in l]
+        assert len(error_lines) == 1
+        payload = json.loads(error_lines[0].removeprefix("data: "))
+        assert payload["type"] == "error"
+        assert payload["content"].startswith("LLM error:")
+        assert "llama3.1:8b" in payload["content"]
+
+    def test_stream_agent_immediate_error_yields_error_then_done(self, client, mock_agent):
+        mock_agent.stream.return_value = _async_gen_raising(
+            [], RuntimeError("connection refused")
+        )
+        resp = client.post("/chat/stream", json={"message": "hi", "session_id": "s1"})
+        assert resp.status_code == 200
+        lines = [l for l in resp.text.strip().split("\n\n") if l.startswith("data:")]
+        assert lines[-1] == "data: [DONE]"
+        assert len(lines) == 2  # error + DONE
+        payload = json.loads(lines[0].removeprefix("data: "))
+        assert payload["type"] == "error"
 
 
 class TestHistoryEndpoints:

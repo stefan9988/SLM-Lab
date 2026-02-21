@@ -84,6 +84,14 @@ export function useChat(sessionId: string) {
             logger.debug('[useChat] Tool status:', event.content);
             setToolStatus(event.content);
             setThinkingActive(false);
+          } else if (event.type === 'error') {
+            logger.error('[useChat] LLM error received:', event.content);
+            aiMsg.content = `*[${event.content}]*`;
+            setMessages((prev) => {
+              const next = [...prev];
+              next[next.length - 1] = { ...aiMsg };
+              return next;
+            });
           }
         }
       } catch (err) {

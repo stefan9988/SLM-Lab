@@ -26,7 +26,7 @@ export interface Conversation {
 }
 
 export interface SSEEvent {
-  type: 'token' | 'status' | 'thinking' | 'tool_use';
+  type: 'token' | 'status' | 'thinking' | 'tool_use' | 'error';
   content: string;
 }
 

@@ -472,16 +472,20 @@ async def chat_stream(
     await agent.warm_session(body.session_id, user_id=user.id)
 
     async def generate():
-        async for event in agent.stream(
-            prompt,
-            session_id=body.session_id,
-            images=images or None,
-            file_attachments=file_attachments or None,
-            user_id=user.id,
-        ):
-            yield f"data: {json.dumps(event)}\n\n"
+        try:
+            async for event in agent.stream(
+                prompt,
+                session_id=body.session_id,
+                images=images or None,
+                file_attachments=file_attachments or None,
+                user_id=user.id,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+            logger.info("POST /chat/stream complete (session_id=%s)", body.session_id)
+        except Exception as exc:
+            logger.error("Chat stream failed: %s", exc, exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'content': f'LLM error: {exc}'})}\n\n"
         yield "data: [DONE]\n\n"
-        logger.info("POST /chat/stream complete (session_id=%s)", body.session_id)
 
     return StreamingResponse(
         generate(),
