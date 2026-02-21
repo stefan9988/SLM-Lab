@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 
@@ -34,6 +34,8 @@ vi.mock('./utils/storage', () => ({
 vi.mock('./utils/api', () => ({
   clearHistory: vi.fn(),
   fetchSessions: vi.fn().mockResolvedValue([]),
+  fetchGeneralAgentModel: vi.fn().mockResolvedValue({ provider: 'ollama', modelName: 'llama3.1:8b' }),
+  updateGeneralAgentModel: vi.fn().mockResolvedValue({ provider: 'ollama', modelName: 'llama3.1:8b' }),
   fetchSchemas: vi.fn().mockResolvedValue([]),
   createSchema: vi.fn(),
   updateSchemaApi: vi.fn(),
@@ -41,6 +43,8 @@ vi.mock('./utils/api', () => ({
   streamChat: vi.fn(),
   fetchHistory: vi.fn(),
 }));
+
+import * as api from './utils/api';
 
 vi.mock('react-pdf', () => ({
   Document: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -50,6 +54,16 @@ vi.mock('react-pdf', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe('App - model error state', () => {
+  it('shows "Unavailable" in the ModelSelector when fetchGeneralAgentModel fails', async () => {
+    vi.mocked(api.fetchGeneralAgentModel).mockRejectedValueOnce(new Error('Network error'));
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    });
+  });
 });
 
 describe('App - analyze view navigation', () => {

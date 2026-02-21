@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent, type DragEvent, type ClipboardEvent } from 'react';
-import type { FileAttachment } from '../types';
+import type { FileAttachment, ModelInfo } from '../types';
 import logger from '../utils/logger';
+import ModelSelector from './ModelSelector';
 
 const ACCEPTED_TYPES =
   '.txt,.py,.js,.ts,.json,.csv,.md,.html,.css,.xml,.yaml,.yml,.log,.pdf,.png,.jpg,.jpeg,.gif,.webp';
@@ -12,13 +13,16 @@ interface Props {
   disabled: boolean;
   streaming: boolean;
   onStop: () => void;
+  currentModel: ModelInfo | null;
+  onModelChange: (provider: string, modelName: string) => void;
+  modelError?: boolean;
 }
 
 const MAX_ROWS = 8;
 const MIN_ROWS = 1;
 const LINE_HEIGHT = 20;
 
-export default function MessageInput({ onSend, disabled, streaming, onStop }: Props) {
+export default function MessageInput({ onSend, disabled, streaming, onStop, currentModel, onModelChange, modelError }: Props) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +190,13 @@ export default function MessageInput({ onSend, disabled, streaming, onStop }: Pr
           ))}
         </div>
       )}
+      <ModelSelector
+        currentProvider={currentModel?.provider ?? ''}
+        currentModelName={currentModel?.modelName ?? ''}
+        onModelChange={onModelChange}
+        disabled={streaming || !currentModel}
+        error={modelError}
+      />
       <div className="flex items-end gap-2 bg-[#1e293b] border border-[#334155] rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-[#7c3aed] focus-within:border-[#7c3aed] transition-all duration-200">
         <input
           ref={fileInputRef}

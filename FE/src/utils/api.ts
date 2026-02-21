@@ -1,4 +1,4 @@
-import type { Message, SSEEvent, FileAttachment, ExtractionSchema, ExtractionLocation, SchemaField } from '../types';
+import type { Message, SSEEvent, FileAttachment, ExtractionSchema, ExtractionLocation, SchemaField, ModelInfo } from '../types';
 import logger from './logger';
 
 const TOKEN_KEY = 'slm-auth-token';
@@ -198,6 +198,36 @@ export interface AnalyzeErrorEvent {
 }
 
 export type AnalyzeSSEEvent = AnalyzeExtractionEvent | AnalyzeStatusEvent | AnalyzeErrorEvent;
+
+export async function fetchGeneralAgentModel(): Promise<ModelInfo> {
+  logger.info('[API] Fetching general agent model');
+  const res = await fetch('/general-agent/model', {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to fetch general agent model:', res.status, res.statusText);
+    throw new Error('Failed to fetch general agent model');
+  }
+  const data = await res.json();
+  return { provider: data.provider, modelName: data.model_name };
+}
+
+export async function updateGeneralAgentModel(provider: string, modelName: string): Promise<ModelInfo> {
+  logger.info('[API] Updating general agent model to:', provider, modelName);
+  const res = await fetch('/general-agent/model', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ provider, model_name: modelName }),
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to update general agent model:', res.status, res.statusText);
+    throw new Error('Failed to update general agent model');
+  }
+  const data = await res.json();
+  return { provider: data.provider, modelName: data.model_name };
+}
 
 function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => {
         '/archive': { target: env.VITE_API_URL || 'http://localhost:8000' },
         '/schemas': { target: env.VITE_API_URL || 'http://localhost:8000' },
         '/analyze': { target: env.VITE_API_URL || 'http://localhost:8000' },
+        '/general-agent': { target: env.VITE_API_URL || 'http://localhost:8000' },
       },
     },
   }

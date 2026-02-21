@@ -369,6 +369,90 @@ class TestGoogleAuthEndpoint:
         assert resp.status_code == 422  # missing Authorization header
 
 
+# ── GET /general-agent/model endpoint tests ──────────────────────────────────
+
+
+class TestGetGeneralAgentModel:
+    def test_returns_provider_and_model_name(self, client, mock_agent):
+        mock_agent._provider = "ollama"
+        mock_agent._model_name = "llama3.1:8b"
+        resp = client.get("/general-agent/model")
+        assert resp.status_code == 200
+        assert resp.json() == {"provider": "ollama", "model_name": "llama3.1:8b"}
+
+    def test_returns_anthropic_model(self, client, mock_agent):
+        mock_agent._provider = "anthropic"
+        mock_agent._model_name = "claude-sonnet-4-6"
+        resp = client.get("/general-agent/model")
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "provider": "anthropic",
+            "model_name": "claude-sonnet-4-6",
+        }
+
+
+# ── PUT /general-agent/model endpoint tests ──────────────────────────────────
+
+
+class TestUpdateGeneralAgentModel:
+    @patch("BE.app.init_agent")
+    def test_updates_agent_and_returns_new_model(
+        self, mock_init_agent, client, mock_agent
+    ):
+        from unittest.mock import MagicMock
+        from AI.agents.base import Agent
+
+        new_mock_agent = MagicMock(spec=Agent)
+        new_mock_agent._provider = "anthropic"
+        new_mock_agent._model_name = "claude-sonnet-4-6"
+        mock_init_agent.return_value = new_mock_agent
+
+        mock_agent._provider = "ollama"
+        mock_agent._model_name = "llama3.1:8b"
+        # Must set _store before reading it (spec=Agent doesn't auto-create instance attrs)
+        mock_agent._store = MagicMock()
+        old_store = mock_agent._store
+
+        resp = client.put(
+            "/general-agent/model",
+            json={"provider": "anthropic", "model_name": "claude-sonnet-4-6"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "provider": "anthropic",
+            "model_name": "claude-sonnet-4-6",
+        }
+
+        mock_init_agent.assert_called_once()
+        call_kwargs = mock_init_agent.call_args.kwargs
+        assert call_kwargs["provider"] == "anthropic"
+        assert call_kwargs["model_name"] == "claude-sonnet-4-6"
+        assert call_kwargs["maintain_history"] is True
+
+        # Verify old store was transferred to the new agent
+        assert new_mock_agent._store is old_store
+
+    @patch("BE.app.init_agent")
+    def test_preserves_session_store(self, mock_init_agent, client, mock_agent):
+        from unittest.mock import MagicMock, sentinel
+        from AI.agents.base import Agent
+
+        new_mock_agent = MagicMock(spec=Agent)
+        new_mock_agent._provider = "openrouter"
+        new_mock_agent._model_name = "openai/gpt-4o"
+        mock_init_agent.return_value = new_mock_agent
+
+        # Set a specific sentinel store to track transfer
+        mock_agent._store = sentinel.old_store
+
+        client.put(
+            "/general-agent/model",
+            json={"provider": "openrouter", "model_name": "openai/gpt-4o"},
+        )
+
+        assert new_mock_agent._store is sentinel.old_store
+
+
 # ── GET /sessions endpoint tests ─────────────────────────────────────────
 
 

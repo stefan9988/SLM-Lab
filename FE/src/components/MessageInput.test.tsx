@@ -8,6 +8,8 @@ const defaultProps = {
   disabled: false,
   streaming: false,
   onStop: vi.fn(),
+  currentModel: null,
+  onModelChange: vi.fn(),
 };
 
 function createFile(name: string, size: number, type = 'text/plain'): File {
@@ -119,6 +121,18 @@ describe('MessageInput', () => {
 
       fireEvent.change(fileInput, { target: { files: [file] } });
       expect(screen.getByText('doc.pdf')).toBeInTheDocument();
+    });
+  });
+
+  describe('modelError prop', () => {
+    it('forwards modelError=true to ModelSelector, showing "Unavailable"', () => {
+      render(<MessageInput {...defaultProps} modelError={true} />);
+      expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    });
+
+    it('shows "Loading…" when modelError is false and no model is set', () => {
+      render(<MessageInput {...defaultProps} modelError={false} currentModel={null} />);
+      expect(screen.getByText('Loading…')).toBeInTheDocument();
     });
   });
 });

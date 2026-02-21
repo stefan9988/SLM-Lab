@@ -522,6 +522,44 @@ async def clear_history(
     return {"status": "cleared"}
 
 
+class AgentModelRequest(BaseModel):
+    provider: str
+    model_name: str
+
+
+@app.get("/general-agent/model")
+async def get_general_agent_model(
+    request: Request, user: UserInfo = Depends(get_current_user)
+):
+    """Return the current general agent's provider and model name."""
+    agent = request.app.state.general_agent
+    return {"provider": agent._provider, "model_name": agent._model_name}
+
+
+@app.put("/general-agent/model")
+async def update_general_agent_model(
+    body: AgentModelRequest,
+    request: Request,
+    user: UserInfo = Depends(get_current_user),
+):
+    """Re-initialize the general agent with a new LLM, preserving session history."""
+    old_agent = request.app.state.general_agent
+    old_store = old_agent._store
+    new_agent = init_agent(
+        system_prompt=GENERAL_AGENT_PROMPT,
+        tools=get_enabled_tools(settings),
+        maintain_history=True,
+        provider=body.provider,
+        model_name=body.model_name,
+    )
+    new_agent._store = old_store
+    request.app.state.general_agent = new_agent
+    from AI.agents import registry
+
+    registry.register("general_agent", new_agent)
+    return {"provider": new_agent._provider, "model_name": new_agent._model_name}
+
+
 @app.get("/sessions")
 async def list_sessions(
     store: PostgresArchiveStore = Depends(get_archive_store),

@@ -70,3 +70,8 @@ export interface HighlightRequest {
   pageNum: number;
   textToHighlight: string;
 }
+
+export interface ModelInfo {
+  provider: string;
+  modelName: string;
+}

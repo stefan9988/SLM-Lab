@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Conversation, FileAttachment } from './types';
+import type { Conversation, FileAttachment, ModelInfo } from './types';
 import { loadConversations, addConversation, removeConversation, saveConversations } from './utils/storage';
-import { clearHistory, fetchSessions } from './utils/api';
+import { clearHistory, fetchSessions, fetchGeneralAgentModel, updateGeneralAgentModel } from './utils/api';
 import { useChat } from './hooks/useChat';
 import { useAuth } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
@@ -37,6 +37,8 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     return saved.length > 0 ? saved[0].id : uuidv4();
   });
   const [view, setView] = useState<'chat' | 'schemas' | 'analyze'>('chat');
+  const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
+  const [modelError, setModelError] = useState(false);
 
   const { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, stopStreaming } = useChat(activeId);
 
@@ -61,6 +63,16 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
       })
       .catch((err) => {
         console.error('Failed to sync sessions from backend:', err);
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch current general agent model on mount
+  useEffect(() => {
+    fetchGeneralAgentModel()
+      .then((m) => { setCurrentModel(m); setModelError(false); })
+      .catch((err) => {
+        console.error('Failed to fetch general agent model:', err);
+        setModelError(true);
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -97,6 +109,15 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
 
   const handleOpenAnalyze = useCallback(() => {
     setView('analyze');
+  }, []);
+
+  const handleModelChange = useCallback(async (provider: string, modelName: string) => {
+    try {
+      const updated = await updateGeneralAgentModel(provider, modelName);
+      setCurrentModel(updated);
+    } catch (err) {
+      console.error('Failed to update general agent model:', err);
+    }
   }, []);
 
   const handleDelete = useCallback(
@@ -136,7 +157,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
         ) : (
           <>
             <ChatWindow messages={messages} toolStatus={toolStatus} streaming={streaming} thinkingActive={thinkingActive} onSend={handleSend} />
-            <MessageInput onSend={handleSend} disabled={streaming} streaming={streaming} onStop={stopStreaming} />
+            <MessageInput onSend={handleSend} disabled={streaming} streaming={streaming} onStop={stopStreaming} currentModel={currentModel} onModelChange={handleModelChange} modelError={modelError} />
           </>
         )}
       </main>

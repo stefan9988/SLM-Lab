@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # CORS settings (comma-separated strings, parsed in app.py)
     CORS_ALLOW_ORIGINS: str = "http://localhost:3000,http://localhost:8080"
     CORS_ALLOW_CREDENTIALS: bool = True
-    CORS_ALLOW_METHODS: str = "GET,POST,DELETE,OPTIONS"
+    CORS_ALLOW_METHODS: str = "GET,POST,PUT,DELETE,OPTIONS"
     CORS_ALLOW_HEADERS: str = "Content-Type,Authorization"
     CORS_EXPOSE_HEADERS: str = ""
     CORS_MAX_AGE: int = 600
