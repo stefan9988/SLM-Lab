@@ -16,20 +16,15 @@ def build_extraction_prompt(schema_fields: list[dict], file_id: str) -> str:
     )
 
     return f"""\
-Extract the following fields from the document.
-Use the file_id to read or search the document using your available tools.
+Extract the following fields from the document identified by file_id.
 
 Document file_id: {file_id}
 
-Fields to extract:
+Fields to extract (keys are case-sensitive and must match exactly):
 {field_lines}
 
-Instructions:
-- Return ONLY a valid JSON array, no other text
-- Each item: {{"key": "field_name", "extraction": "value or null", "location": {{"page_num": N or null, "chunk_num": N or null}}}}
-- ALL schema keys must appear in the output
-- Set extraction and location to null if the value is not found in the document
-- If a field has multiple values (e.g. multiple phone numbers), return separate entries \
-with numbered keys: phone_number_1, phone_number_2, etc.
-- For location, page_num is the 1-based PDF page number, chunk_num is the chunk index \
-from search results (if available)"""
+Follow all extraction and output rules defined in the system prompt.
+Return ONLY a valid JSON array.
+Include ALL schema keys in the output.
+Do not infer or guess missing values.
+"""
