@@ -3,6 +3,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 
+const mockAddToast = vi.fn();
+vi.mock('./contexts/ToastContext', () => ({
+  useToast: () => ({ addToast: mockAddToast }),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 vi.mock('./contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { name: 'Test User', email: 'test@example.com' },

@@ -4,6 +4,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext'
+import { ToastProvider } from './contexts/ToastContext'
 import logger from './utils/logger'
 
 logger.info('[App] Initializing application...');
@@ -15,7 +16,9 @@ createRoot(document.getElementById('root')!).render(
     {googleClientId ? (
       <GoogleOAuthProvider clientId={googleClientId}>
         <AuthProvider>
-          <App />
+          <ToastProvider>
+            <App />
+          </ToastProvider>
         </AuthProvider>
       </GoogleOAuthProvider>
     ) : (

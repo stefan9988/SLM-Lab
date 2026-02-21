@@ -5,6 +5,7 @@ import { loadConversations, addConversation, removeConversation, saveConversatio
 import { clearHistory, fetchSessions, fetchGeneralAgentModel, updateGeneralAgentModel } from './utils/api';
 import { useChat } from './hooks/useChat';
 import { useAuth } from './contexts/AuthContext';
+import { useToast } from './contexts/ToastContext';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import MessageInput from './components/MessageInput';
@@ -41,6 +42,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
   const [modelError, setModelError] = useState(false);
 
   const { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, stopStreaming } = useChat(activeId);
+  const { addToast } = useToast();
 
   useEffect(() => {
     loadHistory();
@@ -132,8 +134,10 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     async (id: string) => {
       try {
         await clearHistory(id);
+        addToast('Chat deleted', 'success');
       } catch (err) {
         console.error('Failed to clear history from backend:', err);
+        addToast('Failed to delete chat', 'error');
       }
       setConversations(removeConversation(id));
       if (id === activeId) {
@@ -141,7 +145,7 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
         setActiveId(remaining.length > 0 ? remaining[0].id : uuidv4());
       }
     },
-    [activeId],
+    [activeId, addToast],
   );
 
   return (

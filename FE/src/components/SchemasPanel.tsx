@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSchemas } from '../hooks/useSchemas';
 import SchemaCard from './SchemaCard';
 import type { ExtractionSchema } from '../types';
+import { useToast } from '../contexts/ToastContext';
 
 interface Props {
   onBack: () => void;
@@ -9,6 +10,7 @@ interface Props {
 
 export default function SchemasPanel({ onBack }: Props) {
   const { schemas, loading, error, addSchema, deleteSchema, saveSchema } = useSchemas();
+  const { addToast } = useToast();
   const [savingId, setSavingId] = useState<string | null>(null);
   const [localEdits, setLocalEdits] = useState<Record<string, ExtractionSchema>>({});
 
@@ -25,8 +27,20 @@ export default function SchemasPanel({ onBack }: Props) {
         delete next[schema.id];
         return next;
       });
+      addToast('Schema saved', 'success');
+    } catch {
+      addToast('Failed to save schema', 'error');
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteSchema(id);
+      addToast('Schema deleted', 'success');
+    } catch {
+      addToast('Failed to delete schema', 'error');
     }
   };
 
@@ -72,7 +86,7 @@ export default function SchemasPanel({ onBack }: Props) {
                 key={schema.id}
                 schema={localEdits[schema.id] ?? schema}
                 onUpdate={handleUpdate}
-                onDelete={() => deleteSchema(schema.id)}
+                onDelete={() => handleDelete(schema.id)}
                 onSave={() => handleSave(localEdits[schema.id] ?? schema)}
                 saving={savingId === schema.id}
               />

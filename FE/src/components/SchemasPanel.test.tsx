@@ -8,6 +8,12 @@ const mockCreateSchema = vi.fn();
 const mockUpdateSchemaApi = vi.fn();
 const mockDeleteSchemaApi = vi.fn();
 
+const mockAddToast = vi.fn();
+vi.mock('../contexts/ToastContext', () => ({
+  useToast: () => ({ addToast: mockAddToast }),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 vi.mock('../utils/api', () => ({
   fetchSchemas: (...args: unknown[]) => mockFetchSchemas(...args),
   createSchema: (...args: unknown[]) => mockCreateSchema(...args),
@@ -24,9 +30,11 @@ describe('SchemasPanel', () => {
   it('renders header with title and buttons', async () => {
     render(<SchemasPanel onBack={vi.fn()} />);
 
-    expect(screen.getByText('Extraction Schemas')).toBeInTheDocument();
-    expect(screen.getByText('+ New Schema')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /back to chat/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Extraction Schemas')).toBeInTheDocument();
+      expect(screen.getByText('+ New Schema')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /back to chat/i })).toBeInTheDocument();
+    });
   });
 
   it('shows loading state initially', () => {

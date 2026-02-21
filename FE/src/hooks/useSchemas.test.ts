@@ -113,7 +113,7 @@ describe('useSchemas', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
-      await result.current.deleteSchema('1');
+      await expect(result.current.deleteSchema('1')).rejects.toThrow();
     });
 
     expect(result.current.error).toBe('Delete failed');
@@ -126,7 +126,7 @@ describe('useSchemas', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
-      await result.current.saveSchema({ id: '1', name: 'X', fields: [] });
+      await expect(result.current.saveSchema({ id: '1', name: 'X', fields: [] })).rejects.toThrow();
     });
 
     expect(result.current.error).toBe('Save failed');

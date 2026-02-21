@@ -39,6 +39,7 @@ export function useSchemas() {
       setSchemas((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete schema');
+      throw err;
     }
   }, []);
 
@@ -48,6 +49,7 @@ export function useSchemas() {
       setSchemas((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save schema');
+      throw err;
     }
   }, []);
 
