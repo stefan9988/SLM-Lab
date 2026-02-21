@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Message as MessageType } from '../types';
 import logger from '../utils/logger';
 
@@ -225,6 +226,7 @@ export default function Message({ role, content, files, thinking, tools_used, is
         ) : (
           <div className="prose prose-sm prose-invert max-w-none prose-p:text-[#e2e8f0] prose-headings:text-[#e2e8f0] prose-strong:text-[#e2e8f0] prose-code:text-[#06b6d4] prose-code:bg-[#0f172a] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0f172a] prose-pre:border prose-pre:border-[#334155] prose-a:text-[#7c3aed] prose-a:no-underline hover:prose-a:underline">
             <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
               components={{
                 a: ({ href, children }) => (
                   <a
