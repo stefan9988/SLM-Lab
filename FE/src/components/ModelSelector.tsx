@@ -60,7 +60,7 @@ export default function ModelSelector({ currentProvider, currentModelName, onMod
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className="text-[#7c3aed]">Model:</span>
+        <span className="text-[#06b6d4]">Model:</span>
         <span>{displayName}</span>
         <svg
           xmlns="http://www.w3.org/2000/svg"
