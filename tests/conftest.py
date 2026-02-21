@@ -36,11 +36,23 @@ def mock_agent():
 
 
 @pytest.fixture
-def client(mock_agent):
+def mock_document_agent():
+    agent = MagicMock(spec=Agent)
+    agent.invoke = AsyncMock(return_value="mock doc response")
+    agent.stream = MagicMock()
+    agent.get_history = AsyncMock(return_value=[])
+    agent.clear_history = AsyncMock()
+    agent.warm_session = AsyncMock()
+    return agent
+
+
+@pytest.fixture
+def client(mock_agent, mock_document_agent):
     from fastapi.testclient import TestClient
     from BE.app import app
 
     app.state.general_agent = mock_agent
+    app.state.document_agent = mock_document_agent
     app.dependency_overrides[get_current_user] = lambda: MOCK_USER
     yield TestClient(app, raise_server_exceptions=False)
     app.dependency_overrides.clear()

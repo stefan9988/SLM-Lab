@@ -1,7 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import ExtractionFieldsTable from './ExtractionFieldsTable';
 import PdfViewer from './PdfViewer';
-import type { HighlightRequest } from '../types';
+import ModelSelector from './ModelSelector';
+import { fetchDocumentAgentModel, updateDocumentAgentModel } from '../utils/api';
+import type { HighlightRequest, ModelInfo } from '../types';
 
 interface Props {
   onBack: () => void;
@@ -10,6 +12,8 @@ interface Props {
 export default function AnalyzePanel({ onBack }: Props) {
   const [documentFile, setDocumentFile] = useState<{ file: File; url: string } | null>(null);
   const [highlight, setHighlight] = useState<HighlightRequest | null>(null);
+  const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
+  const [modelError, setModelError] = useState(false);
 
   const handleLoadDocument = useCallback((file: File) => {
     setDocumentFile((prev) => {
@@ -34,6 +38,21 @@ export default function AnalyzePanel({ onBack }: Props) {
 
   const clearHighlight = useCallback(() => {
     setHighlight(null);
+  }, []);
+
+  useEffect(() => {
+    fetchDocumentAgentModel()
+      .then((m) => { setCurrentModel(m); setModelError(false); })
+      .catch(() => setModelError(true));
+  }, []);
+
+  const handleModelChange = useCallback(async (provider: string, modelName: string) => {
+    try {
+      const updated = await updateDocumentAgentModel(provider, modelName);
+      setCurrentModel(updated);
+    } catch (err) {
+      console.error('Failed to update document agent model:', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -63,6 +82,16 @@ export default function AnalyzePanel({ onBack }: Props) {
             onLoadDocument={handleLoadDocument}
             onLocationClick={handleLocationClick}
             onHighlightClear={clearHighlight}
+            belowControls={
+              <ModelSelector
+                currentProvider={currentModel?.provider ?? ''}
+                currentModelName={currentModel?.modelName ?? ''}
+                onModelChange={handleModelChange}
+                disabled={!currentModel}
+                error={modelError}
+                dropDirection="down"
+              />
+            }
           />
         </div>
         <div className="flex-1 flex flex-col p-5">

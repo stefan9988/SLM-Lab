@@ -229,6 +229,36 @@ export async function updateGeneralAgentModel(provider: string, modelName: strin
   return { provider: data.provider, modelName: data.model_name };
 }
 
+export async function fetchDocumentAgentModel(): Promise<ModelInfo> {
+  logger.info('[API] Fetching document agent model');
+  const res = await fetch('/document-agent/model', {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to fetch document agent model:', res.status, res.statusText);
+    throw new Error(`Failed to fetch document agent model: ${res.status}`);
+  }
+  const data = await res.json();
+  return { provider: data.provider, modelName: data.model_name };
+}
+
+export async function updateDocumentAgentModel(provider: string, modelName: string): Promise<ModelInfo> {
+  logger.info('[API] Updating document agent model to:', provider, modelName);
+  const res = await fetch('/document-agent/model', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ provider, model_name: modelName }),
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to update document agent model:', res.status, res.statusText);
+    throw new Error(`Failed to update document agent model: ${res.status}`);
+  }
+  const data = await res.json();
+  return { provider: data.provider, modelName: data.model_name };
+}
+
 function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

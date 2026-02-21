@@ -7,9 +7,10 @@ interface Props {
   onModelChange: (provider: string, modelName: string) => void;
   disabled?: boolean;
   error?: boolean;
+  dropDirection?: 'up' | 'down';
 }
 
-export default function ModelSelector({ currentProvider, currentModelName, onModelChange, disabled, error }: Props) {
+export default function ModelSelector({ currentProvider, currentModelName, onModelChange, disabled, error, dropDirection = 'up' }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +77,7 @@ export default function ModelSelector({ currentProvider, currentModelName, onMod
 
       {open && (
         <div
-          className="absolute bottom-full mb-1 left-0 z-20 w-56 rounded-xl border border-[#334155] bg-[#1e293b] shadow-xl py-1"
+          className={`absolute ${dropDirection === 'down' ? 'top-full mt-1' : 'bottom-full mb-1'} left-0 z-20 w-56 rounded-xl border border-[#334155] bg-[#1e293b] shadow-xl py-1`}
           role="listbox"
         >
           {providerOrder

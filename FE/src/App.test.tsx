@@ -36,6 +36,8 @@ vi.mock('./utils/api', () => ({
   fetchSessions: vi.fn().mockResolvedValue([]),
   fetchGeneralAgentModel: vi.fn().mockResolvedValue({ provider: 'ollama', modelName: 'llama3.1:8b' }),
   updateGeneralAgentModel: vi.fn().mockResolvedValue({ provider: 'ollama', modelName: 'llama3.1:8b' }),
+  fetchDocumentAgentModel: vi.fn().mockResolvedValue({ provider: 'ollama', modelName: 'llama3.1:8b' }),
+  updateDocumentAgentModel: vi.fn().mockResolvedValue({ provider: 'ollama', modelName: 'llama3.1:8b' }),
   fetchSchemas: vi.fn().mockResolvedValue([]),
   createSchema: vi.fn(),
   updateSchemaApi: vi.fn(),

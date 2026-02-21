@@ -302,7 +302,9 @@ class TestChatStreamEndpoint:
         assert payload["content"].startswith("LLM error:")
         assert "llama3.1:8b" in payload["content"]
 
-    def test_stream_agent_immediate_error_yields_error_then_done(self, client, mock_agent):
+    def test_stream_agent_immediate_error_yields_error_then_done(
+        self, client, mock_agent
+    ):
         mock_agent.stream.return_value = _async_gen_raising(
             [], RuntimeError("connection refused")
         )
@@ -485,6 +487,77 @@ class TestUpdateGeneralAgentModel:
             json={"provider": "openrouter", "model_name": "openai/gpt-4o"},
         )
 
+        assert new_mock_agent._store is sentinel.old_store
+
+
+# ── GET /document-agent/model endpoint tests ──────────────────────────────────
+
+
+class TestGetDocumentAgentModel:
+    def test_returns_provider_and_model_name(self, client, mock_document_agent):
+        mock_document_agent._provider = "ollama"
+        mock_document_agent._model_name = "llama3.1:8b"
+        resp = client.get("/document-agent/model")
+        assert resp.status_code == 200
+        assert resp.json() == {"provider": "ollama", "model_name": "llama3.1:8b"}
+
+    def test_returns_anthropic_model(self, client, mock_document_agent):
+        mock_document_agent._provider = "anthropic"
+        mock_document_agent._model_name = "claude-sonnet-4-6"
+        resp = client.get("/document-agent/model")
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "provider": "anthropic",
+            "model_name": "claude-sonnet-4-6",
+        }
+
+
+# ── PUT /document-agent/model endpoint tests ──────────────────────────────────
+
+
+class TestUpdateDocumentAgentModel:
+    @patch("BE.app.init_agent")
+    def test_updates_agent_and_returns_new_model(
+        self, mock_init_agent, client, mock_document_agent
+    ):
+        from unittest.mock import MagicMock
+        from AI.agents.base import Agent
+
+        new_mock_agent = MagicMock(spec=Agent)
+        new_mock_agent._provider = "anthropic"
+        new_mock_agent._model_name = "claude-sonnet-4-6"
+        new_mock_agent._store = MagicMock()
+        mock_init_agent.return_value = new_mock_agent
+        mock_document_agent._store = MagicMock()
+
+        resp = client.put(
+            "/document-agent/model",
+            json={"provider": "anthropic", "model_name": "claude-sonnet-4-6"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "provider": "anthropic",
+            "model_name": "claude-sonnet-4-6",
+        }
+
+    @patch("BE.app.init_agent")
+    def test_preserves_session_store(
+        self, mock_init_agent, client, mock_document_agent
+    ):
+        from unittest.mock import MagicMock, sentinel
+        from AI.agents.base import Agent
+
+        new_mock_agent = MagicMock(spec=Agent)
+        new_mock_agent._provider = "openrouter"
+        new_mock_agent._model_name = "openai/gpt-4o"
+        new_mock_agent._store = MagicMock()
+        mock_init_agent.return_value = new_mock_agent
+        mock_document_agent._store = sentinel.old_store
+
+        client.put(
+            "/document-agent/model",
+            json={"provider": "openrouter", "model_name": "openai/gpt-4o"},
+        )
         assert new_mock_agent._store is sentinel.old_store
 
 

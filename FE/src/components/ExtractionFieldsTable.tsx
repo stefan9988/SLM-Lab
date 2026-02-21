@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useSchemas } from "../hooks/useSchemas";
 import { streamAnalyzeDocument } from "../utils/api";
 import type { ExtractionRow, ExtractionLocation, HighlightRequest } from "../types";
@@ -19,6 +19,7 @@ interface Props {
   onLoadDocument: (file: File) => void;
   onLocationClick?: (req: HighlightRequest) => void;
   onHighlightClear?: () => void;
+  belowControls?: React.ReactNode;
 }
 
 export default function ExtractionFieldsTable({
@@ -27,6 +28,7 @@ export default function ExtractionFieldsTable({
   onLoadDocument,
   onLocationClick,
   onHighlightClear,
+  belowControls,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -250,6 +252,10 @@ export default function ExtractionFieldsTable({
           )}
         </div>
       </div>
+
+      {belowControls && (
+        <div className="flex justify-start">{belowControls}</div>
+      )}
 
       {rows.length > 0 && (
         <div className="flex-1 overflow-auto">
