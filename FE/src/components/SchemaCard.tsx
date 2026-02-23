@@ -41,6 +41,7 @@ export default function SchemaCard({ schema, onUpdate, onDelete, onSave, saving 
         type="text"
         value={schema.name}
         onChange={(e) => handleNameChange(e.target.value)}
+        onFocus={(e) => e.target.select()}
         className="w-full bg-transparent text-lg font-semibold text-[#e2e8f0] border-b border-[#334155] pb-1 focus:outline-none focus:border-[#7c3aed]"
         aria-label="Schema name"
       />
