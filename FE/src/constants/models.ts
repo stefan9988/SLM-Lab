@@ -8,8 +8,6 @@ export const AVAILABLE_MODELS: ModelOption[] = [
   { provider: 'anthropic', modelName: 'claude-opus-4-6', displayName: 'Claude Opus 4.6' },
   { provider: 'anthropic', modelName: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6' },
   { provider: 'anthropic', modelName: 'claude-haiku-4-5-20251001', displayName: 'Claude Haiku 4.5' },
-  { provider: 'anthropic', modelName: 'claude-3-5-sonnet-20241022', displayName: 'Claude 3.5 Sonnet' },
-  { provider: 'anthropic', modelName: 'claude-3-5-haiku-20241022', displayName: 'Claude 3.5 Haiku' },
   { provider: 'openrouter', modelName: 'qwen/qwen3-vl-235b-a22b-thinking', displayName: 'Qwen 3 VL 235B Thinking' },
   { provider: 'openrouter', modelName: 'arcee-ai/trinity-large-preview:free', displayName: 'Trinity Large Preview' },
   { provider: 'openrouter', modelName: 'stepfun/step-3.5-flash:free', displayName: 'StepFun 3.5 Flash' },

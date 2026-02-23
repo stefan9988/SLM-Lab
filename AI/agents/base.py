@@ -148,9 +148,22 @@ class Agent:
                                 if tc.get("args") and idx in pending_tool_calls:
                                     pending_tool_calls[idx]["args"] += tc["args"]
                         elif msg_chunk.content:
-                            full_response.append(msg_chunk.content)
-                            chunk_count += 1
-                            yield {"type": "token", "content": msg_chunk.content}
+                            content = msg_chunk.content
+                            if isinstance(content, list):
+                                # Anthropic newer models return content blocks: [{"type": "text", "text": "..."}]
+                                text = "".join(
+                                    block.get("text", "")
+                                    for block in content
+                                    if isinstance(block, dict)
+                                    and block.get("type") == "text"
+                                )
+                            else:
+                                # Ollama / OpenRouter / older Claude return plain strings
+                                text = content
+                            if text:
+                                full_response.append(text)
+                                chunk_count += 1
+                                yield {"type": "token", "content": text}
                     elif isinstance(msg_chunk, ToolMessage):
                         tool_messages.append(msg_chunk)
                         for idx in sorted(pending_tool_calls):
