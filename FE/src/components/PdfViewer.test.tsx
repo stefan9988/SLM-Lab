@@ -120,4 +120,72 @@ describe('PdfViewer', () => {
 
     expect(lastCustomTextRenderer).toBeUndefined();
   });
+
+  it('exact match highlights the matching portion within a text item', async () => {
+    render(
+      <PdfViewer
+        fileUrl="http://example.com/test.pdf"
+        highlight={{ pageNum: 1, textToHighlight: 'hello' }}
+      />,
+    );
+    await screen.findByLabelText('Page number');
+
+    const result = lastCustomTextRenderer?.({ str: 'say hello world', itemIndex: 0 });
+    expect(result).toContain('<mark class="pdf-highlight">hello</mark>');
+  });
+
+  it('fallback highlights a fragment that is part of a multi-word extraction', async () => {
+    render(
+      <PdfViewer
+        fileUrl="http://example.com/test.pdf"
+        highlight={{ pageNum: 1, textToHighlight: 'John Smith' }}
+      />,
+    );
+    await screen.findByLabelText('Page number');
+
+    // "John" alone is a fragment of "John Smith"
+    const result = lastCustomTextRenderer?.({ str: 'John', itemIndex: 0 });
+    expect(result).toBe('<mark class="pdf-highlight">John</mark>');
+  });
+
+  it('fallback highlights a whitespace-normalised fragment', async () => {
+    render(
+      <PdfViewer
+        fileUrl="http://example.com/test.pdf"
+        highlight={{ pageNum: 1, textToHighlight: 'John  Smith' }}
+      />,
+    );
+    await screen.findByLabelText('Page number');
+
+    // Extra spaces in the text item are collapsed during normalisation
+    const result = lastCustomTextRenderer?.({ str: 'John  Smith', itemIndex: 0 });
+    expect(result).toContain('<mark class="pdf-highlight">');
+  });
+
+  it('fallback does not highlight short tokens (3 chars or fewer)', async () => {
+    render(
+      <PdfViewer
+        fileUrl="http://example.com/test.pdf"
+        highlight={{ pageNum: 1, textToHighlight: 'John Smith' }}
+      />,
+    );
+    await screen.findByLabelText('Page number');
+
+    // "ohn" is 3 chars — below the minimum length guard
+    const result = lastCustomTextRenderer?.({ str: 'ohn', itemIndex: 0 });
+    expect(result).not.toContain('<mark');
+  });
+
+  it('fallback does not highlight unrelated text', async () => {
+    render(
+      <PdfViewer
+        fileUrl="http://example.com/test.pdf"
+        highlight={{ pageNum: 1, textToHighlight: 'John Smith' }}
+      />,
+    );
+    await screen.findByLabelText('Page number');
+
+    const result = lastCustomTextRenderer?.({ str: 'Completely unrelated text', itemIndex: 0 });
+    expect(result).not.toContain('<mark');
+  });
 });

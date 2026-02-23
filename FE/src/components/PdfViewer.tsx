@@ -21,6 +21,10 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function normalizeForMatch(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 interface Props {
   fileUrl?: string;
   highlight?: HighlightRequest | null;
@@ -55,15 +59,29 @@ export default function PdfViewer({ fileUrl, highlight }: Props) {
   const customTextRenderer = useMemo(() => {
     if (!highlight) return undefined;
 
+    const normalizedHighlight = normalizeForMatch(highlight.textToHighlight);
+
     return (textItem: { str: string; itemIndex: number }) => {
       if (pageNumber !== highlight.pageNum) return escapeHtml(textItem.str);
 
+      const str = textItem.str;
+
+      // Primary: exact/partial match within text item (existing behaviour)
       const escaped = escapeRegExp(highlight.textToHighlight);
-      const regex = new RegExp(`(${escaped})`, 'gi');
-      return escapeHtml(textItem.str).replace(
-        regex,
+      const exactRegex = new RegExp(`(${escaped})`, 'gi');
+      const highlighted = escapeHtml(str).replace(
+        exactRegex,
         '<mark class="pdf-highlight">$1</mark>',
       );
+      if (highlighted !== escapeHtml(str)) return highlighted;
+
+      // Fallback: text item is a fragment of the extraction (multi-line / formatting differences)
+      const normalizedStr = normalizeForMatch(str);
+      if (normalizedStr.length >= 4 && normalizedHighlight.includes(normalizedStr)) {
+        return `<mark class="pdf-highlight">${escapeHtml(str)}</mark>`;
+      }
+
+      return escapeHtml(str);
     };
   }, [highlight, pageNumber]);
 
