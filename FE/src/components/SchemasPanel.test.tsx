@@ -139,4 +139,41 @@ describe('SchemasPanel', () => {
       );
     });
   });
+
+  it('duplicates a schema with _copy name and fresh field IDs when Duplicate is clicked', async () => {
+    const originalSchema = {
+      id: '1',
+      name: 'Original',
+      fields: [{ id: 'f1', key: 'title', description: 'The title' }],
+    };
+    const duplicatedSchema = {
+      id: '2',
+      name: 'Original_copy',
+      fields: [{ id: 'f2-new', key: 'title', description: 'The title' }],
+    };
+    mockFetchSchemas.mockResolvedValue([originalSchema]);
+    mockCreateSchema.mockResolvedValue(duplicatedSchema);
+
+    render(<SchemasPanel onBack={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Original')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText('Duplicate'));
+
+    await waitFor(() => {
+      expect(mockCreateSchema).toHaveBeenCalledOnce();
+      const [name, fields] = mockCreateSchema.mock.calls[0];
+      expect(name).toBe('Original_copy');
+      expect(fields).toHaveLength(1);
+      expect(fields[0].key).toBe('title');
+      expect(fields[0].description).toBe('The title');
+      expect(fields[0].id).not.toBe('f1');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Original_copy')).toBeInTheDocument();
+    });
+  });
 });

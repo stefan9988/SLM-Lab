@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function SchemasPanel({ onBack }: Props) {
-  const { schemas, loading, error, addSchema, deleteSchema, saveSchema } = useSchemas();
+  const { schemas, loading, error, addSchema, deleteSchema, saveSchema, duplicateSchema } = useSchemas();
   const { addToast } = useToast();
   const [savingId, setSavingId] = useState<string | null>(null);
   const [localEdits, setLocalEdits] = useState<Record<string, ExtractionSchema>>({});
@@ -41,6 +41,15 @@ export default function SchemasPanel({ onBack }: Props) {
       addToast('Schema deleted', 'success');
     } catch {
       addToast('Failed to delete schema', 'error');
+    }
+  };
+
+  const handleDuplicate = async (schema: ExtractionSchema) => {
+    try {
+      await duplicateSchema(schema);
+      addToast('Schema duplicated', 'success');
+    } catch {
+      addToast('Failed to duplicate schema', 'error');
     }
   };
 
@@ -88,6 +97,7 @@ export default function SchemasPanel({ onBack }: Props) {
                 onUpdate={handleUpdate}
                 onDelete={() => handleDelete(schema.id)}
                 onSave={() => handleSave(localEdits[schema.id] ?? schema)}
+                onDuplicate={handleDuplicate}
                 saving={savingId === schema.id}
               />
             ))

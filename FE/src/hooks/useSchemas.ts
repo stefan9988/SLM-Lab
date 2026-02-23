@@ -53,5 +53,17 @@ export function useSchemas() {
     }
   }, []);
 
-  return { schemas, loading, error, addSchema, deleteSchema, saveSchema };
+  const duplicateSchema = useCallback(async (schema: ExtractionSchema) => {
+    try {
+      const newName = `${schema.name}_copy`;
+      const newFields = schema.fields.map((f) => ({ ...f, id: crypto.randomUUID() }));
+      const created = await apiCreate(newName, newFields);
+      setSchemas((prev) => [created, ...prev]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to duplicate schema');
+      throw err;
+    }
+  }, []);
+
+  return { schemas, loading, error, addSchema, deleteSchema, saveSchema, duplicateSchema };
 }

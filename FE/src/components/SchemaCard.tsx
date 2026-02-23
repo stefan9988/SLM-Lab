@@ -6,10 +6,11 @@ interface Props {
   onUpdate: (schema: ExtractionSchema) => void;
   onDelete: () => void;
   onSave: () => void;
+  onDuplicate: (schema: ExtractionSchema) => void;
   saving?: boolean;
 }
 
-export default function SchemaCard({ schema, onUpdate, onDelete, onSave, saving }: Props) {
+export default function SchemaCard({ schema, onUpdate, onDelete, onSave, onDuplicate, saving }: Props) {
   const handleNameChange = (name: string) => {
     onUpdate({ ...schema, name });
   };
@@ -77,6 +78,12 @@ export default function SchemaCard({ schema, onUpdate, onDelete, onSave, saving 
             className="px-4 py-1.5 rounded-lg bg-[#7c3aed] text-white text-sm font-medium hover:bg-[#6d28d9] transition-colors duration-200 disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            onClick={() => onDuplicate(schema)}
+            className="px-4 py-1.5 rounded-lg border border-[#334155] text-[#64748b] text-sm hover:text-[#e2e8f0] hover:border-[#64748b] transition-colors duration-200"
+          >
+            Duplicate
           </button>
           <button
             onClick={onDelete}
