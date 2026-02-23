@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
+import AutoResizeTextarea from "./AutoResizeTextarea";
 import { v4 as uuidv4 } from "uuid";
 import { useSchemas } from "../hooks/useSchemas";
 import { streamAnalyzeDocument } from "../utils/api";
@@ -289,21 +290,20 @@ export default function ExtractionFieldsTable({
             <tbody>
               {rows.map((row, i) => (
                 <tr key={row.fieldKey} className="border-b border-[#1e293b]">
-                  <td className="py-2 px-2 text-[#e2e8f0] font-medium">
+                  <td className="py-2 px-2 text-[#e2e8f0] font-medium align-top">
                     {row.fieldKey}
                   </td>
                   <td className="py-1 px-2">
-                    <input
-                      type="text"
+                    <AutoResizeTextarea
                       value={row.extraction}
                       onChange={(e) =>
                         handleRowChange(i, "extraction", e.target.value)
                       }
-                      className="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
+                      className="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors resize-none overflow-hidden"
                       placeholder="Extracted value"
                     />
                   </td>
-                  <td className="py-2 px-2 text-sm text-[#94a3b8]">
+                  <td className="py-2 px-2 text-sm text-[#94a3b8] align-top">
                     {row.location?.page_num != null && row.extraction ? (
                       <button
                         type="button"

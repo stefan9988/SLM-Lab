@@ -1,4 +1,5 @@
 import type { SchemaField } from '../types';
+import AutoResizeTextarea from './AutoResizeTextarea';
 
 interface Props {
   field: SchemaField;
@@ -8,7 +9,7 @@ interface Props {
 
 export default function SchemaFieldRow({ field, onChange, onDelete }: Props) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-start gap-2">
       <input
         type="text"
         value={field.key}
@@ -16,12 +17,11 @@ export default function SchemaFieldRow({ field, onChange, onDelete }: Props) {
         placeholder="Field key"
         className="flex-1 bg-[#0f172a] border border-[#334155] rounded-md px-3 py-1.5 text-sm text-[#e2e8f0] placeholder-[#64748b] focus:outline-none focus:border-[#7c3aed]"
       />
-      <input
-        type="text"
+      <AutoResizeTextarea
         value={field.description}
         onChange={(e) => onChange({ ...field, description: e.target.value })}
         placeholder="Description (optional)"
-        className="flex-1 bg-[#0f172a] border border-[#334155] rounded-md px-3 py-1.5 text-sm text-[#e2e8f0] placeholder-[#64748b] focus:outline-none focus:border-[#7c3aed]"
+        className="flex-1 bg-[#0f172a] border border-[#334155] rounded-md px-3 py-1.5 text-sm text-[#e2e8f0] placeholder-[#64748b] focus:outline-none focus:border-[#7c3aed] resize-none overflow-hidden"
       />
       <button
         onClick={onDelete}
