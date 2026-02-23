@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import PdfViewer from './PdfViewer';
 
 let lastOnLoadSuccess: ((args: { numPages: number }) => void) | undefined;
@@ -187,5 +187,118 @@ describe('PdfViewer', () => {
 
     const result = lastCustomTextRenderer?.({ str: 'Completely unrelated text', itemIndex: 0 });
     expect(result).not.toContain('<mark');
+  });
+
+  describe('scroll-to-highlight', () => {
+    let scrollIntoViewMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      scrollIntoViewMock = vi.fn();
+      window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+    });
+
+    afterEach(() => {
+      // Restore original (undefined in jsdom)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window.HTMLElement.prototype as any).scrollIntoView;
+    });
+
+    it('scrolls to mark when it appears asynchronously', async () => {
+      const { container } = render(
+        <PdfViewer
+          fileUrl="http://example.com/test.pdf"
+          highlight={{ pageNum: 1, textToHighlight: 'hello' }}
+        />,
+      );
+
+      // Simulate react-pdf text layer injecting the mark into the scroll container
+      const scrollContainer = container.querySelector(
+        '.flex-1.overflow-auto',
+      ) as HTMLElement;
+      act(() => {
+        const mark = document.createElement('mark');
+        mark.className = 'pdf-highlight';
+        mark.textContent = 'hello';
+        scrollContainer.appendChild(mark);
+      });
+
+      await waitFor(() =>
+        expect(scrollIntoViewMock).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          block: 'center',
+        }),
+      );
+    });
+
+    it('scrolls immediately when mark is already in the DOM', async () => {
+      const { container } = render(
+        <PdfViewer
+          fileUrl="http://example.com/test.pdf"
+          highlight={{ pageNum: 1, textToHighlight: 'hello' }}
+        />,
+      );
+
+      // Insert a mark before the re-render so it is already present
+      const scrollContainer = container.querySelector(
+        '.flex-1.overflow-auto',
+      ) as HTMLElement;
+      const mark = document.createElement('mark');
+      mark.className = 'pdf-highlight';
+      mark.textContent = 'hello';
+      scrollContainer.appendChild(mark);
+
+      // Re-render with a new highlight — the mark is already in the DOM
+      act(() => {
+        render(
+          <PdfViewer
+            fileUrl="http://example.com/test.pdf"
+            highlight={{ pageNum: 1, textToHighlight: 'hello again' }}
+          />,
+          { container: container.parentElement! },
+        );
+      });
+
+      await waitFor(() =>
+        expect(scrollIntoViewMock).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          block: 'center',
+        }),
+      );
+    });
+
+    it('disconnects observer when highlight changes before mark appears', async () => {
+      const disconnectSpy = vi.spyOn(MutationObserver.prototype, 'disconnect');
+
+      const { rerender } = render(
+        <PdfViewer
+          fileUrl="http://example.com/test.pdf"
+          highlight={{ pageNum: 1, textToHighlight: 'first' }}
+        />,
+      );
+
+      // Change highlight before any mark is injected — cleanup should disconnect
+      act(() => {
+        rerender(
+          <PdfViewer
+            fileUrl="http://example.com/test.pdf"
+            highlight={{ pageNum: 1, textToHighlight: 'second' }}
+          />,
+        );
+      });
+
+      expect(disconnectSpy).toHaveBeenCalled();
+      disconnectSpy.mockRestore();
+    });
+
+    it('does not scroll when highlight is null', async () => {
+      render(<PdfViewer fileUrl="http://example.com/test.pdf" highlight={null} />);
+
+      // Give effects a chance to run
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+
+      expect(scrollIntoViewMock).not.toHaveBeenCalled();
+    });
   });
 });

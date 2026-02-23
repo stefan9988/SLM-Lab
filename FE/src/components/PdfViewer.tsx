@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -34,6 +34,7 @@ export default function PdfViewer({ fileUrl, highlight }: Props) {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [pageInput, setPageInput] = useState<string>('1');
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -55,6 +56,34 @@ export default function PdfViewer({ fileUrl, highlight }: Props) {
       goToPage(highlight.pageNum);
     }
   }, [highlight, numPages, goToPage]);
+
+  useEffect(() => {
+    if (!highlight) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    // If the mark is already in the DOM (same-page re-highlight), scroll immediately.
+    const existingMark = container.querySelector('.pdf-highlight');
+    if (existingMark) {
+      existingMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // Otherwise watch for the mark to appear (text layer renders asynchronously).
+    let observer: MutationObserver | null = new MutationObserver(() => {
+      const mark = container.querySelector('.pdf-highlight');
+      if (mark) {
+        observer!.disconnect();
+        observer = null;
+        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+    observer.observe(container, { subtree: true, childList: true });
+
+    return () => {
+      observer?.disconnect();
+    };
+  }, [highlight]);
 
   const customTextRenderer = useMemo(() => {
     if (!highlight) return undefined;
@@ -122,7 +151,10 @@ export default function PdfViewer({ fileUrl, highlight }: Props) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex-1 overflow-auto flex items-start justify-center p-4 bg-[#0a0f1e] rounded-lg">
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-auto flex items-start justify-center p-4 bg-[#0a0f1e] rounded-lg"
+      >
         <Document file={fileUrl} onLoadSuccess={onDocumentLoadSuccess} loading={<p className="text-[#64748b] text-sm">Loading PDF...</p>}>
           <Page pageNumber={pageNumber} width={500} customTextRenderer={customTextRenderer} />
         </Document>
