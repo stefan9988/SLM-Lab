@@ -12,7 +12,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
   { provider: 'openrouter', modelName: 'arcee-ai/trinity-large-preview:free', displayName: 'Trinity Large Preview' },
   { provider: 'openrouter', modelName: 'stepfun/step-3.5-flash:free', displayName: 'StepFun 3.5 Flash' },
   { provider: 'openrouter', modelName: 'z-ai/glm-4.5-air:free', displayName: 'GLM 4.5 Air' },
-  { provider: 'ollama', modelName: 'llama3.1:8b', displayName: 'Llama 3.1 8B' },
+  { provider: 'ollama', modelName: 'qwen3:14b', displayName: 'Qwen 3 14B Local' },
   { provider: 'ollama', modelName: 'kimi-k2.5:cloud', displayName: 'Kimi K2.5 Cloud' },
   { provider: 'ollama', modelName: 'qwen3.5:cloud', displayName: 'Qwen 3.5 Cloud' },
   { provider: 'ollama', modelName: 'glm-5:cloud', displayName: 'GLM 5 Cloud' },
