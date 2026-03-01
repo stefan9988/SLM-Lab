@@ -694,6 +694,12 @@ describe("ExtractionFieldsTable", () => {
           screen.getByText("Continue chatting about this document"),
         ).toBeInTheDocument();
       });
+
+      // Open the validation panel
+      await user.click(screen.getByTestId("validate-toggle-button"));
+      await waitFor(() => {
+        expect(screen.getByTestId("validation-url-input-0")).toBeInTheDocument();
+      });
     }
 
     async function* makeValidateGen(
@@ -712,16 +718,45 @@ describe("ExtractionFieldsTable", () => {
         expect(screen.getByText("Analyze Document")).toBeInTheDocument();
       });
 
-      expect(screen.queryByText("Validate Extraction")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("validate-toggle-button")).not.toBeInTheDocument();
       expect(screen.queryByTestId("validate-button")).not.toBeInTheDocument();
     });
 
     it("validation section appears after analysis completes", async () => {
       const user = userEvent.setup();
-      await runAnalysis(user);
+      mockStreamAnalyzeDocument.mockImplementation(() =>
+        makeAnalyzeGen([
+          { type: "extraction", content: { key: "vendor", extraction: "Acme Corp", location: null } },
+          { type: "extraction", content: { key: "amount", extraction: "1000", location: null } },
+        ]),
+      );
 
-      expect(screen.getByText("Validate Extraction")).toBeInTheDocument();
-      expect(screen.getByTestId("validate-button")).toBeInTheDocument();
+      render(
+        <ExtractionFieldsTable {...defaultProps} file={file} onContinueChat={vi.fn()} />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeEnabled();
+      });
+
+      await act(async () => {
+        await user.click(screen.getByText("Analyze Document"));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("validate-toggle-button")).toBeInTheDocument();
+      });
+
+      // "Analyze Document" is replaced by the Validate toggle
+      expect(screen.queryByText("Analyze Document")).not.toBeInTheDocument();
+      // Panel is closed — Run Validation button not yet visible
+      expect(screen.queryByTestId("validate-button")).not.toBeInTheDocument();
+
+      // Click toggle to open panel
+      await user.click(screen.getByTestId("validate-toggle-button"));
+      await waitFor(() => {
+        expect(screen.getByTestId("validate-button")).toBeInTheDocument();
+      });
     });
 
     it("can add a second URL input", async () => {
@@ -891,7 +926,7 @@ describe("ExtractionFieldsTable", () => {
       await user.click(screen.getByText("Clear"));
 
       expect(screen.queryByText("Source")).not.toBeInTheDocument();
-      expect(screen.queryByText("Validate Extraction")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("validate-toggle-button")).not.toBeInTheDocument();
     });
   });
 });
