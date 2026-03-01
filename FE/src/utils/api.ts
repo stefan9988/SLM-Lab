@@ -1,4 +1,4 @@
-import type { Message, SSEEvent, FileAttachment, ExtractionSchema, ExtractionLocation, SchemaField, ModelInfo } from '../types';
+import type { Message, SSEEvent, FileAttachment, ExtractionSchema, ExtractionLocation, SchemaField, ModelInfo, ValidationResultItem } from '../types';
 import logger from './logger';
 
 const TOKEN_KEY = 'slm-auth-token';
@@ -257,6 +257,83 @@ export async function updateDocumentAgentModel(provider: string, modelName: stri
   }
   const data = await res.json();
   return { provider: data.provider, modelName: data.model_name };
+}
+
+export interface ValidateCompleteEvent {
+  type: 'validation_complete';
+  content: ValidationResultItem[];
+}
+
+export async function* streamValidate(
+  sessionId: string,
+  validationUrls: string[],
+  extractedData: Array<{ key: string; value: string }>,
+  signal?: AbortSignal,
+): AsyncGenerator<SSEEvent | ValidateCompleteEvent | 'DONE'> {
+  logger.info('[API] Starting validation for session:', sessionId, 'with', validationUrls.length, 'URLs');
+  const res = await fetch('/validate-stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({
+      session_id: sessionId,
+      validation_urls: validationUrls,
+      extracted_data: extractedData,
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Validate request failed:', res.status, res.statusText);
+    throw new Error('Validate request failed');
+  }
+  logger.info('[API] Validate stream connection established');
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop()!;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data: ')) continue;
+      const payload = trimmed.slice(6);
+      if (payload === '[DONE]') {
+        yield 'DONE';
+        return;
+      }
+      try {
+        const event = JSON.parse(payload);
+        logger.debug('[API] Received validate event:', event.type);
+        yield event;
+      } catch {
+        logger.warn('[API] Skipping malformed validate SSE event:', payload);
+      }
+    }
+  }
+}
+
+export async function fetchValidationResults(
+  sessionId: string,
+): Promise<ValidationResultItem[] | null> {
+  logger.info('[API] Fetching validation results for session:', sessionId);
+  const res = await fetch(`/validate-results/${encodeURIComponent(sessionId)}`, {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    logger.error('[API] Failed to fetch validation results:', res.status, res.statusText);
+    return null;
+  }
+  const data = await res.json();
+  return data.results ?? null;
 }
 
 function readFileAsDataURL(file: File): Promise<string> {

@@ -5,6 +5,8 @@ import ExtractionFieldsTable from "./ExtractionFieldsTable";
 
 const mockFetchSchemas = vi.fn();
 const mockStreamAnalyzeDocument = vi.fn();
+const mockStreamValidate = vi.fn();
+const mockFetchValidationResults = vi.fn();
 
 vi.mock("../utils/api", () => ({
   fetchSchemas: (...args: unknown[]) => mockFetchSchemas(...args),
@@ -12,6 +14,8 @@ vi.mock("../utils/api", () => ({
   updateSchemaApi: vi.fn(),
   deleteSchemaApi: vi.fn(),
   streamAnalyzeDocument: (...args: unknown[]) => mockStreamAnalyzeDocument(...args),
+  streamValidate: (...args: unknown[]) => mockStreamValidate(...args),
+  fetchValidationResults: (...args: unknown[]) => mockFetchValidationResults(...args),
 }));
 
 const TEST_SESSION_ID = "test-uuid-1234-5678-abcd-ef0123456789";
@@ -53,6 +57,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   mockFetchSchemas.mockResolvedValue(schemasFixture);
+  mockFetchValidationResults.mockResolvedValue(null);
 });
 
 describe("ExtractionFieldsTable", () => {
@@ -648,6 +653,245 @@ describe("ExtractionFieldsTable", () => {
       await user.click(screen.getByText("Continue chatting about this document"));
 
       expect(onContinueChat).toHaveBeenCalledWith(TEST_SESSION_ID, 'report.pdf');
+    });
+  });
+
+  describe("Validation UI", () => {
+    const file = new File(["x"], "test.pdf", { type: "application/pdf" });
+
+    async function runAnalysis(user: ReturnType<typeof userEvent.setup>) {
+      mockStreamAnalyzeDocument.mockImplementation(() =>
+        makeAnalyzeGen([
+          {
+            type: "extraction",
+            content: { key: "vendor", extraction: "Acme Corp", location: null },
+          },
+          {
+            type: "extraction",
+            content: { key: "amount", extraction: "1000", location: null },
+          },
+        ]),
+      );
+
+      render(
+        <ExtractionFieldsTable
+          {...defaultProps}
+          file={file}
+          onContinueChat={vi.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeEnabled();
+      });
+
+      await act(async () => {
+        await user.click(screen.getByText("Analyze Document"));
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.getByText("Continue chatting about this document"),
+        ).toBeInTheDocument();
+      });
+    }
+
+    async function* makeValidateGen(
+      events: Array<{ type: string; content: unknown }>,
+    ) {
+      for (const e of events) {
+        yield e;
+      }
+      yield "DONE" as const;
+    }
+
+    it("validation UI is not shown before analysis completes", async () => {
+      render(<ExtractionFieldsTable {...defaultProps} file={file} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Analyze Document")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText("Validate Extraction")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("validate-button")).not.toBeInTheDocument();
+    });
+
+    it("validation section appears after analysis completes", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      expect(screen.getByText("Validate Extraction")).toBeInTheDocument();
+      expect(screen.getByTestId("validate-button")).toBeInTheDocument();
+    });
+
+    it("can add a second URL input", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      const addBtn = screen.getByTestId("add-url-button");
+      await user.click(addBtn);
+
+      expect(screen.getAllByTestId(/validation-url-input-/)).toHaveLength(2);
+    });
+
+    it("remove button only appears when there is more than one URL input", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      // Only one input — no remove button
+      expect(screen.queryByLabelText("Remove URL")).not.toBeInTheDocument();
+
+      // Add a second URL
+      await user.click(screen.getByTestId("add-url-button"));
+
+      // Now remove buttons should appear
+      const removeBtns = screen.getAllByLabelText("Remove URL");
+      expect(removeBtns).toHaveLength(2);
+    });
+
+    it("removing a URL input decreases the count", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      await user.click(screen.getByTestId("add-url-button"));
+      expect(screen.getAllByTestId(/validation-url-input-/)).toHaveLength(2);
+
+      const removeBtns = screen.getAllByLabelText("Remove URL");
+      await user.click(removeBtns[0]);
+
+      expect(screen.getAllByTestId(/validation-url-input-/)).toHaveLength(1);
+    });
+
+    it("validate button is disabled when URL input is empty", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      // Input is empty by default
+      expect(screen.getByTestId("validate-button")).toBeDisabled();
+    });
+
+    it("validate button is enabled when URL is filled in", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      const urlInput = screen.getByTestId("validation-url-input-0");
+      await user.type(urlInput, "https://acme.example.com");
+
+      expect(screen.getByTestId("validate-button")).toBeEnabled();
+    });
+
+    it("renders status dots after validation_complete event", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      mockStreamValidate.mockImplementation(() =>
+        makeValidateGen([
+          {
+            type: "validation_complete",
+            content: [
+              {
+                claim: "vendor: Acme Corp",
+                status: "correct",
+                validated_value: "Acme Corporation",
+                sources: ["https://acme.example.com/about"],
+              },
+              {
+                claim: "amount: 1000",
+                status: "incorrect",
+                validated_value: "2000",
+                sources: ["https://acme.example.com/invoice"],
+              },
+            ],
+          },
+        ]),
+      );
+
+      const urlInput = screen.getByTestId("validation-url-input-0");
+      await user.type(urlInput, "https://acme.example.com");
+
+      await act(async () => {
+        await user.click(screen.getByTestId("validate-button"));
+      });
+
+      await waitFor(() => {
+        // green dot for vendor (correct), red dot for amount (incorrect)
+        const greenDots = document.querySelectorAll(".bg-green-400");
+        const redDots = document.querySelectorAll(".bg-red-400");
+        expect(greenDots.length).toBeGreaterThanOrEqual(1);
+        expect(redDots.length).toBeGreaterThanOrEqual(1);
+      });
+    });
+
+    it("source column appears only after validation", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      // No source column before validation
+      expect(screen.queryByText("Source")).not.toBeInTheDocument();
+
+      mockStreamValidate.mockImplementation(() =>
+        makeValidateGen([
+          {
+            type: "validation_complete",
+            content: [
+              {
+                claim: "vendor: Acme Corp",
+                status: "correct",
+                validated_value: "Acme Corporation",
+                sources: ["https://acme.example.com/about"],
+              },
+            ],
+          },
+        ]),
+      );
+
+      const urlInput = screen.getByTestId("validation-url-input-0");
+      await user.type(urlInput, "https://acme.example.com");
+
+      await act(async () => {
+        await user.click(screen.getByTestId("validate-button"));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Source")).toBeInTheDocument();
+      });
+    });
+
+    it("clear button resets validation state", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      mockStreamValidate.mockImplementation(() =>
+        makeValidateGen([
+          {
+            type: "validation_complete",
+            content: [
+              {
+                claim: "vendor: Acme Corp",
+                status: "correct",
+                validated_value: "Acme Corporation",
+                sources: ["https://acme.example.com"],
+              },
+            ],
+          },
+        ]),
+      );
+
+      const urlInput = screen.getByTestId("validation-url-input-0");
+      await user.type(urlInput, "https://acme.example.com");
+
+      await act(async () => {
+        await user.click(screen.getByTestId("validate-button"));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Source")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText("Clear"));
+
+      expect(screen.queryByText("Source")).not.toBeInTheDocument();
+      expect(screen.queryByText("Validate Extraction")).not.toBeInTheDocument();
     });
   });
 });

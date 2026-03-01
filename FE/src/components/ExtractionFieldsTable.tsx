@@ -2,10 +2,11 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import AutoResizeTextarea from "./AutoResizeTextarea";
 import { v4 as uuidv4 } from "uuid";
 import { useSchemas } from "../hooks/useSchemas";
-import { streamAnalyzeDocument } from "../utils/api";
-import type { ExtractionRow, ExtractionLocation, HighlightRequest } from "../types";
+import { streamAnalyzeDocument, streamValidate, fetchValidationResults } from "../utils/api";
+import type { ExtractionRow, ExtractionLocation, HighlightRequest, ValidationResults } from "../types";
 
 const LAST_SCHEMA_KEY = "slm-last-schema-id";
+const MAX_VALIDATION_URLS = 5;
 
 function formatLocation(location: ExtractionLocation | null): string {
   if (!location) return "-";
@@ -36,12 +37,18 @@ export default function ExtractionFieldsTable({
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const validationAbortRef = useRef<AbortController | null>(null);
   const { schemas, loading } = useSchemas();
   const [selectedSchemaId, setSelectedSchemaId] = useState<string>("");
   const [rows, setRows] = useState<ExtractionRow[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [analysisSessionId, setAnalysisSessionId] = useState<string | null>(null);
+  const [validationUrls, setValidationUrls] = useState<string[]>([""]);
+  const [validationResults, setValidationResults] = useState<ValidationResults>({});
+  const [validating, setValidating] = useState(false);
+  const [validationStatusText, setValidationStatusText] = useState("");
+  const [validationError, setValidationError] = useState("");
 
   useEffect(() => {
     if (loading || schemas.length === 0) return;
@@ -57,6 +64,20 @@ export default function ExtractionFieldsTable({
       })),
     );
   }, [loading, schemas]);
+
+  // Load persisted validation results when analysisSessionId becomes available
+  useEffect(() => {
+    if (!analysisSessionId) return;
+    fetchValidationResults(analysisSessionId).then((items) => {
+      if (!items) return;
+      const mapped: ValidationResults = {};
+      for (const item of items) {
+        const key = item.claim.split(": ")[0];
+        mapped[key] = item;
+      }
+      setValidationResults(mapped);
+    });
+  }, [analysisSessionId]);
 
   const handleSchemaChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -96,6 +117,10 @@ export default function ExtractionFieldsTable({
     );
     setStatusText("");
     setAnalysisSessionId(null);
+    setValidationResults({});
+    setValidationUrls([""]);
+    setValidationStatusText("");
+    setValidationError("");
     onHighlightClear?.();
   }, [onHighlightClear]);
 
@@ -126,11 +151,14 @@ export default function ExtractionFieldsTable({
 
     const sessionId = uuidv4();
     onHighlightClear?.();
-    // Reset rows to empty values before starting
     setRows((prev) =>
       prev.map((row) => ({ ...row, extraction: "", location: null })),
     );
     setAnalysisSessionId(null);
+    setValidationResults({});
+    setValidationUrls([""]);
+    setValidationStatusText("");
+    setValidationError("");
     setAnalyzing(true);
     setStatusText("Starting analysis...");
 
@@ -154,7 +182,6 @@ export default function ExtractionFieldsTable({
           setRows((prev) => {
             const idx = prev.findIndex((r) => r.fieldKey === key);
             if (idx !== -1) {
-              // Update existing row
               return prev.map((r, i) =>
                 i === idx
                   ? {
@@ -165,7 +192,6 @@ export default function ExtractionFieldsTable({
                   : r,
               );
             }
-            // Append numbered variant and remove empty base key row
             const baseMatch = key.match(/^(.+)_\d+$/);
             const baseKey = baseMatch?.[1];
             const filtered = baseKey
@@ -201,14 +227,81 @@ export default function ExtractionFieldsTable({
     }
   }, [file, selectedSchemaId, analyzing, onHighlightClear]);
 
-  // Cleanup abort on unmount
+  const handleValidate = useCallback(async () => {
+    if (!analysisSessionId || validating) return;
+
+    const validUrls = validationUrls.filter((u) => u.trim() !== "");
+    if (validUrls.length === 0) return;
+
+    const extractedData = rows
+      .filter((r) => r.extraction.trim() !== "")
+      .map((r) => ({ key: r.fieldKey, value: r.extraction }));
+
+    if (extractedData.length === 0) return;
+
+    validationAbortRef.current?.abort();
+    const abort = new AbortController();
+    validationAbortRef.current = abort;
+
+    setValidating(true);
+    setValidationStatusText("Starting validation...");
+    setValidationError("");
+
+    try {
+      for await (const event of streamValidate(
+        analysisSessionId,
+        validUrls,
+        extractedData,
+        abort.signal,
+      )) {
+        if (event === "DONE") break;
+
+        if (typeof event === "object") {
+          if (event.type === "status") {
+            setValidationStatusText(event.content as string);
+          } else if (event.type === "validation_complete") {
+            const items = event.content as import("../types").ValidationResultItem[];
+            const mapped: ValidationResults = {};
+            for (const item of items) {
+              const key = item.claim.split(": ")[0];
+              mapped[key] = item;
+            }
+            setValidationResults(mapped);
+          } else if (event.type === "error") {
+            setValidationError(`Error: ${event.content}`);
+          }
+        }
+      }
+    } catch (err) {
+      if (!abort.signal.aborted) {
+        setValidationError(
+          `Error: ${err instanceof Error ? err.message : "Validation failed"}`,
+        );
+      }
+    } finally {
+      setValidating(false);
+      setValidationStatusText("");
+      validationAbortRef.current = null;
+    }
+  }, [analysisSessionId, validating, validationUrls, rows]);
+
+  // Cleanup aborts on unmount
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      validationAbortRef.current?.abort();
     };
   }, []);
 
   const canAnalyze = !!file && !!selectedSchemaId && !analyzing;
+  const hasExtractedData = rows.some((r) => r.extraction.trim() !== "");
+  const hasValidation = Object.keys(validationResults).length > 0;
+  const canValidate =
+    !!analysisSessionId &&
+    !analyzing &&
+    !validating &&
+    validationUrls.some((u) => u.trim() !== "") &&
+    hasExtractedData;
 
   return (
     <div className="flex flex-col gap-4 h-full">
@@ -279,50 +372,97 @@ export default function ExtractionFieldsTable({
                 <th className="text-left py-2 px-2 border-b border-[#334155] w-1/4">
                   Key
                 </th>
-                <th className="text-left py-2 px-2 border-b border-[#334155] w-[37.5%]">
+                <th
+                  className={`text-left py-2 px-2 border-b border-[#334155] ${hasValidation ? "w-[30%]" : "w-[37.5%]"}`}
+                >
                   Extraction
                 </th>
-                <th className="text-left py-2 px-2 border-b border-[#334155] w-[37.5%]">
+                <th
+                  className={`text-left py-2 px-2 border-b border-[#334155] ${hasValidation ? "w-[30%]" : "w-[37.5%]"}`}
+                >
                   Location
                 </th>
+                {hasValidation && (
+                  <th className="text-left py-2 px-2 border-b border-[#334155] w-[15%]">
+                    Source
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => (
-                <tr key={row.fieldKey} className="border-b border-[#1e293b]">
-                  <td className="py-2 px-2 text-[#e2e8f0] font-medium align-top">
-                    {row.fieldKey}
-                  </td>
-                  <td className="py-1 px-2">
-                    <AutoResizeTextarea
-                      value={row.extraction}
-                      onChange={(e) =>
-                        handleRowChange(i, "extraction", e.target.value)
-                      }
-                      className="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors resize-none overflow-hidden"
-                      placeholder="Extracted value"
-                    />
-                  </td>
-                  <td className="py-2 px-2 text-sm text-[#94a3b8] align-top">
-                    {row.location?.page_num != null && row.extraction ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onLocationClick?.({
-                            pageNum: row.location!.page_num!,
-                            textToHighlight: row.extraction,
-                          })
+              {rows.map((row, i) => {
+                const vr = validationResults[row.fieldKey];
+                return (
+                  <tr key={row.fieldKey} className="border-b border-[#1e293b]">
+                    <td className="py-2 px-2 text-[#e2e8f0] font-medium align-top">
+                      <span>{row.fieldKey}</span>
+                      {vr && (
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ml-2 align-middle ${
+                            vr.status === "correct"
+                              ? "bg-green-400"
+                              : vr.status === "incorrect"
+                                ? "bg-red-400"
+                                : "bg-yellow-400"
+                          }`}
+                          title={vr.validated_value ?? "Not found"}
+                        />
+                      )}
+                    </td>
+                    <td className="py-1 px-2">
+                      <AutoResizeTextarea
+                        value={row.extraction}
+                        onChange={(e) =>
+                          handleRowChange(i, "extraction", e.target.value)
                         }
-                        className="text-[#7c3aed] hover:underline cursor-pointer bg-transparent border-none p-0 text-sm"
-                      >
-                        {formatLocation(row.location)}
-                      </button>
-                    ) : (
-                      formatLocation(row.location)
+                        className="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors resize-none overflow-hidden"
+                        placeholder="Extracted value"
+                      />
+                    </td>
+                    <td className="py-2 px-2 text-sm text-[#94a3b8] align-top">
+                      {row.location?.page_num != null && row.extraction ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onLocationClick?.({
+                              pageNum: row.location!.page_num!,
+                              textToHighlight: row.extraction,
+                            })
+                          }
+                          className="text-[#7c3aed] hover:underline cursor-pointer bg-transparent border-none p-0 text-sm"
+                        >
+                          {formatLocation(row.location)}
+                        </button>
+                      ) : (
+                        formatLocation(row.location)
+                      )}
+                    </td>
+                    {hasValidation && (
+                      <td className="py-2 px-2 text-xs text-[#94a3b8] align-top">
+                        {vr?.sources[0] ? (
+                          <a
+                            href={vr.sources[0]}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#7c3aed] hover:underline truncate block max-w-[140px]"
+                            title={vr.sources[0]}
+                          >
+                            {(() => {
+                              try {
+                                return new URL(vr.sources[0]).hostname;
+                              } catch {
+                                return vr.sources[0];
+                              }
+                            })()}
+                          </a>
+                        ) : (
+                          "–"
+                        )}
+                      </td>
                     )}
-                  </td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -366,13 +506,83 @@ export default function ExtractionFieldsTable({
       </button>
 
       {analysisSessionId && !analyzing && (
-        <button
-          type="button"
-          onClick={() => onContinueChat?.(analysisSessionId, documentName ?? 'document')}
-          className="w-full rounded-lg border border-[#334155] text-[#64748b] py-2.5 text-sm font-medium hover:text-[#7c3aed] hover:border-[#7c3aed] transition-all duration-200"
-        >
-          Continue chatting about this document
-        </button>
+        <>
+          <div className="border-t border-[#334155] pt-3">
+            <p className="text-xs text-[#94a3b8] mb-2 font-medium uppercase tracking-wider">
+              Validate Extraction
+            </p>
+            <label className="block text-xs text-[#94a3b8] mb-1">
+              Validation URLs
+            </label>
+            <div className="flex flex-col gap-1 mb-2">
+              {validationUrls.map((url, idx) => (
+                <div key={idx} className="flex gap-1 items-center">
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => {
+                      const next = [...validationUrls];
+                      next[idx] = e.target.value;
+                      setValidationUrls(next);
+                    }}
+                    placeholder="https://example.com"
+                    className="flex-1 bg-[#1e293b] border border-[#334155] rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
+                    data-testid={`validation-url-input-${idx}`}
+                  />
+                  {validationUrls.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValidationUrls((prev) =>
+                          prev.filter((_, i) => i !== idx),
+                        );
+                      }}
+                      className="text-[#64748b] hover:text-red-400 transition-colors px-1"
+                      aria-label="Remove URL"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {validationUrls.length < MAX_VALIDATION_URLS && (
+              <button
+                type="button"
+                onClick={() => setValidationUrls((prev) => [...prev, ""])}
+                className="text-xs text-[#64748b] hover:text-[#7c3aed] transition-colors mb-2"
+                data-testid="add-url-button"
+              >
+                + Add URL
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleValidate}
+              disabled={!canValidate}
+              className="w-full rounded-lg border border-[#7c3aed] text-[#7c3aed] py-2 text-sm font-medium hover:bg-[#7c3aed] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
+              data-testid="validate-button"
+            >
+              {validating ? "Validating…" : "Validate"}
+            </button>
+            {validating && validationStatusText && (
+              <p className="text-xs text-[#94a3b8] mt-1">{validationStatusText}</p>
+            )}
+            {validationError && (
+              <p className="text-xs text-red-400 mt-1">{validationError}</p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              onContinueChat?.(analysisSessionId, documentName ?? "document")
+            }
+            className="w-full rounded-lg border border-[#334155] text-[#64748b] py-2.5 text-sm font-medium hover:text-[#7c3aed] hover:border-[#7c3aed] transition-all duration-200"
+          >
+            Continue chatting about this document
+          </button>
+        </>
       )}
     </div>
   );

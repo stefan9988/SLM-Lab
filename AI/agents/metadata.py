@@ -43,6 +43,8 @@ AGENT_METADATA: dict[str, AgentMetadata] = {
             "Do NOT delegate when:\n"
             "- The answer is definitively contained in the document and no external check is needed.\n"
             "- The question is purely creative, conversational, or opinion-based.\n\n"
+            "When validation URLs are explicitly provided, the agent fetches those pages directly\n"
+            "using the web_page_content tool before falling back to a general web search.\n\n"
             "When the Validation Agent returns its JSON result, present the findings clearly to\n"
             "the user — do not expose the raw JSON unless the user asks for it."
         ),

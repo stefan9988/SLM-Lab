@@ -3,6 +3,7 @@
 import json
 import re
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
@@ -803,6 +804,218 @@ def _parse_extraction_json(text: str) -> list[dict]:
         raise ValueError("No JSON array found in agent response")
 
     return json.loads(cleaned[start : end + 1])
+
+
+class ValidateStreamRequest(BaseModel):
+    session_id: str = Field(max_length=128, pattern=SESSION_ID_PATTERN)
+    validation_urls: list[str] = Field(min_length=1, max_length=5)
+    extracted_data: list[dict]
+
+
+def _parse_validation_json(text: str) -> list[dict]:
+    """Extract the results array from the validation agent's JSON response."""
+    # Strip markdown code fences if present
+    cleaned = re.sub(r"```(?:json)?\s*", "", text)
+    cleaned = cleaned.replace("```", "")
+
+    # Try to parse as a JSON object with a "results" key
+    start_obj = cleaned.find("{")
+    end_obj = cleaned.rfind("}")
+    if start_obj != -1 and end_obj != -1 and end_obj > start_obj:
+        try:
+            obj = json.loads(cleaned[start_obj : end_obj + 1])
+            if isinstance(obj, dict) and "results" in obj:
+                return obj["results"]
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Fallback: find a bare JSON array
+    start = cleaned.find("[")
+    end = cleaned.rfind("]")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("No validation results found in agent response")
+
+    return json.loads(cleaned[start : end + 1])
+
+
+@app.post("/validate-stream")
+async def validate_stream(
+    body: ValidateStreamRequest,
+    request: Request,
+    user: UserInfo = Depends(get_current_user),
+):
+    """Validate extracted fields against URLs. Streams SSE events."""
+    logger.info(
+        "POST /validate-stream (session_id=%s, urls=%d, fields=%d)",
+        body.session_id,
+        len(body.validation_urls),
+        len(body.extracted_data),
+    )
+
+    url_list = "\n".join(f"- {u}" for u in body.validation_urls)
+    field_list = "\n".join(
+        f"- {item.get('key', '')}: {item.get('value', '')}"
+        for item in body.extracted_data
+    )
+    prompt = (
+        f"Verify the following extracted fields against the provided URLs.\n\n"
+        f"Validation URLs:\n{url_list}\n\n"
+        f"Fields to validate:\n{field_list}"
+    )
+
+    validation_agent = request.app.state.validation_agent
+    val_session_id = f"validate-{uuid4()}"
+
+    async def generate():
+        full_text = ""
+        try:
+            async for event in validation_agent.stream(
+                prompt,
+                session_id=val_session_id,
+                user_id=user.id,
+            ):
+                event_type = event.get("type", "")
+                if event_type == "token":
+                    full_text += event.get("content", "")
+                    yield f"data: {json.dumps({'type': 'token', 'content': event.get('content', '')})}\n\n"
+                elif event_type in ("status", "tool_use"):
+                    yield f"data: {json.dumps({'type': 'status', 'content': event.get('content', '')})}\n\n"
+
+            # Parse validation results
+            results = _parse_validation_json(full_text)
+
+            yield f"data: {json.dumps({'type': 'validation_complete', 'content': results})}\n\n"
+
+            # Save messages to the analysis session for chat continuity
+            archive = _create_archive_store()
+            if archive is not None:
+                now_iso = datetime.now(timezone.utc).isoformat()
+                user_msg = {
+                    "type": "human",
+                    "content": prompt,
+                    "timestamp": now_iso,
+                }
+                ai_summary = (
+                    f"Validation complete. Checked {len(results)} field(s) against "
+                    f"{len(body.validation_urls)} URL(s). Results: "
+                    + ", ".join(
+                        f"{r.get('claim', '?')}: {r.get('status', '?')}"
+                        for r in results
+                    )
+                )
+                ai_msg = {
+                    "type": "ai",
+                    "content": ai_summary,
+                    "timestamp": now_iso,
+                }
+                try:
+                    await archive.save_messages(
+                        body.session_id,
+                        [user_msg, ai_msg],
+                        user_id=user.id,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to save validation messages to archive: %s", exc
+                    )
+
+            # Persist structured results
+            if settings.POSTGRES_ENABLED:
+                await _save_validation_result(body.session_id, user.id, results)
+
+        except Exception as exc:
+            logger.error("Validation stream failed: %s", exc, exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
+
+        yield "data: [DONE]\n\n"
+        logger.info("POST /validate-stream complete (session_id=%s)", body.session_id)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+async def _save_validation_result(
+    session_id: str, user_id: str, results: list[dict]
+) -> None:
+    """Upsert a ValidationResult record in PostgreSQL."""
+    from BE.database import get_session_factory
+    from BE.models import ValidationResult
+    from sqlalchemy import select, update
+
+    try:
+        factory = get_session_factory()
+        async with factory() as db_session:
+            async with db_session.begin():
+                now = datetime.now(timezone.utc)
+                # Check if record already exists for this session+user
+                existing = await db_session.execute(
+                    select(ValidationResult).where(
+                        ValidationResult.session_id == session_id,
+                        ValidationResult.user_id == user_id,
+                    )
+                )
+                row = existing.scalar_one_or_none()
+                if row is not None:
+                    await db_session.execute(
+                        update(ValidationResult)
+                        .where(
+                            ValidationResult.session_id == session_id,
+                            ValidationResult.user_id == user_id,
+                        )
+                        .values(results=results, updated_at=now)
+                    )
+                else:
+                    db_session.add(
+                        ValidationResult(
+                            session_id=session_id,
+                            user_id=user_id,
+                            results=results,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+    except Exception as exc:
+        logger.warning("Failed to save validation result: %s", exc)
+
+
+@app.get("/validate-results/{session_id}")
+async def get_validation_results(
+    session_id: str = Path(max_length=128, pattern=SESSION_ID_PATTERN),
+    user: UserInfo = Depends(get_current_user),
+):
+    """Get persisted validation results for a session."""
+    logger.info("GET /validate-results (session_id=%s)", session_id)
+
+    if not settings.POSTGRES_ENABLED:
+        return {"results": None}
+
+    from BE.database import get_session_factory
+    from BE.models import ValidationResult
+    from sqlalchemy import select
+
+    try:
+        factory = get_session_factory()
+        async with factory() as db_session:
+            result = await db_session.execute(
+                select(ValidationResult).where(
+                    ValidationResult.session_id == session_id,
+                    ValidationResult.user_id == user.id,
+                )
+            )
+            row = result.scalar_one_or_none()
+            if row is None:
+                return {"results": None}
+            return {"results": row.results}
+    except Exception as exc:
+        logger.warning("Failed to get validation results: %s", exc)
+        return {"results": None}
 
 
 @app.post("/analyze")

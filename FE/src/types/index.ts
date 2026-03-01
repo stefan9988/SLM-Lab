@@ -75,3 +75,12 @@ export interface ModelInfo {
   provider: string;
   modelName: string;
 }
+
+export interface ValidationResultItem {
+  claim: string;
+  status: 'correct' | 'incorrect' | 'not_found';
+  validated_value: string | null;
+  sources: string[];
+}
+
+export type ValidationResults = Record<string, ValidationResultItem>;

@@ -6,7 +6,15 @@ from uuid import uuid4
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-__all__ = ["Base", "User", "Session", "Message", "FileUpload", "ExtractionSchema"]
+__all__ = [
+    "Base",
+    "User",
+    "Session",
+    "Message",
+    "FileUpload",
+    "ExtractionSchema",
+    "ValidationResult",
+]
 
 
 class Base(DeclarativeBase):
@@ -127,3 +135,24 @@ class ExtractionSchema(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="extraction_schemas")
+
+
+class ValidationResult(Base):
+    __tablename__ = "validation_results"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid4())
+    )
+    session_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    results: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
