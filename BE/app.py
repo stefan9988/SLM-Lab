@@ -11,7 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
 from AI.agents import init_agent
-from AI.prompts import GENERAL_AGENT_PROMPT, DOCUMENT_AGENT_PROMPT
+from AI.prompts import build_general_agent_prompt, DOCUMENT_AGENT_PROMPT
+from AI.agents.metadata import get_delegatable_agents
 from AI.prompts.extraction_prompt import build_extraction_prompt
 from AI.prompts.validation_agent_prompt import VALIDATION_AGENT_PROMPT
 from AI.tools import (
@@ -298,7 +299,7 @@ async def lifespan(app: FastAPI):
             logger.warning("Qdrant init failed (vector store disabled): %s", exc)
 
     app.state.general_agent = init_agent(
-        system_prompt=GENERAL_AGENT_PROMPT,
+        system_prompt=build_general_agent_prompt(get_delegatable_agents()),
         tools=tools,
         maintain_history=True,
         provider=settings.GENERAL_AGENT_LLM_PROVIDER or None,
@@ -336,7 +337,11 @@ async def lifespan(app: FastAPI):
     from AI.agents import registry
 
     registry.register("general_agent", app.state.general_agent)
-    registry.register("document_agent", app.state.document_agent)
+    registry.register(
+        "document_agent",
+        app.state.document_agent,
+        allowed_callers={"general_agent"},
+    )
     registry.register(
         "validation_agent",
         app.state.validation_agent,
@@ -578,7 +583,7 @@ async def update_general_agent_model(
     old_agent = request.app.state.general_agent
     old_store = old_agent._store
     new_agent = init_agent(
-        system_prompt=GENERAL_AGENT_PROMPT,
+        system_prompt=build_general_agent_prompt(get_delegatable_agents()),
         tools=get_enabled_tools(settings),
         maintain_history=True,
         provider=body.provider,
@@ -621,7 +626,11 @@ async def update_document_agent_model(
     request.app.state.document_agent = new_agent
     from AI.agents import registry
 
-    registry.register("document_agent", new_agent)
+    registry.register(
+        "document_agent",
+        new_agent,
+        allowed_callers={"general_agent"},
+    )
     return {"provider": new_agent._provider, "model_name": new_agent._model_name}
 
 
