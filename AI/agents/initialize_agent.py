@@ -54,6 +54,7 @@ def init_agent(
     maintain_history: bool = False,
     provider: Optional[str] = None,
     model_name: Optional[str] = None,
+    agent_name: str = "",
 ) -> Agent:
     """Initialize and return an Agent.
 
@@ -86,6 +87,7 @@ def init_agent(
             session_store=store,
             model_name=resolved_model,
             provider=resolved_provider,
+            agent_name=agent_name,
         )
         logger.info("init_agent successful")
         return agent

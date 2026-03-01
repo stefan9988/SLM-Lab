@@ -27,11 +27,13 @@ class Agent:
         session_store: Optional[SessionStore] = None,
         model_name: str = "",
         provider: str = "",
+        agent_name: str = "",
     ):
         self.maintain_history = maintain_history
         self._store: SessionStore = session_store or InMemoryStore()
         self._model_name = model_name
         self._provider = provider
+        self._agent_name = agent_name
 
         tool_names = [t.name for t in tools] if tools else []
         logger.info(
@@ -72,7 +74,12 @@ class Agent:
                 file_attachments=file_attachments,
                 user_id=user_id,
             )
-            config = {"configurable": {"user_id": user_id}} if user_id else None
+            configurable: dict = {}
+            if user_id:
+                configurable["user_id"] = user_id
+            if self._agent_name:
+                configurable["agent_name"] = self._agent_name
+            config = {"configurable": configurable} if configurable else None
             result = await self._agent.ainvoke({"messages": messages}, config=config)
             all_messages = result["messages"]
             await self._save_history(all_messages, session_id, user_id=user_id)
@@ -111,7 +118,12 @@ class Agent:
             tool_messages = []
             pending_tool_calls = {}  # {index: {"name": str, "args": str}}
             completed_tools = []  # [{"name": str, "args": dict}, ...]
-            config = {"configurable": {"user_id": user_id}} if user_id else None
+            configurable: dict = {}
+            if user_id:
+                configurable["user_id"] = user_id
+            if self._agent_name:
+                configurable["agent_name"] = self._agent_name
+            config = {"configurable": configurable} if configurable else None
             async for stream_mode, chunk in self._agent.astream(
                 {"messages": messages},
                 config=config,

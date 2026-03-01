@@ -19,6 +19,7 @@ __all__ = [
     "web_page_content_tool",
     "get_enabled_tools",
     "get_document_agent_enabled_tools",
+    "get_validation_agent_enabled_tools",
 ]
 
 GENERAL_AGENT_TOOLS = [
@@ -59,6 +60,24 @@ def get_document_agent_enabled_tools(settings) -> list:
     """Return tools enabled for the document agent based on settings."""
     tools = []
     for setting_name, tool in DOCUMENT_AGENT_TOOLS:
+        if getattr(settings, setting_name, False):
+            tools.append(tool)
+    return tools
+
+
+VALIDATION_AGENT_TOOLS = [
+    ("VALIDATION_AGENT_DATE_TIME_TOOL", get_current_date_and_time),
+    ("VALIDATION_AGENT_BRAVE_SEARCH_TOOL", brave_search_tool),
+    ("VALIDATION_AGENT_OLLAMA_WEB_SEARCH_TOOL", ollama_web_search_tool),
+    ("VALIDATION_AGENT_OLLAMA_WEB_FETCH_TOOL", ollama_web_fetch_tool),
+    ("VALIDATION_AGENT_WEB_PAGE_CONTENT_TOOL", web_page_content_tool),
+]
+
+
+def get_validation_agent_enabled_tools(settings) -> list:
+    """Return tools enabled for the validation agent based on settings."""
+    tools = []
+    for setting_name, tool in VALIDATION_AGENT_TOOLS:
         if getattr(settings, setting_name, False):
             tools.append(tool)
     return tools

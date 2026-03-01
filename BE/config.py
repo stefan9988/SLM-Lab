@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     GENERAL_AGENT_MODEL_NAME: str = ""
     DOCUMENT_AGENT_LLM_PROVIDER: str = ""
     DOCUMENT_AGENT_MODEL_NAME: str = ""
+    VALIDATION_AGENT_LLM_PROVIDER: str = ""
+    VALIDATION_AGENT_MODEL_NAME: str = ""
 
     # API settings
     API_TITLE: str = "SLM-Lab Chat API"
@@ -89,6 +91,13 @@ class Settings(BaseSettings):
     DOCUMENT_AGENT_SEARCH_CHUNKS_TOOL: bool = False
     DOCUMENT_AGENT_DELEGATE_TOOL: bool = False
     DOCUMENT_AGENT_WEB_PAGE_CONTENT_TOOL: bool = False
+
+    # Validation Agent Tool Toggles
+    VALIDATION_AGENT_DATE_TIME_TOOL: bool = False
+    VALIDATION_AGENT_BRAVE_SEARCH_TOOL: bool = False
+    VALIDATION_AGENT_OLLAMA_WEB_SEARCH_TOOL: bool = False
+    VALIDATION_AGENT_OLLAMA_WEB_FETCH_TOOL: bool = False
+    VALIDATION_AGENT_WEB_PAGE_CONTENT_TOOL: bool = False
 
     # PostgreSQL settings
     POSTGRES_URL: str = "postgresql+asyncpg://slmlab:slmlab@localhost:5432/slmlab"

@@ -13,7 +13,12 @@ from pydantic import BaseModel, Field, ValidationError
 from AI.agents import init_agent
 from AI.prompts import GENERAL_AGENT_PROMPT, DOCUMENT_AGENT_PROMPT
 from AI.prompts.extraction_prompt import build_extraction_prompt
-from AI.tools import get_enabled_tools, get_document_agent_enabled_tools
+from AI.prompts.validation_agent_prompt import VALIDATION_AGENT_PROMPT
+from AI.tools import (
+    get_enabled_tools,
+    get_document_agent_enabled_tools,
+    get_validation_agent_enabled_tools,
+)
 from BE.archive_store import (
     PostgresArchiveStore,
     create_store as _create_archive_store,
@@ -298,6 +303,7 @@ async def lifespan(app: FastAPI):
         maintain_history=True,
         provider=settings.GENERAL_AGENT_LLM_PROVIDER or None,
         model_name=settings.GENERAL_AGENT_MODEL_NAME or None,
+        agent_name="general_agent",
     )
 
     doc_tools = get_document_agent_enabled_tools(settings)
@@ -310,6 +316,20 @@ async def lifespan(app: FastAPI):
         maintain_history=True,
         provider=settings.DOCUMENT_AGENT_LLM_PROVIDER or None,
         model_name=settings.DOCUMENT_AGENT_MODEL_NAME or None,
+        agent_name="document_agent",
+    )
+
+    val_tools = get_validation_agent_enabled_tools(settings)
+    val_tool_names = [t.name if hasattr(t, "name") else t.__name__ for t in val_tools]
+    logger.info("Validation agent tools enabled: %s", val_tool_names)
+
+    app.state.validation_agent = init_agent(
+        system_prompt=VALIDATION_AGENT_PROMPT,
+        tools=val_tools,
+        maintain_history=False,
+        provider=settings.VALIDATION_AGENT_LLM_PROVIDER or None,
+        model_name=settings.VALIDATION_AGENT_MODEL_NAME or None,
+        agent_name="validation_agent",
     )
 
     # Register agents for cross-agent delegation
@@ -317,6 +337,11 @@ async def lifespan(app: FastAPI):
 
     registry.register("general_agent", app.state.general_agent)
     registry.register("document_agent", app.state.document_agent)
+    registry.register(
+        "validation_agent",
+        app.state.validation_agent,
+        allowed_callers={"general_agent"},
+    )
 
     # Log service URLs for easy reference
     logger.info("=" * 60)

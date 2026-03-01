@@ -19,11 +19,20 @@ logger = setup_logger(__name__)
 _active_delegations: set[tuple[str, str]] = set()
 
 
-async def _run_delegation(agent_name: str, prompt: str, user_id: str) -> str:
+async def _run_delegation(
+    agent_name: str, prompt: str, user_id: str, caller_name: str = ""
+) -> str:
     """Execute the delegation inside the event loop with circular-call protection."""
     agent = registry.get(agent_name)
     if agent is None:
         return f"Error: Agent '{agent_name}' not found in registry."
+
+    allowed = registry.get_allowed_callers(agent_name)
+    if allowed is not None and caller_name not in allowed:
+        return (
+            f"Error: Agent '{agent_name}' can only be called by "
+            f"{', '.join(sorted(allowed))}. Current caller: '{caller_name}'."
+        )
 
     key = (user_id, agent_name)
     if key in _active_delegations:
@@ -81,15 +90,17 @@ async def delegate_to_agent_tool(agent_name: str, prompt: str) -> str:
             f"Available agents: {', '.join(available) if available else '(none)'}."
         )
 
-    # Extract user_id from config
+    # Extract user_id and caller identity from config
     config = get_config()
-    user_id: str = config.get("configurable", {}).get("user_id", "")
+    configurable = config.get("configurable", {})
+    user_id: str = configurable.get("user_id", "")
+    caller_name: str = configurable.get("agent_name", "")
     if not user_id:
         logger.warning("No user_id in config — cannot delegate")
         return "Error: Unable to determine user identity for delegation."
 
     writer(f"Running delegation to {agent_name}…")
-    result = await _run_delegation(agent_name, prompt, user_id)
+    result = await _run_delegation(agent_name, prompt, user_id, caller_name)
 
     logger.info(
         "delegate_to_agent_tool complete (target=%s, response_length=%d)",
