@@ -307,62 +307,64 @@ export default function ExtractionFieldsTable({
 
   return (
     <div className="flex flex-col gap-4 h-full">
-      <div className="flex gap-4">
-        <div className="w-1/2">
-          <label className="block text-xs text-[#94a3b8] mb-1">
-            Load Document
-          </label>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf"
-            className="hidden"
-            data-testid="file-input"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onLoadDocument(file);
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-left truncate text-[#e2e8f0] hover:border-[#7c3aed] focus:outline-none focus:border-[#7c3aed] transition-colors"
-          >
-            {documentName || "Choose File"}
-          </button>
-        </div>
-
-        <div className="w-1/2">
-          <label
-            htmlFor="schema-select"
-            className="block text-xs text-[#94a3b8] mb-1"
-          >
-            Extraction Schema
-          </label>
-          {loading ? (
-            <p className="text-[#94a3b8] text-sm py-2">Loading schemas...</p>
-          ) : schemas.length === 0 ? (
-            <p className="text-[#94a3b8] text-sm py-2">
-              No schemas available. Create one in the Schemas tab.
-            </p>
-          ) : (
-            <select
-              id="schema-select"
-              value={selectedSchemaId}
-              onChange={handleSchemaChange}
-              className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
+      {!analysisSessionId && (
+        <div className="flex gap-4">
+          <div className="w-1/2">
+            <label className="block text-xs text-[#94a3b8] mb-1">
+              Load Document
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              data-testid="file-input"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onLoadDocument(file);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-left truncate text-[#e2e8f0] hover:border-[#7c3aed] focus:outline-none focus:border-[#7c3aed] transition-colors"
             >
-              {schemas.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-      </div>
+              {documentName || "Choose File"}
+            </button>
+          </div>
 
-      {belowControls && (
+          <div className="w-1/2">
+            <label
+              htmlFor="schema-select"
+              className="block text-xs text-[#94a3b8] mb-1"
+            >
+              Extraction Schema
+            </label>
+            {loading ? (
+              <p className="text-[#94a3b8] text-sm py-2">Loading schemas...</p>
+            ) : schemas.length === 0 ? (
+              <p className="text-[#94a3b8] text-sm py-2">
+                No schemas available. Create one in the Schemas tab.
+              </p>
+            ) : (
+              <select
+                id="schema-select"
+                value={selectedSchemaId}
+                onChange={handleSchemaChange}
+                className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
+              >
+                {schemas.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!analysisSessionId && belowControls && (
         <div className="flex justify-start">{belowControls}</div>
       )}
 
@@ -386,7 +388,7 @@ export default function ExtractionFieldsTable({
                 </th>
                 {hasValidation && (
                   <th className="text-left py-2 px-2 border-b border-[#334155] w-[15%]">
-                    Source
+                    Validated
                   </th>
                 )}
               </tr>
@@ -407,7 +409,7 @@ export default function ExtractionFieldsTable({
                                 ? "bg-red-400"
                                 : "bg-yellow-400"
                           }`}
-                          title={vr.validated_value ?? "Not found"}
+                          title={vr.status.replace("_", " ")}
                         />
                       )}
                     </td>
@@ -441,25 +443,19 @@ export default function ExtractionFieldsTable({
                     </td>
                     {hasValidation && (
                       <td className="py-2 px-2 text-xs text-[#94a3b8] align-top">
-                        {vr?.sources[0] ? (
+                        <span>{vr?.validated_value ?? "–"}</span>
+                        {vr?.sources?.map((url, idx) => (
                           <a
-                            href={vr.sources[0]}
+                            key={idx}
+                            href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[#7c3aed] hover:underline truncate block max-w-[140px]"
-                            title={vr.sources[0]}
+                            title={url}
+                            className="text-[#7c3aed] hover:underline ml-1 text-xs"
                           >
-                            {(() => {
-                              try {
-                                return new URL(vr.sources[0]).hostname;
-                              } catch {
-                                return vr.sources[0];
-                              }
-                            })()}
+                            [{idx + 1}]
                           </a>
-                        ) : (
-                          "–"
-                        )}
+                        ))}
                       </td>
                     )}
                   </tr>
@@ -509,78 +505,82 @@ export default function ExtractionFieldsTable({
         </button>
       ) : (
         <div className="mt-auto flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={() => setShowValidationPanel((prev) => !prev)}
-            data-testid="validate-toggle-button"
-            className="w-full rounded-lg bg-[#7c3aed] text-white py-2.5 text-sm font-medium hover:bg-[#6d28d9] hover:shadow-[0_0_12px_rgba(124,58,237,0.4)] transition-all duration-200"
-          >
-            {showValidationPanel ? "Validate ▴" : "Validate ▾"}
-          </button>
-
-          {showValidationPanel && (
-            <div className="border-t border-[#334155] pt-3 flex flex-col gap-2">
-              <label className="block text-xs text-[#94a3b8]">
-                Validation URLs
-              </label>
-              <div className="flex flex-col gap-1">
-                {validationUrls.map((url, idx) => (
-                  <div key={idx} className="flex gap-1 items-center">
-                    <input
-                      type="url"
-                      value={url}
-                      onChange={(e) => {
-                        const next = [...validationUrls];
-                        next[idx] = e.target.value;
-                        setValidationUrls(next);
-                      }}
-                      placeholder="https://example.com"
-                      className="flex-1 bg-[#1e293b] border border-[#334155] rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
-                      data-testid={`validation-url-input-${idx}`}
-                    />
-                    {validationUrls.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setValidationUrls((prev) =>
-                            prev.filter((_, i) => i !== idx),
-                          );
-                        }}
-                        className="text-[#64748b] hover:text-red-400 transition-colors px-1"
-                        aria-label="Remove URL"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {validationUrls.length < MAX_VALIDATION_URLS && (
-                <button
-                  type="button"
-                  onClick={() => setValidationUrls((prev) => [...prev, ""])}
-                  className="text-xs text-[#64748b] hover:text-[#7c3aed] transition-colors"
-                  data-testid="add-url-button"
-                >
-                  + Add URL
-                </button>
-              )}
+          {!hasValidation && (
+            <>
               <button
                 type="button"
-                onClick={handleValidate}
-                disabled={!canValidate}
-                className="w-full rounded-lg border border-[#7c3aed] text-[#7c3aed] py-2 text-sm font-medium hover:bg-[#7c3aed] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
-                data-testid="validate-button"
+                onClick={() => setShowValidationPanel((prev) => !prev)}
+                data-testid="validate-toggle-button"
+                className="w-full rounded-lg bg-[#7c3aed] text-white py-2.5 text-sm font-medium hover:bg-[#6d28d9] hover:shadow-[0_0_12px_rgba(124,58,237,0.4)] transition-all duration-200"
               >
-                {validating ? "Validating…" : "Run Validation"}
+                {showValidationPanel ? "Validate ▾" : "Validate ▴"}
               </button>
-              {validating && validationStatusText && (
-                <p className="text-xs text-[#94a3b8]">{validationStatusText}</p>
+
+              {showValidationPanel && (
+                <div className="border-t border-[#334155] pt-3 flex flex-col gap-2">
+                  <label className="block text-xs text-[#94a3b8]">
+                    Validation URLs
+                  </label>
+                  <div className="flex flex-col gap-1">
+                    {validationUrls.map((url, idx) => (
+                      <div key={idx} className="flex gap-1 items-center">
+                        <input
+                          type="url"
+                          value={url}
+                          onChange={(e) => {
+                            const next = [...validationUrls];
+                            next[idx] = e.target.value;
+                            setValidationUrls(next);
+                          }}
+                          placeholder="https://example.com"
+                          className="flex-1 bg-[#1e293b] border border-[#334155] rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
+                          data-testid={`validation-url-input-${idx}`}
+                        />
+                        {validationUrls.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setValidationUrls((prev) =>
+                                prev.filter((_, i) => i !== idx),
+                              );
+                            }}
+                            className="text-[#64748b] hover:text-red-400 transition-colors px-1"
+                            aria-label="Remove URL"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {validationUrls.length < MAX_VALIDATION_URLS && (
+                    <button
+                      type="button"
+                      onClick={() => setValidationUrls((prev) => [...prev, ""])}
+                      className="text-xs text-[#64748b] hover:text-[#7c3aed] transition-colors"
+                      data-testid="add-url-button"
+                    >
+                      + Add URL
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleValidate}
+                    disabled={!canValidate}
+                    className="w-full rounded-lg border border-[#7c3aed] text-[#7c3aed] py-2 text-sm font-medium hover:bg-[#7c3aed] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
+                    data-testid="validate-button"
+                  >
+                    {validating ? "Validating…" : "Run Validation"}
+                  </button>
+                  {validating && validationStatusText && (
+                    <p className="text-xs text-[#94a3b8]">{validationStatusText}</p>
+                  )}
+                  {validationError && (
+                    <p className="text-xs text-red-400">{validationError}</p>
+                  )}
+                </div>
               )}
-              {validationError && (
-                <p className="text-xs text-red-400">{validationError}</p>
-              )}
-            </div>
+            </>
           )}
 
           <button

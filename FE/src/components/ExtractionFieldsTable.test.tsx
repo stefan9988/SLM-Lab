@@ -861,8 +861,8 @@ describe("ExtractionFieldsTable", () => {
       const user = userEvent.setup();
       await runAnalysis(user);
 
-      // No source column before validation
-      expect(screen.queryByText("Source")).not.toBeInTheDocument();
+      // No validated column before validation
+      expect(screen.queryByText("Validated")).not.toBeInTheDocument();
 
       mockStreamValidate.mockImplementation(() =>
         makeValidateGen([
@@ -888,7 +888,7 @@ describe("ExtractionFieldsTable", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText("Source")).toBeInTheDocument();
+        expect(screen.getByText("Validated")).toBeInTheDocument();
       });
     });
 
@@ -920,13 +920,173 @@ describe("ExtractionFieldsTable", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText("Source")).toBeInTheDocument();
+        expect(screen.getByText("Validated")).toBeInTheDocument();
       });
 
       await user.click(screen.getByText("Clear"));
 
-      expect(screen.queryByText("Source")).not.toBeInTheDocument();
+      expect(screen.queryByText("Validated")).not.toBeInTheDocument();
       expect(screen.queryByTestId("validate-toggle-button")).not.toBeInTheDocument();
+    });
+
+    it("hides Load Document and Extraction Schema after analysis completes", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      expect(screen.queryByText("Load Document")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Extraction Schema")).not.toBeInTheDocument();
+    });
+
+    it("shows Load Document and Extraction Schema again after Clear", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      await user.click(screen.getByText("Clear"));
+
+      await waitFor(() => {
+        expect(screen.getByText("Load Document")).toBeInTheDocument();
+        expect(screen.getByLabelText("Extraction Schema")).toBeInTheDocument();
+      });
+    });
+
+    it("hides Validate toggle after validation completes", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      mockStreamValidate.mockImplementation(() =>
+        makeValidateGen([
+          {
+            type: "validation_complete",
+            content: [
+              {
+                claim: "vendor: Acme Corp",
+                status: "correct",
+                validated_value: "Acme Corporation",
+                sources: ["https://acme.example.com/about"],
+              },
+            ],
+          },
+        ]),
+      );
+
+      const urlInput = screen.getByTestId("validation-url-input-0");
+      await user.type(urlInput, "https://acme.example.com");
+
+      await act(async () => {
+        await user.click(screen.getByTestId("validate-button"));
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("validate-toggle-button")).not.toBeInTheDocument();
+      });
+    });
+
+    it("shows validated_value in Validated column", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      mockStreamValidate.mockImplementation(() =>
+        makeValidateGen([
+          {
+            type: "validation_complete",
+            content: [
+              {
+                claim: "vendor: Acme Corp",
+                status: "correct",
+                validated_value: "Acme Corporation",
+                sources: ["https://acme.example.com/about"],
+              },
+            ],
+          },
+        ]),
+      );
+
+      const urlInput = screen.getByTestId("validation-url-input-0");
+      await user.type(urlInput, "https://acme.example.com");
+
+      await act(async () => {
+        await user.click(screen.getByTestId("validate-button"));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Acme Corporation")).toBeInTheDocument();
+      });
+    });
+
+    it("shows citation links with source URL tooltips", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      mockStreamValidate.mockImplementation(() =>
+        makeValidateGen([
+          {
+            type: "validation_complete",
+            content: [
+              {
+                claim: "vendor: Acme Corp",
+                status: "correct",
+                validated_value: "Acme Corporation",
+                sources: ["https://acme.example.com/about"],
+              },
+            ],
+          },
+        ]),
+      );
+
+      const urlInput = screen.getByTestId("validation-url-input-0");
+      await user.type(urlInput, "https://acme.example.com");
+
+      await act(async () => {
+        await user.click(screen.getByTestId("validate-button"));
+      });
+
+      await waitFor(() => {
+        const citationLink = screen.getByText("[1]");
+        expect(citationLink).toBeInTheDocument();
+        expect(citationLink).toHaveAttribute("title", "https://acme.example.com/about");
+        expect(citationLink).toHaveAttribute("href", "https://acme.example.com/about");
+      });
+    });
+
+    it("status dot title shows status label not validated value", async () => {
+      const user = userEvent.setup();
+      await runAnalysis(user);
+
+      mockStreamValidate.mockImplementation(() =>
+        makeValidateGen([
+          {
+            type: "validation_complete",
+            content: [
+              {
+                claim: "vendor: Acme Corp",
+                status: "correct",
+                validated_value: "Acme Corporation",
+                sources: ["https://acme.example.com/about"],
+              },
+              {
+                claim: "amount: 1000",
+                status: "not_found",
+                validated_value: null,
+                sources: [],
+              },
+            ],
+          },
+        ]),
+      );
+
+      const urlInput = screen.getByTestId("validation-url-input-0");
+      await user.type(urlInput, "https://acme.example.com");
+
+      await act(async () => {
+        await user.click(screen.getByTestId("validate-button"));
+      });
+
+      await waitFor(() => {
+        const greenDot = document.querySelector(".bg-green-400");
+        expect(greenDot).toHaveAttribute("title", "correct");
+        const yellowDot = document.querySelector(".bg-yellow-400");
+        expect(yellowDot).toHaveAttribute("title", "not found");
+      });
     });
   });
 });
