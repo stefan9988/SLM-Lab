@@ -883,13 +883,7 @@ async def validate_stream(
             yield f"data: {json.dumps({'type': 'validation_complete', 'content': results})}\n\n"
 
             # Save messages to the analysis session for chat continuity
-            ai_summary = (
-                f"Validation complete. Checked {len(results)} field(s) against "
-                f"{len(body.validation_urls)} URL(s). Results: "
-                + ", ".join(
-                    f"{r.get('claim', '?')}: {r.get('status', '?')}" for r in results
-                )
-            )
+            ai_summary = json.dumps(results)
             try:
                 general_agent = request.app.state.general_agent
                 await general_agent.append_to_history(

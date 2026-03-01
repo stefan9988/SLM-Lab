@@ -240,8 +240,12 @@ class TestValidateStream:
         assert len(messages_arg) == 2
         assert isinstance(messages_arg[0], HumanMessage)
         assert isinstance(messages_arg[1], AIMessage)
-        assert "Validation complete" in messages_arg[1].content
-        assert "URL(s)" in messages_arg[1].content
+        import json as json_module
+        parsed = json_module.loads(messages_arg[1].content)
+        assert isinstance(parsed, list)
+        assert len(parsed) > 0
+        assert "claim" in parsed[0]
+        assert "status" in parsed[0]
 
     @patch("BE.app.settings")
     def test_persists_result_when_postgres_enabled(
