@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
+from langchain_core.messages import AIMessage, HumanMessage
+
 from AI.agents import init_agent
 from AI.prompts import build_general_agent_prompt, DOCUMENT_AGENT_PROMPT
 from AI.agents.metadata import get_delegatable_agents
@@ -881,37 +883,22 @@ async def validate_stream(
             yield f"data: {json.dumps({'type': 'validation_complete', 'content': results})}\n\n"
 
             # Save messages to the analysis session for chat continuity
-            archive = _create_archive_store()
-            if archive is not None:
-                now_iso = datetime.now(timezone.utc).isoformat()
-                user_msg = {
-                    "type": "human",
-                    "content": prompt,
-                    "timestamp": now_iso,
-                }
-                ai_summary = (
-                    f"Validation complete. Checked {len(results)} field(s) against "
-                    f"{len(body.validation_urls)} URL(s). Results: "
-                    + ", ".join(
-                        f"{r.get('claim', '?')}: {r.get('status', '?')}"
-                        for r in results
-                    )
+            ai_summary = (
+                f"Validation complete. Checked {len(results)} field(s) against "
+                f"{len(body.validation_urls)} URL(s). Results: "
+                + ", ".join(
+                    f"{r.get('claim', '?')}: {r.get('status', '?')}" for r in results
                 )
-                ai_msg = {
-                    "type": "ai",
-                    "content": ai_summary,
-                    "timestamp": now_iso,
-                }
-                try:
-                    await archive.save_messages(
-                        body.session_id,
-                        [user_msg, ai_msg],
-                        user_id=user.id,
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Failed to save validation messages to archive: %s", exc
-                    )
+            )
+            try:
+                general_agent = request.app.state.general_agent
+                await general_agent.append_to_history(
+                    body.session_id,
+                    [HumanMessage(content=prompt), AIMessage(content=ai_summary)],
+                    user_id=user.id,
+                )
+            except Exception as exc:
+                logger.warning("Failed to save validation messages to history: %s", exc)
 
             # Persist structured results
             if settings.POSTGRES_ENABLED:

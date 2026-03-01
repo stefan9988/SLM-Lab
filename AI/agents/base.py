@@ -210,6 +210,17 @@ class Agent:
         """Load session history from the archive if the session store is empty."""
         await warm_session_from_archive(self._store, session_id, user_id=user_id)
 
+    async def append_to_history(
+        self, session_id: str, messages: list, user_id: str = ""
+    ) -> None:
+        """Append LangChain messages to the existing session history."""
+        await self.warm_session(session_id, user_id=user_id)
+        existing = await self._store.get_messages(session_id, user_id=user_id)
+        all_messages = list(existing) + list(messages)
+        await self._store.save_messages(
+            session_id, all_messages, self._model_name, self._provider, user_id=user_id
+        )
+
     async def clear_history(self, session_id: str, user_id: str = "") -> None:
         """Clear the conversation history for a session."""
         await self._store.clear(session_id, user_id=user_id)

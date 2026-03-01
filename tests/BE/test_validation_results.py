@@ -70,6 +70,7 @@ def _make_minimal_agent():
     agent.get_history = AsyncMock(return_value=[])
     agent.clear_history = AsyncMock()
     agent.warm_session = AsyncMock()
+    agent.append_to_history = AsyncMock()
     return agent
 
 
@@ -146,15 +147,15 @@ class TestValidateStream:
             {"type": "token", "content": AGENT_RESPONSE_JSON},
         ]
 
-    @patch("BE.app._create_archive_store", return_value=None)
     @patch("BE.app.settings")
     def test_streams_validation_complete_event(
         self,
         mock_settings,
-        _mock_archive,
         client_with_validation,
         mock_validation_agent,
     ):
+        from BE.app import app
+
         mock_settings.POSTGRES_ENABLED = False
         mock_validation_agent.stream.return_value = _async_gen(
             self._make_stream_events()
@@ -188,12 +189,64 @@ class TestValidateStream:
         assert results[0]["claim"] == "company_name: Acme Corp"
         assert results[0]["status"] == "correct"
 
-    @patch("BE.app._create_archive_store", return_value=None)
+        mock_general_agent = app.state.general_agent
+        mock_general_agent.append_to_history.assert_awaited_once()
+        call_args = mock_general_agent.append_to_history.call_args
+        assert (
+            call_args.kwargs.get("user_id") == "test-user-id"
+            or call_args.args[2] == "test-user-id"
+        )
+
+    @patch("BE.app.settings")
+    def test_appends_validation_summary_to_agent_history(
+        self,
+        mock_settings,
+        client_with_validation,
+        mock_validation_agent,
+    ):
+        from langchain_core.messages import AIMessage, HumanMessage
+        from BE.app import app
+
+        mock_settings.POSTGRES_ENABLED = False
+        mock_validation_agent.stream.return_value = _async_gen(
+            self._make_stream_events()
+        )
+
+        client_with_validation.post(
+            "/validate-stream",
+            json={
+                "session_id": "sess-history",
+                "validation_urls": ["https://acme.example.com"],
+                "extracted_data": [
+                    {"key": "company_name", "value": "Acme Corp"},
+                ],
+            },
+        )
+
+        mock_general_agent = app.state.general_agent
+        mock_general_agent.append_to_history.assert_awaited_once()
+        call_args = mock_general_agent.append_to_history.call_args
+
+        session_id_arg = (
+            call_args.args[0] if call_args.args else call_args.kwargs.get("session_id")
+        )
+        messages_arg = (
+            call_args.args[1]
+            if len(call_args.args) > 1
+            else call_args.kwargs.get("messages")
+        )
+
+        assert session_id_arg == "sess-history"
+        assert len(messages_arg) == 2
+        assert isinstance(messages_arg[0], HumanMessage)
+        assert isinstance(messages_arg[1], AIMessage)
+        assert "Validation complete" in messages_arg[1].content
+        assert "URL(s)" in messages_arg[1].content
+
     @patch("BE.app.settings")
     def test_persists_result_when_postgres_enabled(
         self,
         mock_settings,
-        _mock_archive,
         client_with_validation,
         mock_validation_agent,
     ):
@@ -222,12 +275,10 @@ class TestValidateStream:
         assert saved_results[0][0] == "sess-persist"
         assert saved_results[0][1] == "test-user-id"
 
-    @patch("BE.app._create_archive_store", return_value=None)
     @patch("BE.app.settings")
     def test_returns_error_event_on_invalid_response(
         self,
         mock_settings,
-        _mock_archive,
         client_with_validation,
         mock_validation_agent,
     ):
