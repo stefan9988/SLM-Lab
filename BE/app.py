@@ -15,7 +15,10 @@ from AI.agents import init_agent
 from AI.prompts import build_general_agent_prompt, DOCUMENT_AGENT_PROMPT
 from AI.agents.metadata import get_delegatable_agents
 from AI.prompts.extraction_prompt import build_extraction_prompt
-from AI.prompts.validation_agent_prompt import VALIDATION_AGENT_PROMPT
+from AI.prompts.validation_agent_prompt import (
+    VALIDATION_AGENT_PROMPT,
+    build_validation_prompt,
+)
 from AI.tools import (
     get_enabled_tools,
     get_document_agent_enabled_tools,
@@ -852,16 +855,7 @@ async def validate_stream(
         len(body.extracted_data),
     )
 
-    url_list = "\n".join(f"- {u}" for u in body.validation_urls)
-    field_list = "\n".join(
-        f"- {item.get('key', '')}: {item.get('value', '')}"
-        for item in body.extracted_data
-    )
-    prompt = (
-        f"Verify the following extracted fields against the provided URLs.\n\n"
-        f"Validation URLs:\n{url_list}\n\n"
-        f"Fields to validate:\n{field_list}"
-    )
+    prompt = build_validation_prompt(body.validation_urls, body.extracted_data)
 
     validation_agent = request.app.state.validation_agent
     val_session_id = f"validate-{uuid4()}"

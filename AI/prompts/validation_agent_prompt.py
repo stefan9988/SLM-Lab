@@ -37,3 +37,18 @@ Example output:
   ]
 }
 """
+
+
+def build_validation_prompt(
+    validation_urls: list[str],
+    extracted_data: list[dict],
+) -> str:
+    url_list = "\n".join(f"- {u}" for u in validation_urls)
+    field_list = "\n".join(
+        f"- {item.get('key', '')}: {item.get('value', '')}" for item in extracted_data
+    )
+    return (
+        f"Verify the following extracted fields against the provided URLs.\n\n"
+        f"Validation URLs:\n{url_list}\n\n"
+        f"Fields to validate:\n{field_list}"
+    )
