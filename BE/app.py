@@ -9,7 +9,7 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -811,10 +811,23 @@ def _parse_extraction_json(text: str) -> list[dict]:
     return json.loads(cleaned[start : end + 1])
 
 
+class ExtractedDataItem(BaseModel):
+    key: str = Field(max_length=255)
+    value: str = ""
+
+
 class ValidateStreamRequest(BaseModel):
     session_id: str = Field(max_length=128, pattern=SESSION_ID_PATTERN)
     validation_urls: list[str] = Field(min_length=1, max_length=5)
-    extracted_data: list[dict]
+    extracted_data: list[ExtractedDataItem]
+
+    @field_validator("validation_urls")
+    @classmethod
+    def validate_urls(cls, urls: list[str]) -> list[str]:
+        for url in urls:
+            if not url.startswith(("http://", "https://")):
+                raise ValueError(f"URL must use http or https scheme: {url!r}")
+        return urls
 
 
 def _parse_validation_json(text: str) -> list[dict]:
@@ -843,6 +856,30 @@ def _parse_validation_json(text: str) -> list[dict]:
     return json.loads(cleaned[start : end + 1])
 
 
+_VALID_STATUSES = frozenset({"correct", "incorrect", "not_found"})
+
+
+def _normalise_validation_results(raw: list) -> list[dict]:
+    """Coerce each validation result to the expected shape, dropping non-dicts."""
+    out = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        status = item.get("status", "not_found")
+        if status not in _VALID_STATUSES:
+            status = "not_found"
+        out.append(
+            {
+                "key": item.get("key") or None,
+                "claim": item.get("claim") or "",
+                "validated_value": item.get("validated_value") or None,
+                "status": status,
+                "sources": item.get("sources") or [],
+            }
+        )
+    return out
+
+
 @app.post("/validate-stream")
 async def validate_stream(
     body: ValidateStreamRequest,
@@ -857,7 +894,10 @@ async def validate_stream(
         len(body.extracted_data),
     )
 
-    prompt = build_validation_prompt(body.validation_urls, body.extracted_data)
+    prompt = build_validation_prompt(
+        body.validation_urls,
+        [item.model_dump() for item in body.extracted_data],
+    )
 
     validation_agent = request.app.state.validation_agent
     val_session_id = f"validate-{uuid4()}"
@@ -879,6 +919,7 @@ async def validate_stream(
 
             # Parse validation results
             results = _parse_validation_json(full_text)
+            results = _normalise_validation_results(results)
 
             yield f"data: {json.dumps({'type': 'validation_complete', 'content': results})}\n\n"
 

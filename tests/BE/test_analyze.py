@@ -4,7 +4,11 @@ import json
 
 import pytest
 
-from BE.app import validate_extraction_keys, _parse_extraction_json
+from BE.app import (
+    validate_extraction_keys,
+    _parse_extraction_json,
+    _normalise_validation_results,
+)
 from AI.prompts.extraction_prompt import build_extraction_prompt
 
 # --- validate_extraction_keys ---
@@ -106,6 +110,67 @@ class TestParseExtractionJson:
     def test_empty_array(self):
         result = _parse_extraction_json("[]")
         assert result == []
+
+
+# --- _normalise_validation_results ---
+
+
+class TestNormaliseValidationResults:
+    def test_valid_results_pass_through_unchanged(self):
+        raw = [
+            {
+                "key": "company_name",
+                "claim": "company_name: Acme",
+                "validated_value": "Acme Corp",
+                "status": "correct",
+                "sources": ["https://example.com"],
+            }
+        ]
+        result = _normalise_validation_results(raw)
+        assert len(result) == 1
+        assert result[0]["key"] == "company_name"
+        assert result[0]["claim"] == "company_name: Acme"
+        assert result[0]["validated_value"] == "Acme Corp"
+        assert result[0]["status"] == "correct"
+        assert result[0]["sources"] == ["https://example.com"]
+
+    def test_missing_fields_get_defaults(self):
+        raw = [{}]
+        result = _normalise_validation_results(raw)
+        assert len(result) == 1
+        assert result[0]["key"] is None
+        assert result[0]["claim"] == ""
+        assert result[0]["validated_value"] is None
+        assert result[0]["status"] == "not_found"
+        assert result[0]["sources"] == []
+
+    def test_invalid_status_coerced_to_not_found(self):
+        raw = [{"key": "x", "claim": "x: y", "status": "unknown_status"}]
+        result = _normalise_validation_results(raw)
+        assert result[0]["status"] == "not_found"
+
+    def test_all_valid_statuses_accepted(self):
+        for status in ("correct", "incorrect", "not_found"):
+            raw = [{"status": status}]
+            result = _normalise_validation_results(raw)
+            assert result[0]["status"] == status
+
+    def test_non_dict_items_are_skipped(self):
+        raw = ["a string", 42, None, {"key": "kept", "status": "correct"}]
+        result = _normalise_validation_results(raw)
+        assert len(result) == 1
+        assert result[0]["key"] == "kept"
+
+    def test_empty_string_fields_become_defaults(self):
+        raw = [{"key": "", "claim": "", "validated_value": "", "sources": None}]
+        result = _normalise_validation_results(raw)
+        assert result[0]["key"] is None
+        assert result[0]["claim"] == ""
+        assert result[0]["validated_value"] is None
+        assert result[0]["sources"] == []
+
+    def test_empty_list_returns_empty(self):
+        assert _normalise_validation_results([]) == []
 
 
 # --- build_extraction_prompt ---

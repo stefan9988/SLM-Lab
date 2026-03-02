@@ -350,6 +350,95 @@ class TestValidationResultSecurity:
         assert resp.json() == {"results": None}
 
 
+class TestValidateStreamInputValidation:
+    def test_non_url_string_in_validation_urls_returns_422(
+        self, client_with_validation
+    ):
+        resp = client_with_validation.post(
+            "/validate-stream",
+            json={
+                "session_id": "sess-bad-url",
+                "validation_urls": ["not-a-url"],
+                "extracted_data": [{"key": "x", "value": "y"}],
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_ftp_url_in_validation_urls_returns_422(self, client_with_validation):
+        resp = client_with_validation.post(
+            "/validate-stream",
+            json={
+                "session_id": "sess-ftp",
+                "validation_urls": ["ftp://example.com/file.txt"],
+                "extracted_data": [{"key": "x", "value": "y"}],
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_file_url_in_validation_urls_returns_422(self, client_with_validation):
+        resp = client_with_validation.post(
+            "/validate-stream",
+            json={
+                "session_id": "sess-file",
+                "validation_urls": ["file:///etc/passwd"],
+                "extracted_data": [{"key": "x", "value": "y"}],
+            },
+        )
+        assert resp.status_code == 422
+
+    @patch("BE.app.settings")
+    def test_valid_http_and_https_urls_accepted(
+        self, mock_settings, client_with_validation, mock_validation_agent
+    ):
+        mock_settings.POSTGRES_ENABLED = False
+        mock_validation_agent.stream.return_value = _async_gen(
+            [{"type": "token", "content": json.dumps({"results": []})}]
+        )
+        resp = client_with_validation.post(
+            "/validate-stream",
+            json={
+                "session_id": "sess-valid-urls",
+                "validation_urls": [
+                    "http://example.com",
+                    "https://secure.example.com",
+                ],
+                "extracted_data": [{"key": "x", "value": "y"}],
+            },
+        )
+        assert resp.status_code == 200
+
+    def test_extracted_data_item_missing_key_returns_422(self, client_with_validation):
+        resp = client_with_validation.post(
+            "/validate-stream",
+            json={
+                "session_id": "sess-no-key",
+                "validation_urls": ["https://example.com"],
+                "extracted_data": [{"value": "some value"}],
+            },
+        )
+        assert resp.status_code == 422
+
+    @patch("BE.app.settings")
+    def test_extracted_data_item_with_extra_fields_accepted(
+        self, mock_settings, client_with_validation, mock_validation_agent
+    ):
+        mock_settings.POSTGRES_ENABLED = False
+        mock_validation_agent.stream.return_value = _async_gen(
+            [{"type": "token", "content": json.dumps({"results": []})}]
+        )
+        resp = client_with_validation.post(
+            "/validate-stream",
+            json={
+                "session_id": "sess-extra-fields",
+                "validation_urls": ["https://example.com"],
+                "extracted_data": [
+                    {"key": "x", "value": "y", "unexpected_field": "ignored"}
+                ],
+            },
+        )
+        assert resp.status_code == 200
+
+
 class TestParseValidationJson:
     def test_parses_object_with_results_key(self):
         from BE.app import _parse_validation_json
