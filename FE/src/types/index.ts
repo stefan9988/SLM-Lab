@@ -77,6 +77,7 @@ export interface ModelInfo {
 }
 
 export interface ValidationResultItem {
+  key: string | null;
   claim: string;
   status: 'correct' | 'incorrect' | 'not_found';
   validated_value: string | null;

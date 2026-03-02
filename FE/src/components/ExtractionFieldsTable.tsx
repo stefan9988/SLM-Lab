@@ -73,7 +73,7 @@ export default function ExtractionFieldsTable({
       if (!items) return;
       const mapped: ValidationResults = {};
       for (const item of items) {
-        const key = item.claim.split(": ")[0];
+        const key = item.key ?? item.claim.split(": ")[0];
         mapped[key] = item;
       }
       setValidationResults(mapped);
@@ -265,7 +265,7 @@ export default function ExtractionFieldsTable({
             const items = event.content as import("../types").ValidationResultItem[];
             const mapped: ValidationResults = {};
             for (const item of items) {
-              const key = item.claim.split(": ")[0];
+              const key = item.key ?? item.claim.split(": ")[0];
               mapped[key] = item;
             }
             setValidationResults(mapped);

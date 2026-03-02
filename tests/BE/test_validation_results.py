@@ -26,12 +26,14 @@ MOCK_USER_2 = UserInfo(
 
 SAMPLE_RESULTS = [
     {
+        "key": "company_name",
         "claim": "company_name: Acme Corp",
         "status": "correct",
         "validated_value": "Acme Corporation",
         "sources": ["https://acme.example.com/about"],
     },
     {
+        "key": "founded_year",
         "claim": "founded_year: 1990",
         "status": "incorrect",
         "validated_value": "1985",
@@ -241,6 +243,7 @@ class TestValidateStream:
         assert isinstance(messages_arg[0], HumanMessage)
         assert isinstance(messages_arg[1], AIMessage)
         import json as json_module
+
         parsed = json_module.loads(messages_arg[1].content)
         assert isinstance(parsed, list)
         assert len(parsed) > 0

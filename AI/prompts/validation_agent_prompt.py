@@ -16,6 +16,7 @@ Output format:
 - Always respond with a single valid JSON object and nothing else — no prose, no markdown fences.
 - The top-level key is "results", whose value is an array with one entry per claim.
 - Each entry must have exactly these fields:
+    - "key"             : the schema key associated with this claim, or null if none.
     - "claim"           : the original claim text as provided.
     - "validated_value" : the correct value found via web search, or null if not found.
     - "status"          : one of "correct", "incorrect", or "not_found".
@@ -29,6 +30,7 @@ Example output:
 {
   "results": [
     {
+      "key": "paris_capital",
       "claim": "Paris is the capital of France",
       "validated_value": "Paris",
       "status": "correct",
@@ -45,7 +47,8 @@ def build_validation_prompt(
 ) -> str:
     url_list = "\n".join(f"- {u}" for u in validation_urls)
     field_list = "\n".join(
-        f"- {item.get('key', '')}: {item.get('value', '')}" for item in extracted_data
+        f"- key: {item.get('key', '')} | value: {item.get('value', '')}"
+        for item in extracted_data
     )
     return (
         f"Verify the following extracted fields against the provided URLs.\n\n"
