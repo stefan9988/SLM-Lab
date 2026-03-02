@@ -13,7 +13,7 @@ def get_current_date_and_time() -> str:
     """Returns the current date and time as a formatted string."""
     logger.info("get_current_date_and_time invoked")
     writer = get_stream_writer()
-    writer("Fetching current date and time...")
+    writer("Getting current date and time…")
     result = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logger.debug("get_current_date_and_time result: %s", result)
     return result

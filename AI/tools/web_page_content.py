@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 import httpx
 from bs4 import BeautifulSoup
 from langchain_core.tools import tool
@@ -43,7 +45,7 @@ async def web_page_content_tool(url: str) -> str:
     """
     logger.info("web_page_content_tool invoked (url=%s)", url)
     writer = get_stream_writer()
-    writer(f"Fetching web page: {url}")
+    writer(f"Fetching {urlparse(url).netloc}…")
 
     if not url.startswith(("http://", "https://")):
         return "Error: URL must start with http:// or https://"

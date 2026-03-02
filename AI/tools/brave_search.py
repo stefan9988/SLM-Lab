@@ -29,7 +29,7 @@ def brave_search_tool(query: str, count: int = 3) -> str:
     """
     logger.info("brave_search_tool invoked (query=%s, count=%d)", query, count)
     writer = get_stream_writer()
-    writer(f"Searching the web for: {query} (count={count})")
+    writer(f'Searching for "{query}"…')
 
     try:
         result = _get_brave(count).invoke(query)

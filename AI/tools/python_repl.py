@@ -32,11 +32,11 @@ def python_repl_tool(code: str) -> str:
     - If you want to see a result, you MUST use print()."""
     logger.info("python_repl_tool invoked (code=%s)", code[:100])
     writer = get_stream_writer()
-    writer("Executing Python code")
+    writer("Running Python code…")
     try:
         result = _get_repl().run(code)
         logger.info("python_repl_tool complete (result_length=%d)", len(result))
-        writer("Execution complete")
+        writer("Done")
         return result
     except Exception:
         logger.error("python_repl_tool failed", exc_info=True)

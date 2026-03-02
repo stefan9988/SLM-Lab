@@ -79,7 +79,7 @@ async def delegate_to_agent_tool(agent_name: str, prompt: str) -> str:
         len(prompt),
     )
     writer = get_stream_writer()
-    writer(f"Delegating to agent: {agent_name}")
+    writer(f"Asking {agent_name} for help…")
 
     # Validate agent exists
     if registry.get(agent_name) is None:
@@ -99,7 +99,6 @@ async def delegate_to_agent_tool(agent_name: str, prompt: str) -> str:
         logger.warning("No user_id in config — cannot delegate")
         return "Error: Unable to determine user identity for delegation."
 
-    writer(f"Running delegation to {agent_name}…")
     result = await _run_delegation(agent_name, prompt, user_id, caller_name)
 
     logger.info(
@@ -107,5 +106,5 @@ async def delegate_to_agent_tool(agent_name: str, prompt: str) -> str:
         agent_name,
         len(result),
     )
-    writer("Delegation complete")
+    writer(f"Response received from {agent_name}")
     return result

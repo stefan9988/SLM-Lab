@@ -38,7 +38,7 @@ async def search_chunks_tool(
         len(queries),
     )
     writer = get_stream_writer()
-    writer(f"Searching document chunks (file_id={file_id})")
+    writer("Searching document…")
 
     if not _UUID_RE.match(file_id):
         logger.warning("Invalid UUID format: %s", file_id)
@@ -70,7 +70,7 @@ async def search_chunks_tool(
         return f"Error: Failed to search document — {exc}"
 
     if not results:
-        writer("No matching chunks found")
+        writer("No matching sections found")
         return "No matching chunks found for the given queries."
 
     parts = []
@@ -83,7 +83,9 @@ async def search_chunks_tool(
             f"{r['chunk_text']}"
         )
 
-    writer(f"Found {len(results)} matching chunks")
+    writer(
+        f"Found {len(results)} relevant {'section' if len(results) == 1 else 'sections'}"
+    )
     logger.info(
         "search_chunks_tool complete (file_id=%s, results=%d)",
         file_id,

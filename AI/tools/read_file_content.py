@@ -29,7 +29,7 @@ async def read_file_content_tool(file_id: str) -> str:
     """
     logger.info("read_file_content_tool invoked (file_id=%s)", file_id)
     writer = get_stream_writer()
-    writer(f"Reading uploaded file (id={file_id})")
+    writer("Reading file…")
 
     if not _UUID_RE.match(file_id):
         logger.warning("Invalid UUID format: %s", file_id)
@@ -64,5 +64,5 @@ async def read_file_content_tool(file_id: str) -> str:
         file_id,
         len(content),
     )
-    writer("File read complete")
+    writer("File read")
     return content
