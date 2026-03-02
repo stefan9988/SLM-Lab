@@ -327,9 +327,12 @@ export default function ExtractionFieldsTable({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-left truncate text-[#e2e8f0] hover:border-[#7c3aed] focus:outline-none focus:border-[#7c3aed] transition-colors"
+              className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-left text-[#e2e8f0] hover:border-[#7c3aed] focus:outline-none focus:border-[#7c3aed] transition-colors flex items-center gap-2"
             >
-              {documentName || "Choose File"}
+              <svg className="w-4 h-4 flex-shrink-0 text-[#94a3b8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              <span className="truncate">{documentName || "Choose File"}</span>
             </button>
           </div>
 
@@ -397,23 +400,25 @@ export default function ExtractionFieldsTable({
               {rows.map((row, i) => {
                 const vr = validationResults[row.fieldKey];
                 return (
-                  <tr key={row.fieldKey} className="border-b border-[#1e293b]">
+                  <tr key={row.fieldKey} className="border-b border-[#1e293b] hover:bg-white/[0.02] transition-colors">
                     <td className="py-2 px-2 text-[#e2e8f0] font-medium align-top">
-                      <span>{row.fieldKey}</span>
-                      {vr && (
-                        <span
-                          className={`inline-block w-2 h-2 rounded-full ml-2 align-middle ${
-                            vr.status === "correct"
-                              ? "bg-green-400"
-                              : vr.status === "incorrect"
-                                ? "bg-red-400"
-                                : "bg-yellow-400"
-                          }`}
-                          title={vr.status.replace("_", " ")}
-                        />
-                      )}
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-mono text-xs text-[#c4b5fd]">{row.fieldKey}</span>
+                        {vr && (
+                          <span
+                            className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ring-1 ring-offset-1 ring-offset-[#0f172a] ${
+                              vr.status === "correct"
+                                ? "bg-green-400 ring-green-400"
+                                : vr.status === "incorrect"
+                                  ? "bg-red-400 ring-red-400"
+                                  : "bg-yellow-400 ring-yellow-400"
+                            }`}
+                            title={vr.status.replace("_", " ")}
+                          />
+                        )}
+                      </div>
                     </td>
-                    <td className="py-1 px-2">
+                    <td className={`py-1 px-2 ${analyzing && !row.extraction ? "animate-pulse opacity-50" : ""}`}>
                       <AutoResizeTextarea
                         value={row.extraction}
                         onChange={(e) =>
@@ -433,12 +438,14 @@ export default function ExtractionFieldsTable({
                               textToHighlight: row.extraction,
                             })
                           }
-                          className="text-[#7c3aed] hover:underline cursor-pointer bg-transparent border-none p-0 text-sm"
+                          className="inline-flex items-center bg-[#7c3aed]/10 text-[#7c3aed] border border-[#7c3aed]/20 rounded-full px-2 py-0.5 text-xs cursor-pointer hover:bg-[#7c3aed]/20 transition-colors"
                         >
                           {formatLocation(row.location)}
                         </button>
                       ) : (
-                        formatLocation(row.location)
+                        <span className="inline-flex items-center text-[#475569] bg-transparent border border-transparent rounded-full px-2 py-0.5 text-xs">
+                          {formatLocation(row.location)}
+                        </span>
                       )}
                     </td>
                     {hasValidation && (
@@ -501,7 +508,15 @@ export default function ExtractionFieldsTable({
           disabled={!canAnalyze}
           className="mt-auto w-full rounded-lg bg-[#7c3aed] text-white py-2.5 text-sm font-medium hover:bg-[#6d28d9] hover:shadow-[0_0_12px_rgba(124,58,237,0.4)] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
         >
-          {analyzing ? statusText || "Analyzing..." : "Analyze Document"}
+          {analyzing ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+              </svg>
+              {statusText || "Analyzing..."}
+            </span>
+          ) : "Analyze Document"}
         </button>
       ) : (
         <div className="mt-auto flex flex-col gap-3">
@@ -513,7 +528,20 @@ export default function ExtractionFieldsTable({
                 data-testid="validate-toggle-button"
                 className="w-full rounded-lg bg-[#7c3aed] text-white py-2.5 text-sm font-medium hover:bg-[#6d28d9] hover:shadow-[0_0_12px_rgba(124,58,237,0.4)] transition-all duration-200"
               >
-                {showValidationPanel ? "Validate ▾" : "Validate ▴"}
+                <span className="flex items-center justify-center gap-2">
+                  Validate
+                  <svg
+                    className={`w-4 h-4 transition-transform duration-200 ${showValidationPanel ? "rotate-180" : ""}`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </span>
               </button>
 
               {showValidationPanel && (
@@ -533,7 +561,7 @@ export default function ExtractionFieldsTable({
                             setValidationUrls(next);
                           }}
                           placeholder="https://example.com"
-                          className="flex-1 bg-[#1e293b] border border-[#334155] rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
+                          className="flex-1 bg-[#1e293b] border border-[#334155] rounded-lg px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:border-[#7c3aed] transition-colors"
                           data-testid={`validation-url-input-${idx}`}
                         />
                         {validationUrls.length > 1 && (

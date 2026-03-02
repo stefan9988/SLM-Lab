@@ -168,7 +168,10 @@ export default function PdfViewer({ fileUrl, highlight }: Props) {
             className="px-2 py-1 rounded text-sm text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#1e293b] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             title="First page"
           >
-            |&lt;
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="19 20 9 12 19 4"/>
+              <line x1="5" y1="4" x2="5" y2="20"/>
+            </svg>
           </button>
           <button
             onClick={() => goToPage(pageNumber - 1)}
@@ -176,7 +179,9 @@ export default function PdfViewer({ fileUrl, highlight }: Props) {
             className="px-2 py-1 rounded text-sm text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#1e293b] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             title="Previous page"
           >
-            &lt;
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
           </button>
           <input
             type="text"
@@ -194,7 +199,9 @@ export default function PdfViewer({ fileUrl, highlight }: Props) {
             className="px-2 py-1 rounded text-sm text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#1e293b] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             title="Next page"
           >
-            &gt;
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </button>
           <button
             onClick={() => goToPage(numPages)}
@@ -202,7 +209,10 @@ export default function PdfViewer({ fileUrl, highlight }: Props) {
             className="px-2 py-1 rounded text-sm text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#1e293b] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             title="Last page"
           >
-            &gt;|
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="5 4 15 12 5 20"/>
+              <line x1="19" y1="4" x2="19" y2="20"/>
+            </svg>
           </button>
         </div>
       )}

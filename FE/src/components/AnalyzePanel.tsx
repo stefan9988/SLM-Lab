@@ -67,10 +67,12 @@ export default function AnalyzePanel({ onBack, onContinueChat }: Props) {
       <header className="flex items-center gap-3 px-6 py-4 border-b border-[#334155]">
         <button
           onClick={onBack}
-          className="text-[#64748b] hover:text-[#e2e8f0] transition-colors duration-200 text-lg"
+          className="text-[#64748b] hover:text-[#e2e8f0] transition-colors duration-200"
           aria-label="Back to chat"
         >
-          &larr;
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
         </button>
         <h2 className="text-lg font-semibold text-[#e2e8f0]">Analyze Document</h2>
       </header>
