@@ -41,7 +41,7 @@ describe('SchemasPanel', () => {
     mockFetchSchemas.mockReturnValue(new Promise(() => {})); // never resolves
     render(<SchemasPanel onBack={vi.fn()} />);
 
-    expect(screen.getByText('Loading schemas...')).toBeInTheDocument();
+    expect(screen.getByText('Loading your schemas…')).toBeInTheDocument();
   });
 
   it('shows error state when fetch fails', async () => {
@@ -57,7 +57,7 @@ describe('SchemasPanel', () => {
     render(<SchemasPanel onBack={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('No extraction schemas yet.')).toBeInTheDocument();
+      expect(screen.getByText('No schemas yet')).toBeInTheDocument();
     });
   });
 
@@ -80,7 +80,7 @@ describe('SchemasPanel', () => {
     render(<SchemasPanel onBack={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.queryByText('Loading schemas...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading your schemas…')).not.toBeInTheDocument();
     });
 
     await userEvent.click(screen.getByText('+ New Schema'));
@@ -113,7 +113,7 @@ describe('SchemasPanel', () => {
     await userEvent.click(screen.getByText('Delete'));
 
     await waitFor(() => {
-      expect(screen.getByText('No extraction schemas yet.')).toBeInTheDocument();
+      expect(screen.getByText('No schemas yet')).toBeInTheDocument();
     });
   });
 

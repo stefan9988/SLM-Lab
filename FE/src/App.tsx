@@ -134,10 +134,10 @@ function AuthenticatedApp({ user, onLogout }: { user: ReturnType<typeof useAuth>
     async (id: string) => {
       try {
         await clearHistory(id);
-        addToast('Chat deleted', 'success');
+        addToast('Chat removed', 'success');
       } catch (err) {
         console.error('Failed to clear history from backend:', err);
-        addToast('Failed to delete chat', 'error');
+        addToast('Couldn\'t remove chat', 'error');
       }
       setConversations(removeConversation(id));
       if (id === activeId) {

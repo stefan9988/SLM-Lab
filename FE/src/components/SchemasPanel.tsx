@@ -29,7 +29,7 @@ export default function SchemasPanel({ onBack }: Props) {
       });
       addToast('Schema saved', 'success');
     } catch {
-      addToast('Failed to save schema', 'error');
+      addToast('Couldn\'t save schema', 'error');
     } finally {
       setSavingId(null);
     }
@@ -40,7 +40,7 @@ export default function SchemasPanel({ onBack }: Props) {
       await deleteSchema(id);
       addToast('Schema deleted', 'success');
     } catch {
-      addToast('Failed to delete schema', 'error');
+      addToast('Couldn\'t delete schema', 'error');
     }
   };
 
@@ -49,7 +49,7 @@ export default function SchemasPanel({ onBack }: Props) {
       await duplicateSchema(schema);
       addToast('Schema duplicated', 'success');
     } catch {
-      addToast('Failed to duplicate schema', 'error');
+      addToast('Couldn\'t duplicate schema', 'error');
     }
   };
 
@@ -76,7 +76,7 @@ export default function SchemasPanel({ onBack }: Props) {
         <div className="max-w-3xl mx-auto space-y-4">
           {loading ? (
             <div className="text-center py-16">
-              <p className="text-[#64748b] text-sm">Loading schemas...</p>
+              <p className="text-[#64748b] text-sm">Loading your schemas…</p>
             </div>
           ) : error ? (
             <div className="text-center py-16">
@@ -84,9 +84,9 @@ export default function SchemasPanel({ onBack }: Props) {
             </div>
           ) : schemas.length === 0 ? (
             <div className="text-center py-16">
-              <p className="text-[#64748b] text-sm">No extraction schemas yet.</p>
+              <p className="text-[#64748b] text-sm">No schemas yet</p>
               <p className="text-[#64748b] text-sm mt-1">
-                Click "+ New Schema" to define structured fields for document extraction.
+                Create a schema to define the fields you want to extract from documents.
               </p>
             </div>
           ) : (

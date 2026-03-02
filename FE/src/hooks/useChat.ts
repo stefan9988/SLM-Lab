@@ -99,7 +99,7 @@ export function useChat(sessionId: string) {
           // Stream aborted intentionally
         } else {
           logger.error('[useChat] Stream error:', err);
-          aiMsg.content += '\n\n*[Error: connection lost]*';
+          aiMsg.content += '\n\n*[Connection lost — please try again.]*';
           setMessages((prev) => {
             const next = [...prev];
             next[next.length - 1] = { ...aiMsg };

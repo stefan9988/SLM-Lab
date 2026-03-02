@@ -50,7 +50,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop, curr
     for (const f of selected) {
       if (f.size > MAX_FILE_SIZE) {
         logger.warn('[MessageInput] File too large:', f.name, f.size);
-        setError(`File "${f.name}" exceeds 10MB limit.`);
+        setError(`"${f.name}" is too large — max 10 MB per file.`);
         return;
       }
     }
@@ -58,7 +58,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop, curr
     const totalSize = [...files, ...selected].reduce((s, f) => s + f.size, 0);
     if (totalSize > MAX_TOTAL_SIZE) {
       logger.warn('[MessageInput] Total file size exceeds limit:', totalSize);
-      setError('Total file size exceeds 20MB limit.');
+      setError('Total size is over the 20 MB limit — please remove a file.');
       return;
     }
 

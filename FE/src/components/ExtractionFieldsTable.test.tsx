@@ -425,7 +425,7 @@ describe("ExtractionFieldsTable", () => {
       await waitFor(() => {
         expect(
           screen.getByText(
-            "No schemas available. Create one in the Schemas tab.",
+            "No schemas yet — create one in the Schemas tab to get started.",
           ),
         ).toBeInTheDocument();
       });
@@ -549,7 +549,7 @@ describe("ExtractionFieldsTable", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText(/Error:/)).toBeInTheDocument();
+        expect(screen.getByText(/Something went wrong/)).toBeInTheDocument();
       });
 
       expect(

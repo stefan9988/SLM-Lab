@@ -61,7 +61,7 @@ describe('MessageInput', () => {
       const bigFile = createFile('huge.txt', 11 * 1024 * 1024);
 
       fireEvent.drop(dropZone, { dataTransfer: mockDataTransfer([bigFile]) });
-      expect(screen.getByText(/exceeds 10MB limit/)).toBeInTheDocument();
+      expect(screen.getByText(/is too large/)).toBeInTheDocument();
       expect(screen.queryByText('huge.txt')).not.toBeInTheDocument();
     });
 
@@ -80,7 +80,7 @@ describe('MessageInput', () => {
 
       const file3 = createFile('c.txt', 8 * 1024 * 1024);
       fireEvent.drop(dropZone, { dataTransfer: mockDataTransfer([file3]) });
-      expect(screen.getByText(/Total file size exceeds 20MB limit/)).toBeInTheDocument();
+      expect(screen.getByText(/Total size is over the 20 MB limit/)).toBeInTheDocument();
     });
   });
 

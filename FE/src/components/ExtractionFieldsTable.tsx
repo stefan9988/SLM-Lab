@@ -43,6 +43,7 @@ export default function ExtractionFieldsTable({
   const [rows, setRows] = useState<ExtractionRow[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [statusText, setStatusText] = useState("");
+  const [analysisError, setAnalysisError] = useState("");
   const [analysisSessionId, setAnalysisSessionId] = useState<string | null>(null);
   const [validationUrls, setValidationUrls] = useState<string[]>([""]);
   const [validationResults, setValidationResults] = useState<ValidationResults>({});
@@ -118,6 +119,7 @@ export default function ExtractionFieldsTable({
     );
     setStatusText("");
     setAnalysisSessionId(null);
+    setAnalysisError("");
     setValidationResults({});
     setValidationUrls([""]);
     setValidationStatusText("");
@@ -162,7 +164,8 @@ export default function ExtractionFieldsTable({
     setValidationStatusText("");
     setValidationError("");
     setAnalyzing(true);
-    setStatusText("Starting analysis...");
+    setStatusText("Analyzing your document…");
+    setAnalysisError("");
 
     const abort = new AbortController();
     abortRef.current = abort;
@@ -209,20 +212,18 @@ export default function ExtractionFieldsTable({
             ];
           });
         } else if (event.type === "error") {
-          setStatusText(`Error: ${event.content}`);
+          setAnalysisError(event.content);
         }
       }
     } catch (err) {
       hadFatalError = true;
       if (!abort.signal.aborted) {
-        setStatusText(
-          `Error: ${err instanceof Error ? err.message : "Analysis failed"}`,
-        );
+        setAnalysisError("Something went wrong — please try again");
       }
     } finally {
       setAnalyzing(false);
       abortRef.current = null;
-      setStatusText((prev) => (prev.startsWith("Error") ? prev : ""));
+      setStatusText("");
       if (!hadFatalError && !abort.signal.aborted) {
         setAnalysisSessionId(sessionId);
       }
@@ -246,7 +247,7 @@ export default function ExtractionFieldsTable({
     validationAbortRef.current = abort;
 
     setValidating(true);
-    setValidationStatusText("Starting validation...");
+    setValidationStatusText("Running validation…");
     setValidationError("");
 
     try {
@@ -270,15 +271,13 @@ export default function ExtractionFieldsTable({
             }
             setValidationResults(mapped);
           } else if (event.type === "error") {
-            setValidationError(`Error: ${event.content}`);
+            setValidationError(event.content);
           }
         }
       }
     } catch (err) {
       if (!abort.signal.aborted) {
-        setValidationError(
-          `Error: ${err instanceof Error ? err.message : "Validation failed"}`,
-        );
+        setValidationError("Validation failed — please try again");
       }
     } finally {
       setValidating(false);
@@ -344,10 +343,10 @@ export default function ExtractionFieldsTable({
               Extraction Schema
             </label>
             {loading ? (
-              <p className="text-[#94a3b8] text-sm py-2">Loading schemas...</p>
+              <p className="text-[#94a3b8] text-sm py-2">Loading schemas…</p>
             ) : schemas.length === 0 ? (
               <p className="text-[#94a3b8] text-sm py-2">
-                No schemas available. Create one in the Schemas tab.
+                No schemas yet — create one in the Schemas tab to get started.
               </p>
             ) : (
               <select
@@ -495,11 +494,11 @@ export default function ExtractionFieldsTable({
       )}
 
       {selectedSchemaId && rows.length === 0 && (
-        <p className="text-[#64748b] text-sm">This schema has no fields.</p>
+        <p className="text-[#64748b] text-sm">This schema has no fields yet.</p>
       )}
 
-      {!analyzing && statusText && statusText.startsWith("Error") && (
-        <p className="text-xs text-red-400">{statusText}</p>
+      {analysisError && (
+        <p className="text-xs text-red-400">{analysisError}</p>
       )}
 
       {!analysisSessionId ? (
