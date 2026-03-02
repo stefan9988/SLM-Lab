@@ -2,11 +2,12 @@ import { useState, useCallback, useRef } from 'react';
 import type { Message, FileAttachment } from '../types';
 import { streamChat, fetchHistory } from '../utils/api';
 import logger from '../utils/logger';
+import { useStatusQueue } from './useStatusQueue';
 
 export function useChat(sessionId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
-  const [toolStatus, setToolStatus] = useState<string | null>(null);
+  const { toolStatus, enqueueStatus, clearStatus } = useStatusQueue();
   const [thinkingActive, setThinkingActive] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -26,7 +27,7 @@ export function useChat(sessionId: string) {
     abortRef.current?.abort();
     abortRef.current = null;
     setStreaming(false);
-    setToolStatus(null);
+    clearStatus();
     setThinkingActive(false);
   }, []);
 
@@ -41,7 +42,7 @@ export function useChat(sessionId: string) {
       const userMsg: Message = { id: crypto.randomUUID(), role: 'human', content: text, files };
       setMessages((prev) => [...prev, userMsg]);
       setStreaming(true);
-      setToolStatus(null);
+      clearStatus();
       setThinkingActive(false);
 
       const aiMsg: Message = { id: crypto.randomUUID(), role: 'ai', content: '' };
@@ -55,7 +56,7 @@ export function useChat(sessionId: string) {
           }
           if (event.type === 'token') {
             aiMsg.content += event.content;
-            setToolStatus(null);
+            clearStatus();
             setThinkingActive(false);
             setMessages((prev) => {
               const next = [...prev];
@@ -65,7 +66,7 @@ export function useChat(sessionId: string) {
           } else if (event.type === 'thinking') {
             logger.debug('[useChat] Received thinking block');
             aiMsg.thinking = (aiMsg.thinking || '') + event.content;
-            setToolStatus(null);
+            clearStatus();
             setThinkingActive(true);
             setMessages((prev) => {
               const next = [...prev];
@@ -82,7 +83,7 @@ export function useChat(sessionId: string) {
             });
           } else if (event.type === 'status') {
             logger.debug('[useChat] Tool status:', event.content);
-            setToolStatus(event.content);
+            enqueueStatus(event.content);
             setThinkingActive(false);
           } else if (event.type === 'error') {
             logger.error('[useChat] LLM error received:', event.content);
@@ -109,11 +110,11 @@ export function useChat(sessionId: string) {
       } finally {
         abortRef.current = null;
         setStreaming(false);
-        setToolStatus(null);
+        clearStatus();
         setThinkingActive(false);
       }
     },
-    [sessionId, streaming],
+    [sessionId, streaming, enqueueStatus, clearStatus],
   );
 
   return { messages, streaming, toolStatus, thinkingActive, sendMessage, loadHistory, stopStreaming };
