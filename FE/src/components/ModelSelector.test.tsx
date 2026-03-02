@@ -5,7 +5,7 @@ import { PROVIDER_LABELS } from '../constants/models';
 
 const defaultProps = {
   currentProvider: 'ollama',
-  currentModelName: 'llama3.1:8b',
+  currentModelName: 'qwen3:14b',
   onModelChange: vi.fn(),
   disabled: false,
 };
@@ -13,7 +13,7 @@ const defaultProps = {
 describe('ModelSelector', () => {
   it('renders the current model display name', () => {
     render(<ModelSelector {...defaultProps} />);
-    expect(screen.getByText('Llama 3.1 8B')).toBeInTheDocument();
+    expect(screen.getByText('Qwen 3 14B Local')).toBeInTheDocument();
   });
 
   it('falls back to raw model name when model is not in the list', () => {
