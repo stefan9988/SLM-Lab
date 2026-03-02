@@ -401,7 +401,7 @@ export default function ExtractionFieldsTable({
                 const vr = validationResults[row.fieldKey];
                 return (
                   <tr key={row.fieldKey} className="border-b border-[#1e293b] hover:bg-white/[0.02] transition-colors">
-                    <td className="py-2 px-2 text-[#e2e8f0] font-medium align-top">
+                    <td className="py-2 px-2 text-[#e2e8f0] font-medium align-middle">
                       <div className="flex items-center justify-between gap-3">
                         <span className="font-mono text-xs text-[#c4b5fd]">{row.fieldKey}</span>
                         {vr && (
@@ -428,7 +428,7 @@ export default function ExtractionFieldsTable({
                         placeholder="Extracted value"
                       />
                     </td>
-                    <td className="py-2 px-2 text-sm text-[#94a3b8] align-top">
+                    <td className="py-2 px-2 text-sm text-[#94a3b8] align-middle">
                       {row.location?.page_num != null && row.extraction ? (
                         <button
                           type="button"
@@ -449,7 +449,7 @@ export default function ExtractionFieldsTable({
                       )}
                     </td>
                     {hasValidation && (
-                      <td className="py-2 px-2 text-xs text-[#94a3b8] align-top">
+                      <td className="py-2 px-2 text-xs text-[#94a3b8] align-middle">
                         <span>{vr?.validated_value ?? "–"}</span>
                         {vr?.sources?.map((url, idx) => (
                           <a
