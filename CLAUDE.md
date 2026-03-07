@@ -40,6 +40,16 @@ The frontend uses **Vitest** with **React Testing Library**. Tests are co-locate
 
 When adding new environment variables, update `.env.example` accordingly.
 
+## Documentation
+
+When adding new features, API endpoints, or environment variables, update `README.md` accordingly.
+
 ## Formatting
 
 When adding new code or making changes, run `uv run black .` to format the code.
+
+## Known Issues
+
+### Pre-existing test failures
+
+- `tests/BE/test_app.py::TestChatWithFiles::test_file_size_limit_returns_413` — fails when PostgreSQL is not running locally. This is a known environment issue, not a code regression.
