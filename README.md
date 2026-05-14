@@ -74,7 +74,7 @@ docker compose up --build
 - **Frontend:** `http://localhost:8080`
 - **Backend API:** `http://localhost:8000`
 
-The stack includes Redis, PostgreSQL, and Qdrant. Both backend and frontend use `network_mode: host`, so they share the host's network and can reach Ollama on `localhost:11434`, Redis on `localhost:6379`, and Qdrant on `localhost:6333` directly.
+The stack includes Redis, PostgreSQL, Qdrant, and the Telegram bot. Backend, frontend, and the Telegram bot all use `network_mode: host`, so they share the host's network and can reach Ollama on `localhost:11434`, Redis on `localhost:6379`, and Qdrant on `localhost:6333` directly.
 
 To stop:
 
@@ -395,6 +395,12 @@ A standalone Telegram bot that routes messages to the general agent via long pol
 
 ### Running the Bot
 
+**Locally:**
+
 ```bash
 uv run python -m telegram_bot
 ```
+
+**With Docker Compose:**
+
+The bot is included in the Docker Compose stack and starts automatically with `docker compose up --build`. It uses long polling so no inbound port is needed. Make sure `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USER_ID` are set in `.env`.
