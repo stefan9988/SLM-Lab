@@ -16,6 +16,7 @@ def mock_agent():
     agent = MagicMock()
     agent.warm_session = AsyncMock()
     agent.invoke = AsyncMock(return_value="Hello from agent!")
+    agent.clear_history = AsyncMock()
     return agent
 
 
@@ -88,3 +89,23 @@ async def test_agent_error_replies_gracefully(mock_update, mock_context, mock_ag
     mock_update.message.reply_text.assert_called_once_with(
         "Sorry, something went wrong. Please try again."
     )
+
+
+@pytest.mark.asyncio
+async def test_clear_command_clears_history(mock_update, mock_context, mock_agent):
+    await bot_module.clear_command(mock_update, mock_context)
+    mock_agent.clear_history.assert_called_once_with(
+        session_id=SESSION_ID,
+        user_id=BOT_USER_ID,
+    )
+    mock_update.message.reply_text.assert_called_once_with("Chat history cleared.")
+
+
+@pytest.mark.asyncio
+async def test_clear_command_unauthorized_ignored(
+    mock_update, mock_context, mock_agent
+):
+    mock_update.effective_user.id = 99999  # Not the allowed user
+    await bot_module.clear_command(mock_update, mock_context)
+    mock_agent.clear_history.assert_not_called()
+    mock_update.message.reply_text.assert_not_called()

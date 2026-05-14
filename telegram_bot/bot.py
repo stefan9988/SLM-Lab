@@ -5,7 +5,13 @@ import logging
 
 from telegram import Update
 from telegram.constants import ChatAction
-from telegram.ext import Application, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from AI.agents.initialize_agent import init_agent
 from AI.prompts.general_agent_prompt import build_general_agent_prompt
@@ -49,6 +55,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
 
+async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /clear command — wipes the conversation history."""
+    user = update.effective_user
+    if user is None or user.id != settings.TELEGRAM_ALLOWED_USER_ID:
+        logger.warning("Unauthorized /clear attempt from user %s", user and user.id)
+        return
+    await agent.clear_history(
+        session_id=settings.TELEGRAM_SESSION_ID,
+        user_id=settings.TELEGRAM_BOT_USER_ID,
+    )
+    logger.info("Chat history cleared for session %s", settings.TELEGRAM_SESSION_ID)
+    await update.message.reply_text("Chat history cleared.")
+
+
 def main() -> None:
     """Initialize the agent and start the bot."""
     init_config()
@@ -69,6 +89,7 @@ def main() -> None:
     )
 
     app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("clear", clear_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Starting Telegram bot (long polling)...")
