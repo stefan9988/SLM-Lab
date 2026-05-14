@@ -371,6 +371,30 @@ uv run pytest
 # Frontend
 cd FE && npx vitest run
 
+# Telegram bot tests
+uv run pytest tests/telegram/
+
 # Format
 uv run black .
+```
+
+## Telegram Bot
+
+A standalone Telegram bot that routes messages to the general agent via long polling. The bot is restricted to a single owner (by Telegram user ID) and maintains a single persistent conversation session.
+
+### Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/botfather) | *(required)* |
+| `TELEGRAM_ALLOWED_USER_ID` | Numeric Telegram user ID of the owner | *(required)* |
+| `TELEGRAM_SESSION_ID` | Session key for conversation history | `telegram_main` |
+| `TELEGRAM_BOT_USER_ID` | Internal user ID for session namespacing | `telegram_bot_user` |
+| `TELEGRAM_LLM_PROVIDER` | LLM provider override for the bot (`ollama`, `openrouter`, `anthropic`) | falls back to `GENERAL_AGENT_LLM_PROVIDER` → `LLM_PROVIDER` |
+| `TELEGRAM_MODEL_NAME` | Model name override for the bot | falls back to `GENERAL_AGENT_MODEL_NAME` → `MODEL_NAME` |
+
+### Running the Bot
+
+```bash
+uv run python -m telegram_bot
 ```

@@ -7,7 +7,7 @@ from langchain_core.tools import BaseTool
 
 from BE.config import settings
 from BE.logger import setup_logger
-from BE.session_store import create_store
+from BE.session_store import SessionStore, create_store
 
 from .base import Agent
 
@@ -55,6 +55,7 @@ def init_agent(
     provider: Optional[str] = None,
     model_name: Optional[str] = None,
     agent_name: str = "",
+    session_store: Optional[SessionStore] = None,
 ) -> Agent:
     """Initialize and return an Agent.
 
@@ -64,6 +65,7 @@ def init_agent(
         maintain_history: Whether to maintain conversation history across calls.
         provider: LLM provider override. Falls back to global LLM_PROVIDER.
         model_name: Model name override. Falls back to global MODEL_NAME.
+        session_store: Optional pre-built session store. Defaults to create_store().
 
     Returns:
         Configured Agent instance.
@@ -78,7 +80,7 @@ def init_agent(
         resolved_provider = (provider or settings.LLM_PROVIDER).lower()
         resolved_model = model_name or settings.MODEL_NAME
         llm = _build_llm(resolved_provider, resolved_model)
-        store = create_store()
+        store = session_store if session_store is not None else create_store()
         agent = Agent(
             llm=llm,
             system_prompt=system_prompt,

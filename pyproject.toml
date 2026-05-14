@@ -26,10 +26,14 @@ dependencies = [
     "qdrant-client>=1.12.0",
     "httpx>=0.28.1",
     "beautifulsoup4>=4.12.0",
+    "python-telegram-bot>=21.0",
 ]
 
 [tool.setuptools.packages.find]
-include = ["BE*", "AI*"]
+include = ["BE*", "AI*", "telegram_bot*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [dependency-groups]
 dev = [
@@ -37,4 +41,5 @@ dev = [
     "black>=26.1.0",
     "httpx>=0.28.1",
     "pytest>=9.0.2",
+    "pytest-asyncio>=0.23.0",
 ]
