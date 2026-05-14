@@ -12,7 +12,13 @@ from BE.logger import redact_url, setup_logger
 
 logger = setup_logger(__name__)
 
-__all__ = ["SessionStore", "InMemoryStore", "RedisStore", "create_store"]
+__all__ = [
+    "SessionStore",
+    "InMemoryStore",
+    "RedisStore",
+    "ArchivingSessionStore",
+    "create_store",
+]
 
 
 class SessionStore(ABC):
@@ -243,12 +249,9 @@ class InMemoryStore(SessionStore):
     ) -> None:
         dicts = [_msg_to_dict(m, model, provider) for m in messages]
         self._sessions[(user_id, session_id)] = dicts
-        if not _skip_archive:
-            _archive_to_postgres(session_id, dicts, model, provider, user_id)
 
     async def clear(self, session_id: str, user_id: str = "") -> None:
         self._sessions.pop((user_id, session_id), None)
-        _clear_archive(session_id, user_id=user_id)
 
     async def get_history_dicts(self, session_id: str, user_id: str = "") -> list[dict]:
         dicts = self._sessions.get((user_id, session_id), [])
@@ -324,15 +327,11 @@ class RedisStore(SessionStore):
         await self._touch_ttl(pipe, session_id, user_id)
         await pipe.execute()
 
-        if not _skip_archive:
-            _archive_to_postgres(session_id, dicts, model, provider, user_id)
-
     async def clear(self, session_id: str, user_id: str = "") -> None:
         await self._redis.delete(
             self._meta_key(session_id, user_id),
             self._messages_key(session_id, user_id),
         )
-        _clear_archive(session_id, user_id=user_id)
 
     async def get_history_dicts(self, session_id: str, user_id: str = "") -> list[dict]:
         raw = await self._redis.lrange(self._messages_key(session_id, user_id), 0, -1)
@@ -343,6 +342,37 @@ class RedisStore(SessionStore):
             if entry:
                 history.append(entry)
         return history
+
+
+class ArchivingSessionStore(SessionStore):
+    """Wraps any SessionStore and adds transparent PostgreSQL archiving."""
+
+    def __init__(self, inner: SessionStore) -> None:
+        self._inner = inner
+
+    async def get_messages(self, session_id: str, user_id: str = "") -> list:
+        return await self._inner.get_messages(session_id, user_id)
+
+    async def save_messages(
+        self,
+        session_id: str,
+        messages: list,
+        model: str = "",
+        provider: str = "",
+        user_id: str = "",
+        _skip_archive: bool = False,
+    ) -> None:
+        await self._inner.save_messages(session_id, messages, model, provider, user_id)
+        if not _skip_archive:
+            dicts = [_msg_to_dict(m, model, provider) for m in messages]
+            _archive_to_postgres(session_id, dicts, model, provider, user_id)
+
+    async def clear(self, session_id: str, user_id: str = "") -> None:
+        await self._inner.clear(session_id, user_id)
+        _clear_archive(session_id, user_id=user_id)
+
+    async def get_history_dicts(self, session_id: str, user_id: str = "") -> list[dict]:
+        return await self._inner.get_history_dicts(session_id, user_id)
 
 
 async def warm_session_from_archive(
@@ -385,14 +415,14 @@ def create_store() -> SessionStore:
 
     if not settings.REDIS_ENABLED:
         logger.info("Redis disabled, using InMemoryStore")
-        return InMemoryStore()
+        return ArchivingSessionStore(InMemoryStore())
 
     try:
         store = RedisStore(
             redis_url=settings.REDIS_URL,
             ttl_days=settings.REDIS_SESSION_TTL_DAYS,
         )
-        return store
+        return ArchivingSessionStore(store)
     except (
         redis_exceptions.ConnectionError,
         redis_exceptions.TimeoutError,
@@ -402,4 +432,4 @@ def create_store() -> SessionStore:
             "Failed to connect to Redis (%s), falling back to InMemoryStore",
             exc,
         )
-        return InMemoryStore()
+        return ArchivingSessionStore(InMemoryStore())

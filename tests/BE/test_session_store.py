@@ -8,6 +8,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from BE.session_store import (
+    ArchivingSessionStore,
     InMemoryStore,
     RedisStore,
     create_store,
@@ -452,23 +453,15 @@ class TestInMemoryStore:
         assert isinstance(msgs[0], HumanMessage)
         assert isinstance(msgs[1], AIMessage)
 
-    def test_save_triggers_archive_to_postgres(
-        self, run, in_memory_store, sample_messages
-    ):
-        """save_messages calls _archive_to_postgres for PostgreSQL persistence."""
+    def test_save_does_not_archive(self, run, in_memory_store, sample_messages):
+        """Plain InMemoryStore never calls _archive_to_postgres (pure backend)."""
         with patch("BE.session_store._archive_to_postgres") as mock_archive:
             run(
                 in_memory_store.save_messages(
                     "s1", sample_messages, "model", "prov", user_id="u1"
                 )
             )
-            mock_archive.assert_called_once()
-            args = mock_archive.call_args
-            assert args[0][0] == "s1"  # session_id
-            assert len(args[0][1]) == 2  # dicts
-            assert args[0][2] == "model"
-            assert args[0][3] == "prov"
-            assert args[0][4] == "u1"  # user_id
+            mock_archive.assert_not_called()
 
     def test_get_history_dicts(self, run, in_memory_store, sample_messages):
         run(in_memory_store.save_messages("s1", sample_messages, user_id="u1"))
@@ -492,22 +485,20 @@ class TestInMemoryStore:
         assert run(in_memory_store.get_messages("s1", user_id="user-b")) == []
         assert run(in_memory_store.get_history_dicts("s1", user_id="user-b")) == []
 
-    def test_save_skip_archive_does_not_call_postgres(
+    def test_save_skip_archive_flag_accepted(
         self, run, in_memory_store, sample_messages
     ):
-        """save_messages with _skip_archive=True does not call _archive_to_postgres."""
-        with patch("BE.session_store._archive_to_postgres") as mock_archive:
-            run(
-                in_memory_store.save_messages(
-                    "s1",
-                    sample_messages,
-                    "model",
-                    "prov",
-                    user_id="u1",
-                    _skip_archive=True,
-                )
+        """_skip_archive param is accepted (for ABC compliance) but has no effect."""
+        run(
+            in_memory_store.save_messages(
+                "s1",
+                sample_messages,
+                "model",
+                "prov",
+                user_id="u1",
+                _skip_archive=True,
             )
-            mock_archive.assert_not_called()
+        )
         # Messages should still be stored in memory
         assert len(run(in_memory_store.get_messages("s1", user_id="u1"))) == 2
 
@@ -602,19 +593,21 @@ class TestRedisStore:
 
 class TestCreateStore:
     @patch("BE.config.settings")
-    def test_disabled_returns_in_memory(self, mock_settings):
+    def test_disabled_returns_archiving_in_memory(self, mock_settings):
         mock_settings.REDIS_ENABLED = False
         store = create_store()
-        assert isinstance(store, InMemoryStore)
+        assert isinstance(store, ArchivingSessionStore)
+        assert isinstance(store._inner, InMemoryStore)
 
     @patch("BE.session_store.RedisStore")
     @patch("BE.config.settings")
-    def test_enabled_returns_redis(self, mock_settings, mock_redis_cls):
+    def test_enabled_returns_archiving_redis(self, mock_settings, mock_redis_cls):
         mock_settings.REDIS_ENABLED = True
         mock_settings.REDIS_URL = "redis://default:slmlab@localhost:6379/0"
         mock_settings.REDIS_SESSION_TTL_DAYS = 30
         mock_redis_cls.return_value = MagicMock(spec=RedisStore)
         store = create_store()
+        assert isinstance(store, ArchivingSessionStore)
         mock_redis_cls.assert_called_once_with(
             redis_url="redis://default:slmlab@localhost:6379/0", ttl_days=30
         )
@@ -626,7 +619,85 @@ class TestCreateStore:
         mock_settings.REDIS_URL = "redis://default:slmlab@localhost:6379/0"
         mock_settings.REDIS_SESSION_TTL_DAYS = 30
         store = create_store()
-        assert isinstance(store, InMemoryStore)
+        assert isinstance(store, ArchivingSessionStore)
+        assert isinstance(store._inner, InMemoryStore)
+
+
+# --- ArchivingSessionStore ---
+
+
+class TestArchivingSessionStore:
+    @pytest.fixture
+    def inner(self):
+        return InMemoryStore()
+
+    @pytest.fixture
+    def archiving_store(self, inner):
+        return ArchivingSessionStore(inner)
+
+    def test_save_calls_inner_and_archives(self, run, archiving_store, sample_messages):
+        """save_messages delegates to inner store and calls _archive_to_postgres."""
+        with patch("BE.session_store._archive_to_postgres") as mock_archive:
+            run(
+                archiving_store.save_messages(
+                    "s1", sample_messages, "model", "prov", user_id="u1"
+                )
+            )
+            mock_archive.assert_called_once()
+            args = mock_archive.call_args[0]
+            assert args[0] == "s1"
+            assert len(args[1]) == 2
+            assert args[2] == "model"
+            assert args[3] == "prov"
+            assert args[4] == "u1"
+        # Inner store must have the messages too
+        msgs = run(archiving_store.get_messages("s1", user_id="u1"))
+        assert len(msgs) == 2
+
+    def test_save_skip_archive_skips_postgres(
+        self, run, archiving_store, sample_messages
+    ):
+        """_skip_archive=True suppresses _archive_to_postgres call."""
+        with patch("BE.session_store._archive_to_postgres") as mock_archive:
+            run(
+                archiving_store.save_messages(
+                    "s1",
+                    sample_messages,
+                    "model",
+                    "prov",
+                    user_id="u1",
+                    _skip_archive=True,
+                )
+            )
+            mock_archive.assert_not_called()
+        assert len(run(archiving_store.get_messages("s1", user_id="u1"))) == 2
+
+    def test_clear_calls_inner_and_archive(
+        self, run, archiving_store, inner, sample_messages
+    ):
+        """clear delegates to inner store and calls _clear_archive."""
+        run(archiving_store.save_messages("s1", sample_messages, user_id="u1"))
+        with patch("BE.session_store._clear_archive") as mock_clear:
+            run(archiving_store.clear("s1", user_id="u1"))
+            mock_clear.assert_called_once_with("s1", user_id="u1")
+        assert run(archiving_store.get_messages("s1", user_id="u1")) == []
+
+    def test_get_messages_delegates_to_inner(
+        self, run, archiving_store, sample_messages
+    ):
+        """get_messages returns what the inner store holds."""
+        run(archiving_store.save_messages("s1", sample_messages, user_id="u1"))
+        msgs = run(archiving_store.get_messages("s1", user_id="u1"))
+        assert len(msgs) == 2
+
+    def test_get_history_dicts_delegates_to_inner(
+        self, run, archiving_store, sample_messages
+    ):
+        """get_history_dicts delegates to inner store."""
+        run(archiving_store.save_messages("s1", sample_messages, user_id="u1"))
+        history = run(archiving_store.get_history_dicts("s1", user_id="u1"))
+        assert len(history) == 2
+        assert history[0]["role"] == "human"
 
 
 # --- warm_session_from_archive ---
