@@ -21,10 +21,16 @@ async def set_reminder_tool(task: str, remind_at: str) -> str:
     set remind_at to a future value in the same "YYYY-MM-DD HH:MM:SS" format.
 
     Args:
-        task: The instruction for the agent to execute at reminder time.
-              Examples: "Check today's top tech news and summarize",
-                        "Tell the user to go for a walk",
-                        "Look up the weather for tomorrow".
+        task: A fully self-contained instruction for the agent to execute at reminder time.
+              The agent that runs this task will have NO memory of the current conversation,
+              so every detail needed to carry out the task must be included here — names,
+              locations, URLs, quantities, preferences, or any other context the user provided.
+              Write it as an explicit, unambiguous directive.
+              Good:  "Check the weather forecast for Belgrade for tomorrow and send a summary
+                      to the user."
+              Good:  "Remind the user to take their 20mg dose of lisinopril."
+              Bad:   "Check the weather" (missing location)
+              Bad:   "Remind the user about the meeting" (missing all details)
         remind_at: Target date/time in "YYYY-MM-DD HH:MM:SS" format (local server time).
                    Must be in the future. Example: "2026-06-01 14:00:00".
     """
