@@ -78,10 +78,10 @@ def main() -> None:
         system_prompt=build_general_agent_prompt(),
         tools=get_telegram_agent_enabled_tools(be_settings),
         maintain_history=True,
-        provider=settings.TELEGRAM_LLM_PROVIDER
+        provider=settings.TELEGRAM_AGENT_LLM_PROVIDER
         or be_settings.GENERAL_AGENT_LLM_PROVIDER
         or None,
-        model_name=settings.TELEGRAM_MODEL_NAME
+        model_name=settings.TELEGRAM_AGENT_MODEL_NAME
         or be_settings.GENERAL_AGENT_MODEL_NAME
         or None,
         agent_name="telegram_general_agent",

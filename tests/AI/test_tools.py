@@ -22,9 +22,10 @@ class TestGetEnabledTools:
             GENERAL_AGENT_READ_FILE_CONTENT_TOOL=True,
             GENERAL_AGENT_SEARCH_CHUNKS_TOOL=True,
             GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL=True,
+            GENERAL_AGENT_SET_REMINDER_TOOL=True,
         )
         tools = get_enabled_tools(settings)
-        assert len(tools) == 8
+        assert len(tools) == 9
 
     def test_disable_one_tool(self):
         settings = SimpleNamespace(
@@ -36,9 +37,10 @@ class TestGetEnabledTools:
             GENERAL_AGENT_READ_FILE_CONTENT_TOOL=True,
             GENERAL_AGENT_SEARCH_CHUNKS_TOOL=True,
             GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL=True,
+            GENERAL_AGENT_SET_REMINDER_TOOL=True,
         )
         tools = get_enabled_tools(settings)
-        assert len(tools) == 7
+        assert len(tools) == 8
         from AI.tools.python_repl import python_repl_tool
 
         assert python_repl_tool not in tools
@@ -53,6 +55,7 @@ class TestGetEnabledTools:
             GENERAL_AGENT_READ_FILE_CONTENT_TOOL=False,
             GENERAL_AGENT_SEARCH_CHUNKS_TOOL=False,
             GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL=False,
+            GENERAL_AGENT_SET_REMINDER_TOOL=False,
         )
         tools = get_enabled_tools(settings)
         assert len(tools) == 0

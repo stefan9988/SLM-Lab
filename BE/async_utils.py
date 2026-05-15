@@ -55,7 +55,7 @@ async def run_with_retry(
     *,
     max_retries: int = 3,
     retry_delay: float = 1.0,
-    timeout: float = 30.0,
+    timeout: float | None = 30.0,
     task_name: str = "background_task",
 ) -> bool:
     """Execute an async function with timeout and exponential backoff retry.
@@ -72,7 +72,10 @@ async def run_with_retry(
     """
     for attempt in range(max_retries):
         try:
-            await asyncio.wait_for(coro_func(), timeout=timeout)
+            if timeout is None:
+                await coro_func()
+            else:
+                await asyncio.wait_for(coro_func(), timeout=timeout)
             return True
         except asyncio.TimeoutError:
             logger.error(
@@ -106,7 +109,7 @@ def schedule_background_task(
     *,
     max_retries: int = 3,
     retry_delay: float = 1.0,
-    timeout: float = 30.0,
+    timeout: float | None = 30.0,
     task_name: str = "background_task",
 ) -> bool:
     """Schedule a fire-and-forget background task with retry logic.

@@ -12,8 +12,8 @@ class TelegramSettings(BaseSettings):
     TELEGRAM_ALLOWED_USER_ID: int = 0
     TELEGRAM_SESSION_ID: str = "telegram_main"
     TELEGRAM_BOT_USER_ID: str = "telegram_bot_user"
-    TELEGRAM_LLM_PROVIDER: str = ""
-    TELEGRAM_MODEL_NAME: str = ""
+    TELEGRAM_AGENT_LLM_PROVIDER: str = ""
+    TELEGRAM_AGENT_MODEL_NAME: str = ""
 
 
 settings = TelegramSettings()

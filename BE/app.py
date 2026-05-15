@@ -21,11 +21,14 @@ from AI.prompts.validation_agent_prompt import (
     VALIDATION_AGENT_PROMPT,
     build_validation_prompt,
 )
+from AI.prompts.reminder_agent_prompt import REMINDER_AGENT_PROMPT
 from AI.tools import (
     get_enabled_tools,
     get_document_agent_enabled_tools,
     get_validation_agent_enabled_tools,
+    get_reminder_agent_tools,
 )
+from BE.reminder_scheduler import run_reminder_scheduler
 from BE.archive_store import (
     PostgresArchiveStore,
     create_store as _create_archive_store,
@@ -338,6 +341,29 @@ async def lifespan(app: FastAPI):
         model_name=settings.VALIDATION_AGENT_MODEL_NAME or None,
         agent_name="validation_agent",
     )
+
+    reminder_tools = get_reminder_agent_tools(settings)
+    reminder_tool_names = [
+        t.name if hasattr(t, "name") else t.__name__ for t in reminder_tools
+    ]
+    logger.info("Reminder agent tools enabled: %s", reminder_tool_names)
+
+    app.state.reminder_agent = init_agent(
+        system_prompt=REMINDER_AGENT_PROMPT,
+        tools=reminder_tools,
+        maintain_history=False,
+        provider=settings.REMINDER_AGENT_LLM_PROVIDER or None,
+        model_name=settings.REMINDER_AGENT_MODEL_NAME or None,
+        agent_name="reminder_agent",
+    )
+
+    if settings.POSTGRES_ENABLED:
+        schedule_background_task(
+            lambda: run_reminder_scheduler(app.state.reminder_agent),
+            max_retries=1,
+            timeout=None,
+            task_name="reminder_scheduler",
+        )
 
     # Register agents for cross-agent delegation
     from AI.agents import registry

@@ -1,5 +1,6 @@
 """Async SQLAlchemy engine and session factory for PostgreSQL."""
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from BE.logger import setup_logger
@@ -48,6 +49,17 @@ async def init_db() -> None:
     engine = _get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        result = await conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'reminders' AND column_name = 'message'"
+            )
+        )
+        if result.fetchone():
+            await conn.execute(
+                text("ALTER TABLE reminders RENAME COLUMN message TO task")
+            )
+            logger.info("Migrated reminders.message -> reminders.task")
     logger.info("PostgreSQL tables initialized")
 
 

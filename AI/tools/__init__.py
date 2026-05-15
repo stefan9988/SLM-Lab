@@ -7,6 +7,7 @@ from AI.tools.search_chunks import search_chunks_tool
 from AI.tools.delegate_to_agent import delegate_to_agent_tool
 from AI.tools.web_page_content import web_page_content_tool
 from AI.tools.send_telegram_message import send_telegram_message_tool
+from AI.tools.set_reminder import set_reminder_tool
 
 __all__ = [
     "get_current_date_and_time",
@@ -19,10 +20,13 @@ __all__ = [
     "delegate_to_agent_tool",
     "web_page_content_tool",
     "send_telegram_message_tool",
+    "set_reminder_tool",
     "get_enabled_tools",
     "get_telegram_agent_enabled_tools",
     "get_document_agent_enabled_tools",
     "get_validation_agent_enabled_tools",
+    "get_reminder_agent_tools",
+    "REMINDER_AGENT_TOOLS",
 ]
 
 GENERAL_AGENT_TOOLS = [
@@ -36,6 +40,7 @@ GENERAL_AGENT_TOOLS = [
     ("GENERAL_AGENT_DELEGATE_TOOL", delegate_to_agent_tool),
     ("GENERAL_AGENT_WEB_PAGE_CONTENT_TOOL", web_page_content_tool),
     ("GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL", send_telegram_message_tool),
+    ("GENERAL_AGENT_SET_REMINDER_TOOL", set_reminder_tool),
 ]
 
 DOCUMENT_AGENT_TOOLS = [
@@ -94,5 +99,27 @@ def get_validation_agent_enabled_tools(settings) -> list:
     tools = []
     for setting_name, tool in VALIDATION_AGENT_TOOLS:
         if getattr(settings, setting_name, False):
+            tools.append(tool)
+    return tools
+
+
+REMINDER_AGENT_TOOLS = [
+    ("REMINDER_AGENT_DATE_TIME_TOOL", get_current_date_and_time),
+    ("REMINDER_AGENT_BRAVE_SEARCH_TOOL", brave_search_tool),
+    ("REMINDER_AGENT_PYTHON_REPL_TOOL", python_repl_tool),
+    ("REMINDER_AGENT_OLLAMA_WEB_SEARCH_TOOL", ollama_web_search_tool),
+    ("REMINDER_AGENT_OLLAMA_WEB_FETCH_TOOL", ollama_web_fetch_tool),
+    ("REMINDER_AGENT_WEB_PAGE_CONTENT_TOOL", web_page_content_tool),
+    ("REMINDER_AGENT_SEND_TELEGRAM_MESSAGE_TOOL", send_telegram_message_tool),
+]
+
+
+def get_reminder_agent_tools(settings) -> list:
+    """Return tools for the reminder agent. send_telegram_message_tool always included."""
+    tools = []
+    for setting_name, tool in REMINDER_AGENT_TOOLS:
+        if setting_name == "REMINDER_AGENT_SEND_TELEGRAM_MESSAGE_TOOL":
+            tools.append(tool)
+        elif getattr(settings, setting_name, False):
             tools.append(tool)
     return tools

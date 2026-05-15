@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     DOCUMENT_AGENT_MODEL_NAME: str = ""
     VALIDATION_AGENT_LLM_PROVIDER: str = ""
     VALIDATION_AGENT_MODEL_NAME: str = ""
+    REMINDER_AGENT_LLM_PROVIDER: str = ""
+    REMINDER_AGENT_MODEL_NAME: str = "gemma4:latest"
 
     # API settings
     API_TITLE: str = "SLM-Lab Chat API"
@@ -81,6 +83,7 @@ class Settings(BaseSettings):
     GENERAL_AGENT_DELEGATE_TOOL: bool = False
     GENERAL_AGENT_WEB_PAGE_CONTENT_TOOL: bool = False
     GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL: bool = False
+    GENERAL_AGENT_SET_REMINDER_TOOL: bool = False
 
     # Document Agent Tool Toggles
     DOCUMENT_AGENT_DATE_TIME_TOOL: bool = False
@@ -99,6 +102,15 @@ class Settings(BaseSettings):
     VALIDATION_AGENT_OLLAMA_WEB_SEARCH_TOOL: bool = False
     VALIDATION_AGENT_OLLAMA_WEB_FETCH_TOOL: bool = False
     VALIDATION_AGENT_WEB_PAGE_CONTENT_TOOL: bool = False
+
+    # Reminder Agent Tool Toggles
+    REMINDER_AGENT_DATE_TIME_TOOL: bool = True
+    REMINDER_AGENT_BRAVE_SEARCH_TOOL: bool = True
+    REMINDER_AGENT_PYTHON_REPL_TOOL: bool = False
+    REMINDER_AGENT_OLLAMA_WEB_SEARCH_TOOL: bool = False
+    REMINDER_AGENT_OLLAMA_WEB_FETCH_TOOL: bool = False
+    REMINDER_AGENT_WEB_PAGE_CONTENT_TOOL: bool = True
+    REMINDER_AGENT_SEND_TELEGRAM_MESSAGE_TOOL: bool = True
 
     # PostgreSQL settings
     POSTGRES_URL: str = "postgresql+asyncpg://slmlab:slmlab@localhost:5432/slmlab"

@@ -3,7 +3,16 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 __all__ = [
@@ -14,6 +23,7 @@ __all__ = [
     "FileUpload",
     "ExtractionSchema",
     "ValidationResult",
+    "Reminder",
 ]
 
 
@@ -155,4 +165,20 @@ class ValidationResult(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid4())
+    )
+    task: Mapped[str] = mapped_column(Text, nullable=False)
+    remind_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), nullable=False
+    )
+    sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
