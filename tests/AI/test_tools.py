@@ -641,7 +641,11 @@ class TestSendTelegramMessageTool:
         assert result == "Message sent successfully"
         mock_post.assert_called_once_with(
             "https://api.telegram.org/bottest-token/sendMessage",
-            json={"chat_id": 123456789, "text": "Hello!"},
+            json={
+                "chat_id": 123456789,
+                "text": "Hello\\!",
+                "parse_mode": "MarkdownV2",
+            },
             timeout=10,
         )
 
@@ -682,3 +686,21 @@ class TestSendTelegramMessageTool:
         calls = [call.args[0] for call in mock_writer.call_args_list]
         assert any("Sending" in c for c in calls)
         assert any("sent" in c.lower() for c in calls)
+
+    @patch("AI.tools.send_telegram_message.get_stream_writer")
+    @patch("AI.tools.send_telegram_message.httpx.post")
+    @patch("telegram_bot.config.settings", _MOCK_TELEGRAM_SETTINGS)
+    def test_markdown_is_converted_to_markdownv2(self, mock_post, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        from AI.tools.send_telegram_message import send_telegram_message_tool
+
+        send_telegram_message_tool.invoke({"msg": "**bold** *italic*"})
+
+        _, kwargs = mock_post.call_args
+        payload = kwargs["json"]
+        assert payload["parse_mode"] == "MarkdownV2"
+        assert payload["text"] == "*bold* _italic_"

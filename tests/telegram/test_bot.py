@@ -72,7 +72,10 @@ async def test_message_invokes_agent(mock_update, mock_context, mock_agent):
         SESSION_ID,
         user_id=BOT_USER_ID,
     )
-    mock_update.message.reply_text.assert_called_once_with("Hello from agent!")
+    mock_update.message.reply_text.assert_called_once_with(
+        "Hello from agent\\!",
+        parse_mode="MarkdownV2",
+    )
 
 
 @pytest.mark.asyncio

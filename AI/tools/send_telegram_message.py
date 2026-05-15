@@ -1,4 +1,5 @@
 import httpx
+import telegramify_markdown
 from langchain_core.tools import tool
 from langgraph.config import get_stream_writer
 
@@ -22,7 +23,12 @@ def send_telegram_message_tool(msg: str) -> str:
     writer("Sending Telegram message…")
 
     url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": settings.TELEGRAM_ALLOWED_USER_ID, "text": msg}
+    converted = telegramify_markdown.markdownify(msg)
+    payload = {
+        "chat_id": settings.TELEGRAM_ALLOWED_USER_ID,
+        "text": converted,
+        "parse_mode": "MarkdownV2",
+    }
 
     try:
         response = httpx.post(url, json=payload, timeout=10)

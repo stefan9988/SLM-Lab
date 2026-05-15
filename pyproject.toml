@@ -27,6 +27,7 @@ dependencies = [
     "httpx>=0.28.1",
     "beautifulsoup4>=4.12.0",
     "python-telegram-bot>=21.0",
+    "telegramify-markdown>=1.1.5",
 ]
 
 [tool.setuptools.packages.find]

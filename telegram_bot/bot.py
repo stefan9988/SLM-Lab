@@ -3,6 +3,7 @@
 import asyncio
 import logging
 
+import telegramify_markdown
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import (
@@ -47,7 +48,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             settings.TELEGRAM_SESSION_ID,
             user_id=settings.TELEGRAM_BOT_USER_ID,
         )
-        await update.message.reply_text(response)
+        await update.message.reply_text(
+            telegramify_markdown.markdownify(response),
+            parse_mode="MarkdownV2",
+        )
     except Exception:
         logger.error("Agent invocation failed", exc_info=True)
         await update.message.reply_text(
