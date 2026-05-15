@@ -15,7 +15,7 @@ from telegram.ext import (
 
 from AI.agents.initialize_agent import init_agent
 from AI.prompts.general_agent_prompt import build_general_agent_prompt
-from AI.tools import get_enabled_tools
+from AI.tools import get_telegram_agent_enabled_tools
 from BE.config import init_config, settings as be_settings
 from BE.session_store import InMemoryStore
 
@@ -76,7 +76,7 @@ def main() -> None:
     global agent
     agent = init_agent(
         system_prompt=build_general_agent_prompt(),
-        tools=get_enabled_tools(be_settings),
+        tools=get_telegram_agent_enabled_tools(be_settings),
         maintain_history=True,
         provider=settings.TELEGRAM_LLM_PROVIDER
         or be_settings.GENERAL_AGENT_LLM_PROVIDER

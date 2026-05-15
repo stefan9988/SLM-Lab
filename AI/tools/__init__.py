@@ -20,6 +20,7 @@ __all__ = [
     "web_page_content_tool",
     "send_telegram_message_tool",
     "get_enabled_tools",
+    "get_telegram_agent_enabled_tools",
     "get_document_agent_enabled_tools",
     "get_validation_agent_enabled_tools",
 ]
@@ -54,6 +55,17 @@ def get_enabled_tools(settings) -> list:
     """Return tools enabled for the general agent based on settings."""
     tools = []
     for setting_name, tool in GENERAL_AGENT_TOOLS:
+        if getattr(settings, setting_name, False):
+            tools.append(tool)
+    return tools
+
+
+def get_telegram_agent_enabled_tools(settings) -> list:
+    """Return tools enabled for the Telegram agent — excludes send_telegram_message_tool."""
+    tools = []
+    for setting_name, tool in GENERAL_AGENT_TOOLS:
+        if setting_name == "GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL":
+            continue
         if getattr(settings, setting_name, False):
             tools.append(tool)
     return tools
