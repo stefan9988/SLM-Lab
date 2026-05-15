@@ -21,9 +21,10 @@ class TestGetEnabledTools:
             GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=True,
             GENERAL_AGENT_READ_FILE_CONTENT_TOOL=True,
             GENERAL_AGENT_SEARCH_CHUNKS_TOOL=True,
+            GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL=True,
         )
         tools = get_enabled_tools(settings)
-        assert len(tools) == 7
+        assert len(tools) == 8
 
     def test_disable_one_tool(self):
         settings = SimpleNamespace(
@@ -34,9 +35,10 @@ class TestGetEnabledTools:
             GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=True,
             GENERAL_AGENT_READ_FILE_CONTENT_TOOL=True,
             GENERAL_AGENT_SEARCH_CHUNKS_TOOL=True,
+            GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL=True,
         )
         tools = get_enabled_tools(settings)
-        assert len(tools) == 6
+        assert len(tools) == 7
         from AI.tools.python_repl import python_repl_tool
 
         assert python_repl_tool not in tools
@@ -50,6 +52,7 @@ class TestGetEnabledTools:
             GENERAL_AGENT_OLLAMA_WEB_FETCH_TOOL=False,
             GENERAL_AGENT_READ_FILE_CONTENT_TOOL=False,
             GENERAL_AGENT_SEARCH_CHUNKS_TOOL=False,
+            GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL=False,
         )
         tools = get_enabled_tools(settings)
         assert len(tools) == 0
@@ -610,3 +613,69 @@ class TestWebPageContentTool:
         )
         assert "Error" in result
         assert "redirect" in result.lower()
+
+
+_MOCK_TELEGRAM_SETTINGS = SimpleNamespace(
+    TELEGRAM_BOT_TOKEN="test-token",
+    TELEGRAM_ALLOWED_USER_ID=123456789,
+)
+
+
+class TestSendTelegramMessageTool:
+    @patch("AI.tools.send_telegram_message.get_stream_writer")
+    @patch("AI.tools.send_telegram_message.httpx.post")
+    @patch("telegram_bot.config.settings", _MOCK_TELEGRAM_SETTINGS)
+    def test_sends_message_successfully(self, mock_post, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        from AI.tools.send_telegram_message import send_telegram_message_tool
+
+        result = send_telegram_message_tool.invoke({"msg": "Hello!"})
+
+        assert result == "Message sent successfully"
+        mock_post.assert_called_once_with(
+            "https://api.telegram.org/bottest-token/sendMessage",
+            json={"chat_id": 123456789, "text": "Hello!"},
+            timeout=10,
+        )
+
+    @patch("AI.tools.send_telegram_message.get_stream_writer")
+    @patch("AI.tools.send_telegram_message.httpx.post")
+    @patch("telegram_bot.config.settings", _MOCK_TELEGRAM_SETTINGS)
+    def test_raises_on_http_error(self, mock_post, mock_get_writer):
+        mock_get_writer.return_value = MagicMock()
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "400 Bad Request",
+            request=httpx.Request("POST", "https://api.telegram.org/"),
+            response=httpx.Response(
+                400, request=httpx.Request("POST", "https://api.telegram.org/")
+            ),
+        )
+        mock_post.return_value = mock_response
+
+        from AI.tools.send_telegram_message import send_telegram_message_tool
+
+        with pytest.raises(httpx.HTTPStatusError):
+            send_telegram_message_tool.invoke({"msg": "Hello!"})
+
+    @patch("AI.tools.send_telegram_message.get_stream_writer")
+    @patch("AI.tools.send_telegram_message.httpx.post")
+    @patch("telegram_bot.config.settings", _MOCK_TELEGRAM_SETTINGS)
+    def test_stream_writer_called_with_status(self, mock_post, mock_get_writer):
+        mock_writer = MagicMock()
+        mock_get_writer.return_value = mock_writer
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        from AI.tools.send_telegram_message import send_telegram_message_tool
+
+        send_telegram_message_tool.invoke({"msg": "Test"})
+
+        calls = [call.args[0] for call in mock_writer.call_args_list]
+        assert any("Sending" in c for c in calls)
+        assert any("sent" in c.lower() for c in calls)

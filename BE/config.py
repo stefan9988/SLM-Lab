@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     GENERAL_AGENT_SEARCH_CHUNKS_TOOL: bool = False
     GENERAL_AGENT_DELEGATE_TOOL: bool = False
     GENERAL_AGENT_WEB_PAGE_CONTENT_TOOL: bool = False
+    GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL: bool = False
 
     # Document Agent Tool Toggles
     DOCUMENT_AGENT_DATE_TIME_TOOL: bool = False

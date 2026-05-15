@@ -229,6 +229,7 @@ Each tool can be enabled or disabled per agent via env vars following the patter
 | `GENERAL_AGENT_SEARCH_CHUNKS_TOOL` | `true` |
 | `GENERAL_AGENT_DELEGATE_TOOL` | `false` |
 | `GENERAL_AGENT_WEB_PAGE_CONTENT_TOOL` | `true` |
+| `GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL` | `false` |
 
 **Document Agent** (all off by default — it reads files directly via the extraction prompt):
 
