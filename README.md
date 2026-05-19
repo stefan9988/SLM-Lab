@@ -14,6 +14,7 @@ A modern AI chat interface with multi-agent support, document analysis, and real
 - Model switching mid-conversation
 - Multi-user support with Google OAuth
 - Tool usage notifications shown in UI
+- Scheduled reminders: set a task to execute at a future time; results delivered via Telegram
 
 ## Supported LLM Providers
 
@@ -27,11 +28,12 @@ Each agent (general, document, validation) can use a different provider and mode
 
 ## Agent Overview
 
-Three specialized agents run concurrently:
+Four specialized agents run concurrently:
 
 - **General Agent** — main conversational interface; has access to all tools; can delegate to other agents
 - **Document Agent** — extracts structured data from documents against a user-defined schema
 - **Validation Agent** — verifies extracted facts against web sources using search and fetch tools
+- **Reminder Agent** — executes scheduled reminder tasks at the specified time and delivers results via Telegram; runs as a background scheduler polling every 30 seconds
 
 Agents are configured via env vars. Tool toggles control which tools each agent can use. The validation agent can only be called by the general agent.
 
@@ -211,6 +213,8 @@ Each agent can use a different provider and model. Leave empty to fall back to t
 | `DOCUMENT_AGENT_MODEL_NAME` | — | Model override for the document agent |
 | `VALIDATION_AGENT_LLM_PROVIDER` | — | Provider override for the validation agent |
 | `VALIDATION_AGENT_MODEL_NAME` | — | Model override for the validation agent |
+| `REMINDER_AGENT_LLM_PROVIDER` | — | Provider override for the reminder agent |
+| `REMINDER_AGENT_MODEL_NAME` | `gemma4:latest` | Model override for the reminder agent |
 
 ### Tool toggles
 
@@ -230,6 +234,7 @@ Each tool can be enabled or disabled per agent via env vars following the patter
 | `GENERAL_AGENT_DELEGATE_TOOL` | `false` |
 | `GENERAL_AGENT_WEB_PAGE_CONTENT_TOOL` | `true` |
 | `GENERAL_AGENT_SEND_TELEGRAM_MESSAGE_TOOL` | `false` |
+| `GENERAL_AGENT_SET_REMINDER_TOOL` | `false` |
 
 **Document Agent** (all off by default — it reads files directly via the extraction prompt):
 
@@ -254,6 +259,20 @@ Each tool can be enabled or disabled per agent via env vars following the patter
 | `VALIDATION_AGENT_OLLAMA_WEB_SEARCH_TOOL` | `false` |
 | `VALIDATION_AGENT_OLLAMA_WEB_FETCH_TOOL` | `false` |
 | `VALIDATION_AGENT_WEB_PAGE_CONTENT_TOOL` | `true` |
+
+**Reminder Agent** (web + Telegram tools for task execution and delivery):
+
+| Variable | Default |
+|---|---|
+| `REMINDER_AGENT_DATE_TIME_TOOL` | `true` |
+| `REMINDER_AGENT_BRAVE_SEARCH_TOOL` | `true` |
+| `REMINDER_AGENT_PYTHON_REPL_TOOL` | `false` |
+| `REMINDER_AGENT_OLLAMA_WEB_SEARCH_TOOL` | `false` |
+| `REMINDER_AGENT_OLLAMA_WEB_FETCH_TOOL` | `false` |
+| `REMINDER_AGENT_WEB_PAGE_CONTENT_TOOL` | `true` |
+| `REMINDER_AGENT_SEND_TELEGRAM_MESSAGE_TOOL` | `true` |
+
+Note: `REMINDER_AGENT_SEND_TELEGRAM_MESSAGE_TOOL` is always enabled regardless of the setting — the reminder agent always needs to deliver results.
 
 Note: `BRAVE_SEARCH_API_KEY` must be set for the Brave search tool to work.
 
@@ -391,8 +410,8 @@ A standalone Telegram bot that routes messages to the general agent via long pol
 | `TELEGRAM_ALLOWED_USER_ID` | Numeric Telegram user ID of the owner | *(required)* |
 | `TELEGRAM_SESSION_ID` | Session key for conversation history | `telegram_main` |
 | `TELEGRAM_BOT_USER_ID` | Internal user ID for session namespacing | `telegram_bot_user` |
-| `TELEGRAM_LLM_PROVIDER` | LLM provider override for the bot (`ollama`, `openrouter`, `anthropic`) | falls back to `GENERAL_AGENT_LLM_PROVIDER` → `LLM_PROVIDER` |
-| `TELEGRAM_MODEL_NAME` | Model name override for the bot | falls back to `GENERAL_AGENT_MODEL_NAME` → `MODEL_NAME` |
+| `TELEGRAM_AGENT_LLM_PROVIDER` | LLM provider override for the bot (`ollama`, `openrouter`, `anthropic`) | falls back to `GENERAL_AGENT_LLM_PROVIDER` → `LLM_PROVIDER` |
+| `TELEGRAM_AGENT_MODEL_NAME` | Model name override for the bot | falls back to `GENERAL_AGENT_MODEL_NAME` → `MODEL_NAME` |
 
 ### Running the Bot
 
