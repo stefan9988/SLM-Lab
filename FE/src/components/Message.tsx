@@ -120,7 +120,7 @@ export default function Message({ role, content, files, thinking, tools_used, is
       <div
         className={`group relative rounded-2xl px-5 py-3 leading-relaxed ${
           isUser
-            ? 'max-w-[80%] bg-gradient-to-br from-[#7c3aed] to-[#533483] text-white'
+            ? 'max-w-[80%] bg-[#2d3f56] text-white'
             : 'max-w-[750px] bg-[#1e293b] text-[#e2e8f0] border border-[#334155] shadow-sm'
         }`}
       >
