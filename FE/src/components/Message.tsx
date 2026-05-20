@@ -222,7 +222,11 @@ export default function Message({ role, content, files, thinking, tools_used, is
         )}
 
         {isUser ? (
-          normalizedContent ? <p className="whitespace-pre-wrap">{normalizedContent}</p> : null
+          normalizedContent ? (
+            <div className="prose prose-sm prose-invert max-w-none prose-p:text-[#e2e8f0]">
+              <p className="whitespace-pre-wrap">{normalizedContent}</p>
+            </div>
+          ) : null
         ) : (
           <div className="prose prose-sm prose-invert max-w-none prose-p:text-[#e2e8f0] prose-headings:text-[#e2e8f0] prose-strong:text-[#e2e8f0] prose-code:text-[#06b6d4] prose-code:bg-[#0f172a] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0f172a] prose-pre:border prose-pre:border-[#334155] prose-a:text-[#7c3aed] prose-a:no-underline hover:prose-a:underline">
             <ReactMarkdown
