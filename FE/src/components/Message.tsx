@@ -69,7 +69,7 @@ function CopyButton({ code }: { code: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-2 right-2 px-2 py-1 rounded bg-[#334155] text-[#94a3b8] hover:bg-[#475569] hover:text-[#e2e8f0] text-xs opacity-0 group-hover:opacity-100 transition-all duration-200"
+      className="absolute top-2 right-2 px-2 py-1 rounded bg-[#334155]/80 text-[#94a3b8] hover:bg-[#475569] hover:text-[#e2e8f0] text-xs opacity-0 group-hover:opacity-100 transition-all duration-200"
       title="Copy code"
     >
       {copied ? 'Copied!' : 'Copy'}
@@ -131,7 +131,7 @@ export default function Message({ role, content, files, thinking, tools_used, is
             {files.map((f, i) => (
               <span
                 key={i}
-                className="inline-flex items-center gap-1 bg-slate-700/80 text-white text-xs px-2 py-0.5 rounded-full"
+                className="inline-flex items-center gap-1 bg-[#0f3460] text-[#e2e8f0] text-xs px-2 py-1 rounded-full border border-[#334155]"
                 title={f.file_id ? `file_id: ${f.file_id}` : undefined}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">

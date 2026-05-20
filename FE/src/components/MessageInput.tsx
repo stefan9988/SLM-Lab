@@ -219,7 +219,7 @@ export default function MessageInput({ onSend, disabled, streaming, onStop, curr
         </button>
         <textarea
           ref={textareaRef}
-          className="flex-1 resize-none bg-transparent text-[#e2e8f0] placeholder-[#94a3b8] py-1 focus:outline-none text-sm overflow-y-auto"
+          className="flex-1 resize-none bg-transparent text-[#e2e8f0] placeholder-[#64748b] py-1 focus:outline-none text-sm overflow-y-auto"
           rows={MIN_ROWS}
           placeholder="Type a message…"
           value={text}

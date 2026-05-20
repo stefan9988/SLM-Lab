@@ -498,7 +498,7 @@ export default function ExtractionFieldsTable({
       )}
 
       {analysisError && (
-        <p className="text-xs text-red-400">{analysisError}</p>
+        <p className="text-xs text-[#ef4444]">{analysisError}</p>
       )}
 
       {!analysisSessionId ? (

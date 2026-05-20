@@ -75,7 +75,7 @@ export default function SchemaCard({ schema, onUpdate, onDelete, onSave, onDupli
           <button
             onClick={onSave}
             disabled={saving}
-            className="px-4 py-1.5 rounded-lg bg-[#7c3aed] text-white text-sm font-medium hover:bg-[#6d28d9] transition-colors duration-200 disabled:opacity-50"
+            className="px-4 py-1.5 rounded-lg bg-[#7c3aed] text-white text-sm font-medium hover:bg-[#6d28d9] hover:shadow-[0_0_12px_rgba(124,58,237,0.4)] transition-all duration-200 disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
